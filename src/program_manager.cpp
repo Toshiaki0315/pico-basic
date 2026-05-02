@@ -1,0 +1,291 @@
+#include "parser_internal.h"
+#include "hal_display.h"
+#include <cstring>
+#include <stdexcept>
+#include <cstdlib>
+
+// ---------------------------------------------------------
+// Token serialization helpers
+// ---------------------------------------------------------
+
+const char* token_type_to_string(TokenType type) {
+    switch (type) {
+        case TokenType::PRINT: return "PRINT";
+        case TokenType::LET: return "LET";
+        case TokenType::ASSIGN: return "=";
+        case TokenType::PLUS: return "+";
+        case TokenType::MINUS: return "-";
+        case TokenType::MUL: return "*";
+        case TokenType::DIV: return "/";
+        case TokenType::POWER: return "^";
+        case TokenType::LPAREN: return "(";
+        case TokenType::RPAREN: return ")";
+        case TokenType::GOTO: return "GOTO";
+        case TokenType::GOSUB: return "GOSUB";
+        case TokenType::RETURN: return "RETURN";
+        case TokenType::IF: return "IF";
+        case TokenType::THEN: return "THEN";
+        case TokenType::ELSE: return "ELSE";
+        case TokenType::FOR: return "FOR";
+        case TokenType::TO: return "TO";
+        case TokenType::STEP: return "STEP";
+        case TokenType::NEXT: return "NEXT";
+        case TokenType::NEW: return "NEW";
+        case TokenType::LIST: return "LIST";
+        case TokenType::RUN: return "RUN";
+        case TokenType::READ: return "READ";
+        case TokenType::DATA: return "DATA";
+        case TokenType::RESTORE: return "RESTORE";
+        case TokenType::DIM: return "DIM";
+        case TokenType::INPUT: return "INPUT";
+        case TokenType::END: return "END";
+        case TokenType::STOP: return "STOP";
+        case TokenType::INIT: return "INIT";
+        case TokenType::CLEAR: return "CLEAR";
+        case TokenType::NEWON: return "NEWON";
+        case TokenType::WIDTH: return "WIDTH";
+        case TokenType::CONSOLE: return "CONSOLE";
+        case TokenType::CLS: return "CLS";
+        case TokenType::REPEAT: return "REPEAT";
+        case TokenType::UNTIL: return "UNTIL";
+        case TokenType::GET: return "GET";
+        case TokenType::FILES: return "FILES";
+        case TokenType::SAVE: return "SAVE";
+        case TokenType::LOAD: return "LOAD";
+        case TokenType::ON: return "ON";
+        case TokenType::COLON: return "COLON";
+        case TokenType::GPIO: return "GPIO";
+        case TokenType::WINDOW: return "WINDOW";
+        case TokenType::PSET: return "PSET";
+        case TokenType::LINE: return "LINE";
+        case TokenType::CIRCLE: return "CIRCLE";
+        case TokenType::POLY: return "POLY";
+        case TokenType::PAINT: return "PAINT";
+        case TokenType::GET_AT: return "GET@";
+        case TokenType::PUT_AT: return "PUT@";
+        case TokenType::COLOR: return "COLOR";
+        case TokenType::BEEP: return "BEEP";
+        case TokenType::PLAY: return "PLAY";
+        case TokenType::MUSIC: return "MUSIC";
+        case TokenType::SOUND: return "SOUND";
+        case TokenType::GT: return ">";
+        case TokenType::LT: return "<";
+        case TokenType::GTE: return ">=";
+        case TokenType::LTE: return "<=";
+        case TokenType::NEQ: return "<>";
+        case TokenType::COMMA: return ",";
+        case TokenType::SEMICOLON: return ";";
+        case TokenType::WAIT: return "WAIT";
+        default: return "";
+    }
+}
+
+static int tokenize(const TokenList& tokens, uint8_t* buffer) {
+    int ptr = 0;
+    for (int i=0; i<tokens.size; i++) {
+        buffer[ptr++] = (uint8_t)tokens.tokens[i].type;
+        if (tokens.tokens[i].type == TokenType::NUMBER || 
+            tokens.tokens[i].type == TokenType::IDENTIFIER || 
+            tokens.tokens[i].type == TokenType::STRING) {
+            int len = strlen(tokens.tokens[i].text);
+            buffer[ptr++] = (uint8_t)len;
+            memcpy(&buffer[ptr], tokens.tokens[i].text, len);
+            ptr += len;
+        }
+    }
+    buffer[ptr++] = 0xFF; // EOL byte
+    return ptr;
+}
+
+static TokenList detokenize(const uint8_t* buffer) {
+    TokenList t;
+    int ptr = 0;
+    while (t.size < MAX_TOKENS_PER_LINE && buffer[ptr] != 0xFF) {
+        if (ptr > 512) break; 
+        t.tokens[t.size].type = (TokenType)buffer[ptr++];
+        if (t.tokens[t.size].type == TokenType::NUMBER || 
+            t.tokens[t.size].type == TokenType::IDENTIFIER || 
+            t.tokens[t.size].type == TokenType::STRING) {
+            int len = buffer[ptr++];
+            if (len > 64) len = 64; 
+            memcpy(t.tokens[t.size].text, &buffer[ptr], len);
+            t.tokens[t.size].text[len] = '\0';
+            ptr += len;
+        } else {
+            const char* kw = token_type_to_string(t.tokens[t.size].type);
+            strncpy(t.tokens[t.size].text, kw, MAX_TOKEN_LEN - 1);
+            t.tokens[t.size].text[MAX_TOKEN_LEN - 1] = '\0';
+        }
+        t.size++;
+    }
+    return t;
+}
+
+static void update_program_links() {
+    uint16_t ptr = MEMORY_TEXT_BASE;
+    uint16_t first_next = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+    if (first_next == 0 && logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0) return;
+
+    while (ptr < MEMORY_VAR_BASE) {
+        uint16_t code_ptr = ptr + 4;
+        while (code_ptr < MEMORY_VAR_BASE && logical_memory[code_ptr] != 0xFF) {
+            TokenType type = (TokenType)logical_memory[code_ptr++];
+            if (type == TokenType::NUMBER || type == TokenType::IDENTIFIER || type == TokenType::STRING) {
+                if (code_ptr < MEMORY_VAR_BASE) {
+                    int len = logical_memory[code_ptr++];
+                    code_ptr += len;
+                }
+            }
+        }
+        if (code_ptr >= MEMORY_VAR_BASE) break;
+        code_ptr++; 
+        
+        uint16_t actual_next = code_ptr;
+        logical_memory[ptr] = actual_next & 0xFF;
+        logical_memory[ptr+1] = (actual_next >> 8) & 0xFF;
+
+        if (actual_next + 4 >= MEMORY_VAR_BASE || 
+            (logical_memory[actual_next] == 0 && logical_memory[actual_next+1] == 0 &&
+             logical_memory[actual_next+2] == 0 && logical_memory[actual_next+3] == 0)) {
+            logical_memory[actual_next] = 0;
+            logical_memory[actual_next+1] = 0;
+            break;
+        }
+        ptr = actual_next;
+    }
+}
+
+uint16_t find_program_line(int line_number) {
+    uint16_t ptr = MEMORY_TEXT_BASE;
+    if (logical_memory[ptr] == 0 && logical_memory[ptr+1] == 0 && 
+        logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0) return 0xFFFF;
+
+    while (true) {
+        if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) return 0xFFFF;
+        uint16_t current_line = logical_memory[ptr+2] | (logical_memory[ptr+3] << 8);
+        if (current_line == line_number) return ptr;
+        uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+        if (next_ptr == 0) return 0xFFFF;
+        ptr = next_ptr;
+    }
+}
+
+uint16_t get_next_program_line(int line_number) {
+    uint16_t ptr = MEMORY_TEXT_BASE;
+    while (true) {
+        uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+        if (next_ptr == 0) return 0xFFFF;
+        uint16_t current_line = logical_memory[ptr+2] | (logical_memory[ptr+3] << 8);
+        if (current_line > line_number) return ptr;
+        ptr = next_ptr;
+    }
+}
+
+static uint16_t get_end_of_text() {
+    uint16_t ptr = MEMORY_TEXT_BASE;
+    while (true) {
+        uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+        if (next_ptr == 0) return ptr;
+        ptr = next_ptr;
+    }
+}
+
+void store_line(int line_number, const TokenList& tokens) {
+    uint16_t ptr = find_program_line(line_number);
+    uint16_t end_ptr = get_end_of_text() + 2; 
+    
+    if (ptr != 0xFFFF) {
+        uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+        memmove(&logical_memory[ptr], &logical_memory[next_ptr], end_ptr - next_ptr);
+        end_ptr -= (next_ptr - ptr);
+        if (end_ptr + 2 < MEMORY_VAR_BASE) {
+            logical_memory[end_ptr] = 0;
+            logical_memory[end_ptr+1] = 0;
+        }
+        update_program_links();
+    }
+
+    if (tokens.size == 0 || (tokens.size == 1 && tokens.tokens[0].type == TokenType::END_OF_FILE)) return;
+
+    uint16_t insert_ptr = MEMORY_TEXT_BASE;
+    while (true) {
+        uint16_t next_ptr = logical_memory[insert_ptr] | (logical_memory[insert_ptr+1] << 8);
+        if (next_ptr == 0) break;
+        uint16_t current_line = logical_memory[insert_ptr+2] | (logical_memory[insert_ptr+3] << 8);
+        if (current_line > line_number) break;
+        insert_ptr = next_ptr;
+    }
+    
+    uint8_t buffer[256];
+    int code_len = tokenize(tokens, buffer);
+    int total_len = 4 + code_len;
+    
+    if (end_ptr + total_len >= MEMORY_VAR_BASE) {
+        throw std::runtime_error("Out of Memory: Program too large");
+    }
+    
+    memmove(&logical_memory[insert_ptr + total_len], &logical_memory[insert_ptr], end_ptr - insert_ptr);
+    logical_memory[insert_ptr+2] = line_number & 0xFF;
+    logical_memory[insert_ptr+3] = (line_number >> 8) & 0xFF;
+    memcpy(&logical_memory[insert_ptr+4], buffer, code_len);
+    
+    uint16_t new_end = end_ptr + total_len;
+    if (new_end + 2 < MEMORY_VAR_BASE) {
+        logical_memory[new_end] = 0;
+        logical_memory[new_end+1] = 0;
+    }
+
+    update_program_links();
+}
+
+void clear_program() {
+    memset(logical_memory, 0, 8);
+    memset(&logical_memory[MEMORY_VAR_BASE], 0, VAR_TABLE_SIZE + ARRAY_TABLE_SIZE);
+    
+    string_heap_ptr = STRING_HEAP_BASE;
+    array_heap_inner_ptr = DATA_HEAP_BASE;
+    
+    for_stack_ptr = 0;
+    call_stack_ptr = 0;
+    data_buffer_size = 0;
+    data_ptr = 0;
+}
+
+void list_program() {
+    uint16_t ptr = MEMORY_TEXT_BASE;
+    if (logical_memory[ptr] == 0 && logical_memory[ptr+1] == 0 && 
+        logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0) return;
+
+    char buffer[1024];
+    while (ptr < MEMORY_VAR_BASE) {
+        if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) break;
+        
+        uint16_t line_num = logical_memory[ptr+2] | (logical_memory[ptr+3] << 8);
+        TokenList tokens = detokenize(&logical_memory[ptr+4]);
+        
+        int bpos = snprintf(buffer, sizeof(buffer), "%d", line_num);
+        for (int i = 0; i < tokens.size; i++) {
+            if (tokens.tokens[i].type == TokenType::END_OF_FILE) break;
+            bpos += snprintf(buffer + bpos, sizeof(buffer) - bpos, " ");
+            if (tokens.tokens[i].type == TokenType::STRING) {
+                bpos += snprintf(buffer + bpos, sizeof(buffer) - bpos, "\"%s\"", tokens.tokens[i].text);
+            } else {
+                bpos += snprintf(buffer + bpos, sizeof(buffer) - bpos, "%s", tokens.tokens[i].text);
+            }
+        }
+        snprintf(buffer + bpos, sizeof(buffer) - bpos, "\n");
+        hal_display_print(buffer);
+        printf("%s", buffer);
+        
+        uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+        if (next_ptr == 0) break;
+        ptr = next_ptr;
+    }
+}
+
+// ---------------------------------------------------------
+// Added for detokenize use in run_program
+// ---------------------------------------------------------
+TokenList get_detokenized_line(uint16_t line_ptr) {
+    return detokenize(&logical_memory[line_ptr+4]);
+}

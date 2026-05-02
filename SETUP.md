@@ -105,30 +105,38 @@ cd pico-basic
 ### 7.1 SPI 液晶ディスプレイ (ST7789T3)
 | ピンの役割 | 信号名 (LCD側) | Pico 2 GPIOピン | 備考 |
 | :--- | :--- | :--- | :--- |
-| **MOSI** (データ送信) | DIN / SDA | **GPIO 19** | SPI0 TX |
-| **SCK** (クロック) | CLK / SCL | **GPIO 18** | SPI0 SCK |
-| **CS** (チップセレクト) | CS | **GPIO 17** | SPI0 CSn |
-| **DC** (データ/コマンド切替)| DC / RS | **GPIO 16** | |
-| **RST** (リセット) | RES / RST | **GPIO 20** | |
-| **BL** (バックライト) | BLK | **GPIO 15** | PWM制御可能 |
+| **MOSI** (データ送信) | LCD_MOSI | **GPIO 11** | SPI1 TX |
+| **MISO** (データ受信) | LCD_MISO | **GPIO 12** | SPI1 RX (通常の描画では使用しない) |
+| **SCK** (クロック) | LCD_SCK | **GPIO 10** | SPI1 SCK |
+| **CS** (チップセレクト) | LCD_CS | **GPIO 13** | |
+| **DC** (データ/コマンド切替)| LCD_D/C | **GPIO 14** | |
+| **RST** (リセット) | LCD_RST | **GPIO 15** | |
+| **BL** (バックライト) | LCD_BL | **GPIO 16** | PWM制御可能 |
 
 ### 7.2 タッチパネル (CST328 - I2C接続)
 | ピンの役割 | 信号名 | Pico 2 GPIOピン | 備考 |
 | :--- | :--- | :--- | :--- |
 | **SDA** (データ) | TP_SDA | **GPIO 6** | I2C1 SDA |
 | **SCL** (クロック) | TP_SCL | **GPIO 7** | I2C1 SCL |
-| **INT** (割り込み) | TP_INT | **GPIO 17** | タッチ検知用 |
-| **RST** (リセット) | TP_RST | **GPIO 16** | |
+| **INT** (割り込み) | TP_INT | **GPIO 18** | タッチ検知用 |
+| **RST** (リセット) | TP_RST | **GPIO 17** | |
 
 ### 7.3 MicroSDカードスロット (SPI接続)
 BASICプログラムのセーブ/ロード（`CAS:` や `0:` ドライブ）に使用します。
 
 | ピンの役割 | 信号名 (SD側) | Pico 2 GPIOピン | 備考 |
 | :--- | :--- | :--- | :--- |
-| **MOSI** (データ送信) | SD_MOSI | **GPIO 19** | SPI0 TX |
-| **MISO** (データ受信) | SD_MISO | **GPIO 20** | SPI0 RX |
-| **SCK** (クロック) | SD_SCK | **GPIO 18** | SPI0 SCK |
-| **CS** (チップセレクト) | SD_CS | **GPIO 22** | SPI0 CSn |
+### 7.3 MicroSDカードスロット
+BASICプログラムのセーブ/ロード等に使用します。標準的なSPIモードのほか、PIOを用いたSDIO(4bit)アクセスも物理的に可能です。
+
+| ピンの役割 (SPI) | 信号名 (SD側) | Pico 2 GPIOピン | 備考 |
+| :--- | :--- | :--- | :--- |
+| **SCK** (クロック) | SD_SCK | **GPIO 19** | SPI0 SCK |
+| **MOSI** (データ送信) | SD_CMD | **GPIO 20** | SDIOのCMDピンをSPIのMOSIとして使用 |
+| **MISO** (データ受信) | SD_D0 | **GPIO 21** | SDIOのD0ピンをSPIのMISOとして使用 |
+| - (SPIでは未使用) | SD_D1 | **GPIO 22** | SDIO 4bit通信用データ線1 |
+| - (SPIでは未使用) | SD_D2 | **GPIO 23** | SDIO 4bit通信用データ線2 |
+| **CS** (チップセレクト) | SD_D3 | **GPIO 24** | SDIOのD3ピンをSPIのCSとして使用 |
 
 ※ C++側で `TFT_eSPI` やカスタムのSPIドライバを記述する場合は、上記のGPIO番号をコンフィグに指定してください。
 

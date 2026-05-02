@@ -10,14 +10,15 @@
 #include <string.h>
 
 // Waveshare RP2350-Touch-LCD-2.8 Pinout
-#define LCD_DC 16
-#define LCD_CS 17
-#define LCD_CLK 18
-#define LCD_DIN 19
-#define LCD_RST 20
-#define LCD_BL 15
+#define LCD_MOSI 11
+#define LCD_MISO 12
+#define LCD_SCK 10
+#define LCD_CS 13
+#define LCD_DC 14
+#define LCD_RST 15
+#define LCD_BL 16
 
-#define SPI_PORT spi0
+#define SPI_PORT spi1
 
 #define LCD_WIDTH 320
 #define LCD_HEIGHT 240
@@ -75,8 +76,8 @@ void hal_display_init() {
   spi_init(SPI_PORT, 30 * 1000 * 1000);
   spi_set_format(SPI_PORT, 8, SPI_CPOL_0, SPI_CPHA_0, SPI_MSB_FIRST);
 
-  gpio_set_function(LCD_CLK, GPIO_FUNC_SPI);
-  gpio_set_function(LCD_DIN, GPIO_FUNC_SPI);
+  gpio_set_function(LCD_SCK, GPIO_FUNC_SPI);
+  gpio_set_function(LCD_MOSI, GPIO_FUNC_SPI);
 
   // 2. GPIO初期化と「待機状態(1)」の固定
   gpio_init(LCD_DC);

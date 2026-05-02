@@ -19,9 +19,11 @@ if(POLICY CMP0135)
 endif()
 
 # 【追加修正1】強制的に Pico のコンパイラを指定（Macコンパイラの誤検知を防ぐ）
-set(CMAKE_C_COMPILER arm-none-eabi-gcc)
-set(CMAKE_CXX_COMPILER arm-none-eabi-g++)
-set(CMAKE_ASM_COMPILER arm-none-eabi-gcc)
+if(NOT BUILD_TESTS)
+    set(CMAKE_C_COMPILER arm-none-eabi-gcc)
+    set(CMAKE_CXX_COMPILER arm-none-eabi-g++)
+    set(CMAKE_ASM_COMPILER arm-none-eabi-gcc)
+endif()
 
 option(BUILD_TESTS "Build host unit tests instead of Pico UF2" OFF)
 
@@ -53,6 +55,11 @@ if(BUILD_TESTS)
     add_library(core_lib
         src/lexer.cpp
         src/parser.cpp
+        src/memory_manager.cpp
+        src/program_manager.cpp
+        src/expression_parser.cpp
+        src/statement_core.cpp
+        src/statement_graphics_io.cpp
         src/hal_touch.cpp
         src/hal_sdcard.cpp
     )
@@ -101,6 +108,11 @@ else()
         src/repl.cpp
         src/lexer.cpp
         src/parser.cpp
+        src/memory_manager.cpp
+        src/program_manager.cpp
+        src/expression_parser.cpp
+        src/statement_core.cpp
+        src/statement_graphics_io.cpp
     )
 
     if (TARGET pico_stdlib)
