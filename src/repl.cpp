@@ -5,6 +5,7 @@
 #include "parser.h"
 #include <stdio.h>
 #include <cstring>
+#include <stdexcept>
 
 #define MAX_LINE_LEN 256
 
@@ -90,13 +91,21 @@ void repl_start() {
         }
 
         if (input_ptr > 0) {
-            // Lexical Analysis
-            TokenList tokens = lex(input_buffer);
-            
-            // Parse & Execute.
-            // Returns true if a line was stored (line-number mode) -> suppress Ready
-            bool line_stored = parse_and_execute(tokens);
-            show_ready = !line_stored;
+            // lex() は不正な変数名などで例外を投げる。ここで捕まえないと
+            // std::terminate でインタプリタごと落ち、電源を切るしかなくなる
+            try {
+                TokenList tokens = lex(input_buffer);
+
+                // Parse & Execute.
+                // Returns true if a line was stored (line-number mode) -> suppress Ready
+                bool line_stored = parse_and_execute(tokens);
+                show_ready = !line_stored;
+            } catch (const std::exception& e) {
+                char buf[160];
+                snprintf(buf, sizeof(buf), "%s\n", e.what());
+                basic_print(buf);
+                show_ready = true;
+            }
         } else {
             show_ready = true;
         }

@@ -157,8 +157,12 @@ TokenList lex(const char* source) {
             else if (strcmp(upper_ident, "CIRCLE") == 0) t.type = TokenType::CIRCLE;
             else if (strcmp(upper_ident, "POLY") == 0) t.type = TokenType::POLY;
             else if (strcmp(upper_ident, "PAINT") == 0) t.type = TokenType::PAINT;
-            else if (strcmp(upper_ident, "GET_AT") == 0) t.type = TokenType::GET_AT;
-            else if (strcmp(upper_ident, "PUT_AT") == 0) t.type = TokenType::PUT_AT;
+            // マニュアル記載の `GET@` / `PUT@` が本来の書式。
+            // `GET_AT` / `PUT_AT` は既存プログラム互換のために残す
+            else if (strcmp(upper_ident, "GET@") == 0 ||
+                     strcmp(upper_ident, "GET_AT") == 0) t.type = TokenType::GET_AT;
+            else if (strcmp(upper_ident, "PUT@") == 0 ||
+                     strcmp(upper_ident, "PUT_AT") == 0) t.type = TokenType::PUT_AT;
             else if (strcmp(upper_ident, "COLOR") == 0) t.type = TokenType::COLOR;
             else if (strcmp(upper_ident, "BRIGHTNESS") == 0) t.type = TokenType::BRIGHTNESS;
             else if (strcmp(upper_ident, "WAIT") == 0) t.type = TokenType::WAIT;

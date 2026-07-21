@@ -96,6 +96,11 @@ bool parse_and_execute(const TokenList& tokens) {
 }
 
 void run_program(int max_steps) {
+    // RUN のたびに変数と配列を初期化する。
+    // これをしないと DIM が実行のたびに配列ヒープを食い潰し、
+    // 2 回目の RUN が Out of Memory になる
+    execute_clear();
+
     for_stack_ptr = 0;
     call_stack_ptr = 0;
     
