@@ -292,6 +292,13 @@ void execute_dim(const TokenList& tokens, int& pos) {
     }
     if (table_addr == 0xFFFF) throw std::runtime_error("Out of Memory: Too many arrays");
 
+    // 同じ名前を再び DIM した場合、以前の領域を解放する術が無いまま
+    // ヒープを進めてしまうと二重に消費する。Hu-BASIC と同じくエラーにする
+    // （やり直したいときは CLEAR / NEW、または RUN で初期化される）
+    if (logical_memory[table_addr + 8] != 0) {
+        throw std::runtime_error("Duplicate definition: array already dimensioned");
+    }
+
     uint16_t start_addr  = array_heap_inner_ptr;
     uint16_t dim1_u16    = (uint16_t)dim1_count;
     uint16_t dim2_u16    = (uint16_t)dim2_count;
@@ -589,8 +596,9 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::INIT: case TokenType::NEWON:
         case TokenType::WIDTH: case TokenType::CONSOLE:
         case TokenType::REPEAT: case TokenType::UNTIL: case TokenType::GET:
-        case TokenType::WINDOW:
-        case TokenType::POLY:    execute_not_implemented(tokens, pos); break;
+                                 execute_not_implemented(tokens, pos); break;
+        case TokenType::WINDOW:  execute_window(tokens, pos); break;
+        case TokenType::POLY:    execute_poly(tokens, pos); break;
         case TokenType::BEEP:    execute_beep(tokens, pos); break;
         case TokenType::PLAY:    execute_music(tokens, pos); break; 
         case TokenType::MUSIC:   execute_music(tokens, pos); break;

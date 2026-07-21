@@ -18,7 +18,7 @@
 | :--- | :--- | :--- |
 | `NEW` / `CLEAR` | 実装 | プログラム・変数の消去 |
 | `LIST` | 実装 | プログラム一覧 |
-| `RUN` | 実装 | 行番号昇順で実行。実行中は **Ctrl-C** で中断（`Break in N`） |
+| `RUN` | 実装 | 行番号昇順で実行。開始時に変数・配列を初期化。実行中は **Ctrl-C** で中断（`Break in N`） |
 | `SAVE` / `LOAD` | 実装 | 実機は FatFS + MicroSD、ホストは `fopen` |
 | `FILES` | 実装 | 実機は SD ルート、ホストは `opendir` カレント |
 | `KILL` / `NAME` | 実装 | 同上（`hal_sdcard` 経由） |
@@ -44,11 +44,11 @@
 | `CLS` | 実装 | |
 | `LOCATE` | 実装 | |
 | `COLOR` | 実装 | パレット索引 |
-| `PSET` / `LINE` / `CIRCLE` | 実装 | HAL 描画 |
+| `PSET` / `LINE` / `CIRCLE` | 実装 | HAL 描画。座標は `(x,y)` / `x,y` の両表記可。`LINE` は末尾の `B` / `BF` に対応 |
 | `PAINT` | 実装 | 塗りつぶし |
 | `GET@` / `PUT@` | 実装 | 配列とピクセル転送 |
-| `WINDOW` | 未実装 | |
-| `POLY` | 未実装 | |
+| `WINDOW` | 実装 | 画面座標へユーザー座標系を割り当て。引数なしで解除 |
+| `POLY` | 実装 | `POLY (x,y),r,c,n[,skip[,angle]]`。skip≧2 で星形。引数の意味は本実装の定義 |
 | `BRIGHTNESS`（拡張） | 実装 | ディスプレイ依存 |
 
 ## サウンド・その他ハード

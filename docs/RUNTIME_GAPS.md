@@ -12,8 +12,6 @@
 | `WIDTH`, `CONSOLE` | テキスト解像度・スクロール領域 |
 | `REPEAT` … `UNTIL` | 後判定ループ |
 | `GET` | ノンウェイトキー入力 |
-| `WINDOW` | 論理座標系 |
-| `POLY` | 多角形 |
 
 ## 2. ファイル I/O（MicroSD / FatFS）
 

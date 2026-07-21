@@ -154,6 +154,11 @@ void execute_wait(const TokenList& tokens, int& pos);
 void execute_gpio(const TokenList& tokens, int& pos);
 void execute_brightness(const TokenList& tokens, int& pos);
 void execute_paint(const TokenList& tokens, int& pos);
+void execute_window(const TokenList& tokens, int& pos);
+void execute_poly(const TokenList& tokens, int& pos);
+
+// WINDOW で設定したユーザー座標系を既定（画面座標）に戻す
+void reset_graphics_window();
 void execute_get_at(const TokenList& tokens, int& pos);
 void execute_put_at(const TokenList& tokens, int& pos);
 void execute_save(const TokenList& tokens, int& pos);
