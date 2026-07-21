@@ -47,7 +47,8 @@
 | 項目 | 状態 | 参照 |
 | :--- | :--- | :--- |
 | `BEEP` / `MUSIC` / `PLAY` / `SOUND`（論理） | 実装 | `parser.cpp` → `hal_sound.cpp` |
-| Pico 上の PWM ブザー実音 | 未（ログスタブ） | `hal_sound.cpp` — ボードのブザー GPIO 確定後に PWM 割当 |
+| Pico 上の実音出力 | 実装（実機確認済み） | `hal_sound.cpp` + `src/pio/i2s_out.pio` — I2S DAC（PCM5101A）を PIO+DMA で駆動。BCK=GP2 / LRCK=GP3 / DIN=GP4 / XSMT=GP17、48kHz |
+| 矩形波（PSG）化・3重和音 | 未 | 現状は単音サイン波・ブロッキング再生。TASK §3 |
 | `TOUCH(n)` | スタブ | `hal_touch.cpp` — I2C（CST328 等）実装は TASK §3 |
 
 ---

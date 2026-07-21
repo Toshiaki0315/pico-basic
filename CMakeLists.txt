@@ -123,8 +123,8 @@ else()
             pico_stdlib
             hardware_spi
             hardware_i2c
-            hardware_pwm
-            hardware_pio
+            hardware_pwm     # LCD バックライト調光（サウンドではない）
+            hardware_pio     # I2S サウンド出力
             hardware_dma
             hardware_irq
             hardware_clocks

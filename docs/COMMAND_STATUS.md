@@ -55,9 +55,9 @@
 
 | 命令 | 状態 | メモ |
 | :--- | :--- | :--- |
-| `BEEP` | 部分 | 実機は PWM 想定、ホストはログ等 |
-| `MUSIC` / `PLAY` | 実装 | 同一 `execute_music`（MML サブセット） |
-| `SOUND` | 実装 | PSG 風レジスタ書き込みインタフェース |
+| `BEEP` | 実装 | 実機は I2S DAC で発音（880Hz / 200ms）、ホストはログ |
+| `MUSIC` / `PLAY` | 実装 | 同一 `execute_music`（MML サブセット）。単音・ブロッキング再生 |
+| `SOUND` | 部分 | 実装は `SOUND 周波数, 長さ`。Hu-BASIC の `SOUND reg, data`（PSG レジスタ）とは非互換 |
 | `WAIT` | 実装 | |
 | `GPIO` | 部分 | Pico 定義時は実 GPIO、ホストはモック |
 | `TOUCH(...)` 関数 | 部分 | 実機 I2C 未接続時はスタブ値 |
