@@ -49,7 +49,7 @@
 | `BEEP` / `MUSIC` / `PLAY` / `SOUND`（論理） | 実装 | `parser.cpp` → `hal_sound.cpp` |
 | Pico 上の実音出力 | 実装（実機確認済み） | `hal_sound.cpp` + `src/pio/i2s_out.pio` — I2S DAC（PCM5101A）を PIO+DMA で駆動。BCK=GP2 / LRCK=GP3 / DIN=GP4、48kHz |
 | 矩形波（PSG）化・3重和音 | 実装 | `hal_sound.cpp` で 3声の矩形波をミックス。`MUSIC "A","B","C"` で同時発音 |
-| 非同期再生 | 未 | `hal_sound_play_voices()` が `sleep_ms` でブロックする。TASK §3 |
+| 非同期再生 | 実装（実機確認待ち） | 発音キュー + DMA 割り込みのシーケンサ。`PLAY` は待たずに戻り、Ctrl-C / `NEW` で停止 |
 | `TOUCH(n)` | 実装（実機確認待ち） | `hal_touch.cpp` — CST328 を i2c1（SDA=6 / SCL=7、RST=17 / INT=18）で読み取り |
 
 ---

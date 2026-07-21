@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "parser_internal.h"
 #include "hal_display.h"
+#include "hal_sound.h"
 #include <cstdio>
 #include <cstdlib>
 
@@ -58,6 +59,7 @@ bool parse_and_execute(const TokenList& tokens) {
             store_line(line_num, remainder);
             return true;
         } else if (tokens.tokens[0].type == TokenType::NEW) {
+            hal_sound_stop(); // 再生中の演奏も止める
             clear_program();
             return false;
         } else if (tokens.tokens[0].type == TokenType::LIST) {
@@ -131,6 +133,7 @@ void run_program(int max_steps) {
         // Ctrl-C による中断。無限ループから抜ける唯一の手段なので、
         // 反応が鈍らないよう十分短い間隔で確認する
         if ((steps & 0x0F) == 0 && hal_system_break_requested()) {
+            hal_sound_stop(); // 非同期で鳴っている演奏も止める
             char buf[64];
             snprintf(buf, sizeof(buf), "Break in %d\n", current_line);
             basic_print(buf);

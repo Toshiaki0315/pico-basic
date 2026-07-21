@@ -20,6 +20,9 @@ int main() {
     hal_sound_init();
     hal_touch_init();
 
+    // 起動したことが音でも分かるように（非同期なので待たされない）
+    hal_sound_startup_chime();
+
     // Phase 1 & 2: Start the BASIC Read-Eval-Print Loop
     // REPL handles both Serial and LCD outputs
     repl_start();

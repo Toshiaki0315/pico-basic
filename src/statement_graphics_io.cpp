@@ -636,8 +636,8 @@ static void play_mml_tracks(const MmlTrack* tracks, int track_count) {
             }
         }
     }
-
-    hal_sound_stop();
+    // ここで hal_sound_stop() は呼ばない。
+    // 積んだキューを捨ててしまい、非同期再生が鳴る前に消える
 }
 
 void execute_music(const TokenList& tokens, int& pos) {

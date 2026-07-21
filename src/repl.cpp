@@ -1,5 +1,6 @@
 #include "repl.h"
 #include "hal_display.h"
+#include "hal_sound.h"
 #include "lexer.h"
 #include "parser.h"
 #include <stdio.h>
@@ -43,7 +44,20 @@ void repl_start() {
             }
             
             // Simple Line Editor implementation
-            if (c == '\r' || c == '\n') {
+            if (c == 0x03) { // Ctrl-C
+                // 非同期で鳴っている演奏を止める。
+                // RUN 中の中断は run_program() 側で処理しているが、
+                // ダイレクトモードで PLAY した音はここでしか止められない
+                hal_sound_stop();
+
+                // 入力途中の行は破棄して Ready に戻る
+                input_ptr = 0;
+                input_buffer[0] = '\0';
+                last_terminator = 0;
+                printf("\n");
+                hal_display_print("\n");
+                break;
+            } else if (c == '\r' || c == '\n') {
                 // CRLF / LFCR の 2 文字目は、直前の確定と対になる改行なので読み飛ばす。
                 // これをしないと空行を入力したものとして扱われ、Ready が余分に出る
                 if (input_ptr == 0 && last_terminator != 0 && c != last_terminator) {
