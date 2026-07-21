@@ -116,11 +116,18 @@ else()
     )
 
     if (TARGET pico_stdlib)
+        pico_generate_pio_header(pico_basic ${CMAKE_CURRENT_LIST_DIR}/src/pio/i2s_out.pio)
+        target_include_directories(pico_basic PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
         target_link_libraries(pico_basic
             pico_stdlib
             hardware_spi
             hardware_i2c
             hardware_pwm
+            hardware_pio
+            hardware_dma
+            hardware_irq
+            hardware_clocks
         )
         
         pico_enable_stdio_usb(pico_basic 1)

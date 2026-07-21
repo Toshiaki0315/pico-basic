@@ -1,0 +1,104 @@
+;
+; i2s_out.pio
+; I2S マスター出力 PIO プログラム（PCM5101A 向け）
+;
+; ── ピン構成（C コード側で設定する）──────────────────────────
+;   side_set base  = GP2 → side_set[0] = BCK  (ビットクロック)
+;                         side_set[1] = LRCK (ワードセレクト)
+;   out      base  = GP4 → DIN (シリアルデータ出力)
+;
+; ── データフォーマット（TX FIFO への書き込み）─────────────────
+;   32ビット 1ワード = 1 I2S フレーム
+;   [31:16] = 左チャンネル (Left)  サンプル  16bit 符号付き
+;   [15: 0] = 右チャンネル (Right) サンプル  16bit 符号付き
+;   MSB first で送出（out_shift_dir = 左シフト）
+;   autopull スレッショルド = 32 bit
+;
+; ── クロック計算 ────────────────────────────────────────────
+;   1フレームあたりの PIO サイクル数:
+;     set(L) + loop_L×2 + last_L + set(R) + loop_R×2 + last_R
+;     = 1 + 15×2 + 1 + 1 + 15×2 + 1 = 64 サイクル / フレーム
+;
+;   PIO クロック = LRCK × 64 = サンプルレート × 64
+;   【案 B: 48kHz / 133MHz】
+;     PIO_freq = 48000 × 64 = 3,072,000 Hz
+;     clkdiv   = 133,000,000 / 3,072,000 ≈ 43.294
+;   【案 A: 44.1kHz / 176.4MHz（オーバークロック）】
+;     PIO_freq = 44100 × 64 = 2,822,400 Hz
+;     clkdiv   = 176,400,000 / 2,822,400 ≈ 62.500  ← 割り切れる
+;
+; ── I2S タイミング ──────────────────────────────────────────
+;   ・データは BCK 立ち下がりに合わせて変化
+;   ・データは BCK 立ち上がりでサンプリング（PCM5101A の要件）
+;   ・LRCK=0: 左チャンネル  LRCK=1: 右チャンネル
+;   ・LRCK の遷移は左 LSB を出力する BCK 立ち下がりに同期
+;
+; ── side_set ビット対応 ──────────────────────────────────────
+;   side 0bLB  (L=LRCK, B=BCK)
+;   0b00 → BCK=0, LRCK=0 (左, BCK 立ち下がり)
+;   0b01 → BCK=1, LRCK=0 (左, BCK 立ち上がり)
+;   0b10 → BCK=0, LRCK=1 (右, BCK 立ち下がり)
+;   0b11 → BCK=1, LRCK=1 (右, BCK 立ち上がり)
+;
+
+.program i2s_out
+.side_set 2
+
+;                                        LRCK─┐
+;                                         BCK─┘
+.wrap_target
+    set x, 14           side 0b01   ; [1cyc] BCK↑ LRCK=0(左) x=14 → 左 MSB 準備
+bitloop_l:
+    out pins, 1         side 0b00   ; [1cyc] BCK↓ DIN にビット出力（左 bit15→bit1）
+    jmp x-- bitloop_l   side 0b01   ; [1cyc] BCK↑ x-- してループ
+    out pins, 1         side 0b10   ; [1cyc] BCK↓ 左 LSB(bit0) 出力 & LRCK→1(右)
+    set x, 14           side 0b11   ; [1cyc] BCK↑ LRCK=1(右) x=14 → 右 MSB 準備
+bitloop_r:
+    out pins, 1         side 0b10   ; [1cyc] BCK↓ DIN にビット出力（右 bit15→bit1）
+    jmp x-- bitloop_r   side 0b11   ; [1cyc] BCK↑ x-- してループ
+    out pins, 1         side 0b00   ; [1cyc] BCK↓ 右 LSB(bit0) 出力 & LRCK→0(左)
+.wrap
+
+% c-sdk {
+#include "hardware/clocks.h"
+
+// I2S ステートマシンを初期化するヘルパー関数
+// pio       : 使用する PIO インスタンス（pio0 または pio1）
+// sm        : ステートマシン番号
+// offset    : pio_add_program() で得たオフセット
+// bck_pin   : BCK  GPIO 番号（GP2）※ LRCK は bck_pin+1（GP3）が自動使用される
+// din_pin   : DIN  GPIO 番号（GP4）
+// sample_rate: サンプルレート [Hz]（48000 推奨）
+static inline void i2s_out_program_init(PIO pio, uint sm, uint offset,
+                                        uint bck_pin, uint din_pin,
+                                        uint sample_rate) {
+    pio_sm_config c = i2s_out_program_get_default_config(offset);
+
+    // DIN: out ピン設定（1本）
+    sm_config_set_out_pins(&c, din_pin, 1);
+
+    // BCK + LRCK: side_set ピン設定（2本連続, bck_pin=GP2, lrck=GP3）
+    sm_config_set_sideset_pins(&c, bck_pin);
+
+    // TX FIFO を RX FIFO と結合して深さを 8ワードに拡張
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+
+    // OSR: MSB first, autopull, 32bit スレッショルド
+    sm_config_set_out_shift(&c, false, true, 32);
+
+    // PIO クロック分周: PIO_freq = sample_rate × 64 サイクル/フレーム
+    float pio_freq = (float)sample_rate * 64.0f;
+    float clkdiv = (float)clock_get_hz(clk_sys) / pio_freq;
+    sm_config_set_clkdiv(&c, clkdiv);
+
+    // GPIO 方向・初期値の設定
+    pio_gpio_init(pio, din_pin);
+    pio_gpio_init(pio, bck_pin);        // BCK
+    pio_gpio_init(pio, bck_pin + 1);    // LRCK
+    pio_sm_set_consecutive_pindirs(pio, sm, din_pin, 1, true);   // DIN: output
+    pio_sm_set_consecutive_pindirs(pio, sm, bck_pin, 2, true);   // BCK+LRCK: output
+
+    // ステートマシンに設定を適用してリセット
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}

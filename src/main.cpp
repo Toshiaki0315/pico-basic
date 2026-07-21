@@ -1,6 +1,9 @@
 #include "pico/stdlib.h"
 #include <stdio.h>
 #include "hal_display.h"
+#include "hal_sdcard.h"
+#include "hal_sound.h"
+#include "hal_touch.h"
 #include "repl.h"
 
 int main() {
@@ -9,6 +12,13 @@ int main() {
 
     // Phase 2: Initialize Waveshare 2.8" Touch LCD via SPI
     hal_display_init();
+
+    // Phase 3: MicroSD (SAVE / LOAD / FILES)
+    hal_sdcard_init();
+
+    // Phase 5: I2S sound output (PIO + DMA) and I2C touch panel
+    hal_sound_init();
+    hal_touch_init();
 
     // Phase 1 & 2: Start the BASIC Read-Eval-Print Loop
     // REPL handles both Serial and LCD outputs
