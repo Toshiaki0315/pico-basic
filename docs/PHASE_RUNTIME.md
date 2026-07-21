@@ -28,7 +28,7 @@
 | 項目 | 状態 | 参照 |
 | :--- | :--- | :--- |
 | `SAVE` / `LOAD` / `FILES` | ホストは stdio / `opendir` | `parser.cpp` の `execute_*` |
-| MicroSD + FatFS | 未統合 | [RUNTIME_GAPS.md](./RUNTIME_GAPS.md)、TASK §3 |
+| MicroSD + FatFS | 実装（実機確認待ち） | `hal_sdcard.cpp` + `src/hw_config.c`。SDIO 4bit（CLK=19 / CMD=20 / D0〜D3=21〜24、pio1 + DMA_IRQ_1）、ドライバは carlk3 の FatFS ライブラリ |
 | `GOTO` / `GOSUB` / `RETURN` / `FOR` / `NEXT` / `IF` | 実装 | `parser.cpp` |
 | Hu-BASIC 追加構文（`REPEAT`/`UNTIL`、`GET`、`WINDOW` 等） | 未実装パス | `execute_not_implemented` |
 

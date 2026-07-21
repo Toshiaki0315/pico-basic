@@ -19,9 +19,9 @@
 | `NEW` / `CLEAR` | 実装 | プログラム・変数の消去 |
 | `LIST` | 実装 | プログラム一覧 |
 | `RUN` | 実装 | 行番号昇順で実行 |
-| `SAVE` / `LOAD` | 部分 | `fopen` 等。Pico では FatFS / SD 統合が別途必要 |
-| `FILES` | 部分 | `opendir` カレント。SD ルート連携は未 |
-| `KILL` / `NAME` | 部分 | 同上（ファイル API 依存） |
+| `SAVE` / `LOAD` | 実装 | 実機は FatFS + MicroSD、ホストは `fopen` |
+| `FILES` | 実装 | 実機は SD ルート、ホストは `opendir` カレント |
+| `KILL` / `NAME` | 実装 | 同上（`hal_sdcard` 経由） |
 
 ## 制御・代入
 

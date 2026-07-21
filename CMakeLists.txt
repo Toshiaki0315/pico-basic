@@ -98,8 +98,25 @@ else()
         message(WARNING "pico_sdk_import.cmake is not found. Please ensure Raspberry Pi Pico SDK is configured properly.")
     endif()
 
+    # MicroSD (FatFS + SPI ドライバ)。ボード固有のピン定義は src/hw_config.c
+    include(FetchContent)
+    FetchContent_Declare(
+        no-OS-FatFS-SD-SDIO-SPI-RPi-Pico
+        GIT_REPOSITORY https://github.com/carlk3/no-OS-FatFS-SD-SDIO-SPI-RPi-Pico.git
+        # タグは上流で付け替えられる可能性があるため、コミット SHA で固定する
+        GIT_TAG        6c644cfc3ab03c161fee2dd7be4877e5b832fa71 # v3.6.2
+        SOURCE_SUBDIR  src
+    )
+    # SD ドライバのメッセージは USE_PRINTF を定義せず、
+    # hal_sdcard.cpp の put_out_error_message() 等で受け取って制御する。
+    # （カード抜き差しの検出で想定内の失敗が出るため、そこだけ黙らせたい）
+    # ドライバの詳細ログが必要なときは USE_PRINTF / USE_DBG_PRINTF を足す。
+
+    FetchContent_MakeAvailable(no-OS-FatFS-SD-SDIO-SPI-RPi-Pico)
+
     add_executable(pico_basic
         src/main.cpp
+        src/hw_config.c
         src/hal_display.cpp
         src/hal_gpio.cpp
         src/hal_sound.cpp
@@ -128,6 +145,7 @@ else()
             hardware_dma
             hardware_irq
             hardware_clocks
+            no-OS-FatFS-SD-SDIO-SPI-RPi-Pico  # MicroSD (FatFS)
         )
         
         pico_enable_stdio_usb(pico_basic 1)

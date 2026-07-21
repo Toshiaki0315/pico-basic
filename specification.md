@@ -57,7 +57,7 @@ Hu-BASICのコア構文に加え、X1/MZライクなマルチメディア機能�
 
 1. **HAL (Hardware Abstraction Layer):** Pico SDKの機能をラップする層。
    * `hal_display`: SPI経由でのLCD初期化、文字フォントの描画、グラフィックプリミティブ（Bresenhamの線引きアルゴリズム等）の実装。
-   * `hal_sdcard`: SPI経由でのMicroSDアクセスとFatFSの統合。
+   * `hal_sdcard`: SDIO(4bit / PIO)経由でのMicroSDアクセスとFatFSの統合。ピン定義は `src/hw_config.c`。
    * `hal_sound`: PIO（`src/pio/i2s_out.pio`）+ DMA による I2S 出力。3声分の矩形波をダブルバッファ上でミックスし、DMA 完了割り込みで空いた側を埋める。MML の解釈と声の時間軸合成は parser 側（`execute_music`）が担当する。
    * `hal_touch`: I2CまたはSPI経由でのタッチコントローラ（XPT2046等）の読み取り。
 2. **REPL / Line Editor:** シリアル入力を受け付ける。入力した内容はシリアルにエコーバックすると同時に、LCD画面の最下段等にリアルタイム表示（またはスクロール表示）する。
@@ -86,10 +86,10 @@ Hu-BASICのコア構文に加え、X1/MZライクなマルチメディア機能�
 * **テキスト:** 8×8 ドットフォント、グリッド上のカーソル、行末折返し、下端での **上スクロール**（`memmove`）、`CLS` / `LOCATE`。
 * **未対応:** `CONSOLE` / `WIDTH` によるテキストウィンドウ分割（parser 側は未実装通知）。
 
-### Phase 3: プログラムの保存と制御構文 — **部分達成**
+### Phase 3: プログラムの保存と制御構文 — **実装完了（実機確認待ち）**
 
 * **制御構文:** `GOTO` / `GOSUB` / `RETURN` / `FOR` / `NEXT` / `IF` … `THEN` / `ELSE` 等は実行パスあり（Hu-BASIC 全命令との一致は [RUNTIME_GAPS.md](docs/RUNTIME_GAPS.md)）。
-* **ファイル:** ホストでは `SAVE` / `LOAD` / `FILES` が stdio で動作。**Pico + FatFS + MicroSD** は未統合（TASK §3 / `hal_sdcard` 想定）。
+* **ファイル:** ホストでは `SAVE` / `LOAD` / `FILES` が stdio で動作。**Pico では FatFS + MicroSD（SDIO 4bit / PIO 実装）** で動作（`hal_sdcard.cpp` / ピン定義は `src/hw_config.c`）。
 
 ### Phase 4: グラフィックコマンド — **達成（性能計測は任意）**
 

@@ -19,7 +19,7 @@
 
 | 命令 | ホスト | Pico 実機（現状） |
 | :--- | :--- | :--- |
-| `SAVE` / `LOAD` / `FILES` / `KILL` / `NAME` | `fopen` / `opendir` 等で動作 | FatFS 未統合のため、カードルート前提の動作は **未保証**（`hal_sdcard` 相当の層が必要） |
+| `SAVE` / `LOAD` / `FILES` / `KILL` / `NAME` | `fopen` / `opendir` 等で動作 | FatFS + MicroSD（SDIO 4bit / PIO 実装）で動作（`hal_sdcard.cpp`）。カード未挿入・未フォーマット時は操作が失敗する |
 
 ## 3. 制御構文で既に実装済み（参照用）
 
