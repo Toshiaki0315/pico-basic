@@ -311,7 +311,7 @@ void execute_save(const TokenList& tokens, int& pos) {
         ptr = next_ptr;
     }
     hal_file_close(fp);
-    hal_display_print("Saved\n");
+    basic_print("Saved\n");
 }
 
 void execute_load(const TokenList& tokens, int& pos) {
@@ -340,7 +340,7 @@ void execute_load(const TokenList& tokens, int& pos) {
         }
     }
     hal_file_close(fp);
-    hal_display_print("Loaded\n");
+    basic_print("Loaded\n");
 }
 
 void execute_kill(const TokenList& tokens, int& pos) {
@@ -352,7 +352,7 @@ void execute_kill(const TokenList& tokens, int& pos) {
     if (hal_file_remove(filename) != 0) {
         throw std::runtime_error("File Error: Cannot delete file");
     }
-    hal_display_print("Deleted\n");
+    basic_print("Deleted\n");
 }
 
 void execute_name(const TokenList& tokens, int& pos) {
@@ -372,7 +372,7 @@ void execute_name(const TokenList& tokens, int& pos) {
     if (hal_file_rename(oldname, newname) != 0) {
         throw std::runtime_error("File Error: Cannot rename file");
     }
-    hal_display_print("Renamed\n");
+    basic_print("Renamed\n");
 }
 
 void execute_files(const TokenList& tokens, int& pos) {
@@ -380,26 +380,46 @@ void execute_files(const TokenList& tokens, int& pos) {
     
     void* dir = hal_dir_open(".");
     if (dir == NULL) {
-        hal_display_print("Error: Cannot open directory\n");
+        basic_print("Error: Cannot open directory\n");
         return;
     }
     
+    // 桁幅 16 × 2 列 = 32 桁。LCD は 40 桁なので途中で折り返さない
+    const int COL_WIDTH = 16;
+    const int COLS_PER_ROW = 2;
+
     const char* d_name;
-    int count = 0;
+    int count = 0;      // 見つかったファイル数
+    int col = 0;        // 現在の行に出した個数
     char buf[128];
+
     while ((d_name = hal_dir_read(dir)) != NULL) {
-        if (d_name[0] == '.') continue;
-        
-        snprintf(buf, sizeof(buf), "%-16s", d_name);
-        hal_display_print(buf);
         count++;
-        if (count % 4 == 0) hal_display_print("\n");
+
+        if (strlen(d_name) >= (size_t)COL_WIDTH) {
+            // 桁に収まらない長い名前は独立した行に出す。
+            // 詰めて出すと隣のファイル名と繋がって読めなくなるため
+            if (col != 0) {
+                basic_print("\n");
+                col = 0;
+            }
+            snprintf(buf, sizeof(buf), "%s\n", d_name);
+            basic_print(buf);
+            continue;
+        }
+
+        snprintf(buf, sizeof(buf), "%-*s", COL_WIDTH, d_name);
+        basic_print(buf);
+        if (++col >= COLS_PER_ROW) {
+            basic_print("\n");
+            col = 0;
+        }
     }
-    if (count % 4 != 0) hal_display_print("\n");
-    
+    if (col != 0) basic_print("\n");
+
     hal_dir_close(dir);
     snprintf(buf, sizeof(buf), "%d File(s) found\n", count);
-    hal_display_print(buf);
+    basic_print(buf);
 }
 
 void execute_beep(const TokenList& tokens, int& pos) {

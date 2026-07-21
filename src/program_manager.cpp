@@ -274,8 +274,7 @@ void list_program() {
             }
         }
         snprintf(buffer + bpos, sizeof(buffer) - bpos, "\n");
-        hal_display_print(buffer);
-        printf("%s", buffer);
+        basic_print(buffer);
         
         uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
         if (next_ptr == 0) break;

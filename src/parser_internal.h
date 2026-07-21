@@ -123,6 +123,10 @@ Value parse_relation(const TokenList& tokens, int& pos);
 void execute_statement(const TokenList& tokens, int& pos);
 
 // Statement Executors
+// BASIC の出力は LCD とシリアル端末の両方へ出す。
+// 片方だけに出す実装を書かないよう、必ずこの関数を経由すること
+void basic_print(const char* s);
+
 void execute_print(const TokenList& tokens, int& pos);
 void execute_clear();
 void execute_read(const TokenList& tokens, int& pos);

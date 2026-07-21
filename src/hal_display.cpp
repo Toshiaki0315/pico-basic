@@ -174,6 +174,31 @@ void hal_display_sync() {
   gpio_put(LCD_CS, 1);
 }
 
+// 更新した矩形だけを転送する。
+// 全画面転送は 153,600 バイト（30MHz で約 41ms）かかり、1文字ごとに呼ぶと
+// その間 CPU が止まって USB からの入力を取りこぼす。文字セル単位なら 128 バイト。
+static void sync_rect(int x0, int y0, int w, int h) {
+  if (w <= 0 || h <= 0)
+    return;
+  if (x0 < 0) { w += x0; x0 = 0; }
+  if (y0 < 0) { h += y0; y0 = 0; }
+  if (x0 + w > LCD_WIDTH)  w = LCD_WIDTH - x0;
+  if (y0 + h > LCD_HEIGHT) h = LCD_HEIGHT - y0;
+  if (w <= 0 || h <= 0)
+    return;
+
+  lcd_set_window(x0, y0, x0 + w - 1, y0 + h - 1);
+  gpio_put(LCD_DC, 1);
+  gpio_put(LCD_CS, 0);
+  // フレームバッファは全幅で連続しているため、行ごとに切り出して送る
+  for (int row = 0; row < h; row++) {
+    spi_write_blocking(SPI_PORT,
+                       (uint8_t *)(frame_buffer + (y0 + row) * LCD_WIDTH + x0),
+                       w * 2);
+  }
+  gpio_put(LCD_CS, 1);
+}
+
 void hal_graphics_line(int x1, int y1, int x2, int y2, uint16_t color) {
   // Bresenham's algorithm
   int dx = abs(x2 - x1), sx = x1 < x2 ? 1 : -1;
@@ -238,6 +263,11 @@ static void scroll_up() {
 }
 
 void hal_display_print(const char *text) {
+  // 描き換えた範囲だけを転送するため、この呼び出しでの更新領域を追う
+  int dirty_x0 = LCD_WIDTH, dirty_y0 = LCD_HEIGHT;
+  int dirty_x1 = -1, dirty_y1 = -1;
+  bool needs_full_sync = false;
+
   while (*text) {
     char c = *text++;
     if (c == '\n') {
@@ -255,8 +285,13 @@ void hal_display_print(const char *text) {
         cursor_x = TEXT_COLS - 1;
       }
     } else {
-      char_at(cursor_x * FONT_WIDTH, cursor_y * FONT_HEIGHT, c,
-              current_color_565, 0x0000);
+      int px = cursor_x * FONT_WIDTH;
+      int py = cursor_y * FONT_HEIGHT;
+      char_at(px, py, c, current_color_565, 0x0000);
+      if (px < dirty_x0) dirty_x0 = px;
+      if (py < dirty_y0) dirty_y0 = py;
+      if (px + FONT_WIDTH  > dirty_x1) dirty_x1 = px + FONT_WIDTH;
+      if (py + FONT_HEIGHT > dirty_y1) dirty_y1 = py + FONT_HEIGHT;
       cursor_x++;
     }
 
@@ -267,9 +302,15 @@ void hal_display_print(const char *text) {
     if (cursor_y >= TEXT_ROWS) {
       scroll_up();
       cursor_y = TEXT_ROWS - 1;
+      needs_full_sync = true; // 画面全体がずれるので部分転送では足りない
     }
   }
-  hal_display_sync();
+
+  if (needs_full_sync) {
+    hal_display_sync();
+  } else if (dirty_x1 > 0) {
+    sync_rect(dirty_x0, dirty_y0, dirty_x1 - dirty_x0, dirty_y1 - dirty_y0);
+  }
 }
 
 void hal_display_locate(int x, int y) {

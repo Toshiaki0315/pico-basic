@@ -11,12 +11,18 @@ void repl_start() {
     static char input_buffer[MAX_LINE_LEN];
     int input_ptr = 0;
     
-    // Output initial startup banner
-    const char* banner = "pico-basic v2.0\n";
+    // Output initial startup banner.
+    // ビルド日時を出すのは、実機に焼かれているファームが
+    // どのビルドなのかを不具合調査時に判別できるようにするため
+    static char banner[64];
+    snprintf(banner, sizeof(banner), "pico-basic v2.0 (%s %s)\n", __DATE__, __TIME__);
     printf("%s", banner);
     hal_display_print(banner);
 
     bool show_ready = true;
+    // 直前に行を確定させた改行コード。CRLF / LFCR を送る端末で、
+    // 相方の改行を「空行の入力」として扱わないために覚えておく
+    int last_terminator = 0;
 
     while (true) {
         if (show_ready) {
@@ -38,6 +44,13 @@ void repl_start() {
             
             // Simple Line Editor implementation
             if (c == '\r' || c == '\n') {
+                // CRLF / LFCR の 2 文字目は、直前の確定と対になる改行なので読み飛ばす。
+                // これをしないと空行を入力したものとして扱われ、Ready が余分に出る
+                if (input_ptr == 0 && last_terminator != 0 && c != last_terminator) {
+                    last_terminator = 0;
+                    continue;
+                }
+                last_terminator = c;
                 printf("\n");
                 hal_display_print("\n");
                 break;
@@ -49,6 +62,7 @@ void repl_start() {
                     hal_display_print("\b \b");
                 }
             } else if (c >= 32 && c <= 126) {
+                last_terminator = 0; // 改行の対を待つ状態を解除する
                 if (input_ptr < MAX_LINE_LEN - 1) {
                     input_buffer[input_ptr++] = static_cast<char>(c);
                     input_buffer[input_ptr] = '\0';

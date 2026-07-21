@@ -88,8 +88,7 @@ bool parse_and_execute(const TokenList& tokens) {
     } catch (const std::exception& e) {
         char buf[128];
         snprintf(buf, sizeof(buf), "%s\n", e.what());
-        printf("%s", buf);
-        hal_display_print(buf);
+        basic_print(buf);
     }
     return false;
 }
@@ -147,8 +146,7 @@ void run_program(int max_steps) {
         } catch (const std::exception& e) {
             char buf[128];
             snprintf(buf, sizeof(buf), "Error in line %d: %s\n", current_line, e.what());
-            printf("%s", buf);
-            hal_display_print(buf);
+            basic_print(buf);
             break;
         }
         

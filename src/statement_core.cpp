@@ -4,6 +4,12 @@
 #include <stdexcept>
 #include <cstring>
 #include <cstdlib>
+#include <cstdio>
+
+void basic_print(const char* s) {
+    hal_display_print(s);
+    printf("%s", s);
+}
 
 void execute_print(const TokenList& tokens, int& pos) {
     pos++; 
@@ -24,8 +30,7 @@ void execute_print(const TokenList& tokens, int& pos) {
             Value v = parse_relation(tokens, pos);
             require_token(tokens, pos, TokenType::RPAREN, "Expected ')' after TAB"); pos++;
             
-            printf("%s", output);
-            hal_display_print(output);
+            basic_print(output);
             output[0] = '\0';
             hal_display_locate(static_cast<int>(v.num_val), -1);
             newline = false;
@@ -36,8 +41,7 @@ void execute_print(const TokenList& tokens, int& pos) {
         }
     }
     if (newline) strncat(output, "\n", sizeof(output) - strlen(output) - 1);
-    printf("%s", output);
-    hal_display_print(output);
+    basic_print(output);
 }
 
 void execute_clear() {
@@ -364,13 +368,11 @@ void execute_assignment(const TokenList& tokens, int& pos, bool explicit_let) {
 void execute_input(const TokenList& tokens, int& pos) {
     pos++; 
     if (pos < tokens.size && tokens.tokens[pos].type == TokenType::STRING) {
-        hal_display_print(tokens.tokens[pos].text);
-        printf("%s", tokens.tokens[pos].text);
+        basic_print(tokens.tokens[pos].text);
         pos++;
         if (pos < tokens.size && (tokens.tokens[pos].type == TokenType::COMMA || tokens.tokens[pos].type == TokenType::SEMICOLON)) pos++;
     } else {
-        hal_display_print("? ");
-        printf("? ");
+        basic_print("? ");
     }
     
     while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE) {
@@ -434,8 +436,7 @@ void execute_end(const TokenList& tokens, int& pos) {
 void execute_stop(const TokenList& tokens, int& pos) {
     char buf[64];
     snprintf(buf, sizeof(buf), "Break in %d\n", current_line);
-    hal_display_print(buf);
-    printf("%s", buf);
+    basic_print(buf);
     pos = tokens.size;
     current_line = -1;
     branch_taken = true;
@@ -535,8 +536,7 @@ void execute_mid_statement(const TokenList& tokens, int& pos) {
 void execute_not_implemented(const TokenList& tokens, int& pos) {
     char buf[128];
     snprintf(buf, sizeof(buf), "Notice: Command '%s' is registered but not yet implemented.\n", tokens.tokens[pos].text);
-    hal_display_print(buf);
-    printf("%s", buf);
+    basic_print(buf);
     pos = tokens.size;
 }
 
