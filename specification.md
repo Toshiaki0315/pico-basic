@@ -59,7 +59,7 @@ Hu-BASICのコア構文に加え、X1/MZライクなマルチメディア機能�
    * `hal_display`: SPI経由でのLCD初期化、文字フォントの描画、グラフィックプリミティブ（Bresenhamの線引きアルゴリズム等）の実装。
    * `hal_sdcard`: SDIO(4bit / PIO)経由でのMicroSDアクセスとFatFSの統合。ピン定義は `src/hw_config.c`。
    * `hal_sound`: PIO（`src/pio/i2s_out.pio`）+ DMA による I2S 出力。3声分の矩形波をダブルバッファ上でミックスし、DMA 完了割り込みで空いた側を埋める。MML の解釈と声の時間軸合成は parser 側（`execute_music`）が担当する。
-   * `hal_touch`: I2CまたはSPI経由でのタッチコントローラ（XPT2046等）の読み取り。
+   * `hal_touch`: I2C(i2c1)経由でのタッチコントローラ CST328 の読み取り。10ms 間隔でポーリングし、パネル座標を表示の向き（320×240 横）に変換する。
 2. **REPL / Line Editor:** シリアル入力を受け付ける。入力した内容はシリアルにエコーバックすると同時に、LCD画面の最下段等にリアルタイム表示（またはスクロール表示）する。
 3. **Lexer (字句解析器):** 入力文字列をTokenに変換。
 4. **Parser / Interpreter (構文解析・実行エンジン):** Token配列を順次読み込み実行。
@@ -96,10 +96,10 @@ Hu-BASICのコア構文に加え、X1/MZライクなマルチメディア機能�
 * `PSET`, `LINE`, `CIRCLE`, `COLOR`, `PAINT`, `GET@`, `PUT@` を parser から `hal_display` に接続済み。
 * 実機でのリフレッシュレート・SPI 帯域の評価は運用ドキュメントに逐次追記する。
 
-### Phase 5: サウンドとタッチ — **サウンドは実機出力済み / タッチは次段**
+### Phase 5: サウンドとタッチ — **実装完了（タッチは実機確認待ち）**
 
 * parser から `BEEP` / `PLAY` / `MUSIC` / `SOUND`、`TOUCH(n)` を呼び出し可能。
-* **Pico 上:** `hal_sound.cpp` は I2S DAC 出力を実装済み（矩形波・3重和音）。ブロッキング再生のため非同期化は今後の課題。`hal_touch.cpp` は I2C 読取前のスタブ。
+* **Pico 上:** `hal_sound.cpp` は I2S DAC 出力を実装済み（矩形波・3重和音）。ブロッキング再生のため非同期化は今後の課題。`hal_touch.cpp` は CST328 の I2C 読み取りを実装済み。
 
 ---
 

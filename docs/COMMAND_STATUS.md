@@ -18,7 +18,7 @@
 | :--- | :--- | :--- |
 | `NEW` / `CLEAR` | 実装 | プログラム・変数の消去 |
 | `LIST` | 実装 | プログラム一覧 |
-| `RUN` | 実装 | 行番号昇順で実行 |
+| `RUN` | 実装 | 行番号昇順で実行。実行中は **Ctrl-C** で中断（`Break in N`） |
 | `SAVE` / `LOAD` | 実装 | 実機は FatFS + MicroSD、ホストは `fopen` |
 | `FILES` | 実装 | 実機は SD ルート、ホストは `opendir` カレント |
 | `KILL` / `NAME` | 実装 | 同上（`hal_sdcard` 経由） |
@@ -60,7 +60,7 @@
 | `SOUND` | 部分 | 実装は `SOUND 周波数, 長さ`。Hu-BASIC の `SOUND reg, data`（PSG レジスタ）とは非互換 |
 | `WAIT` | 実装 | |
 | `GPIO` | 部分 | Pico 定義時は実 GPIO、ホストはモック |
-| `TOUCH(...)` 関数 | 部分 | 実機 I2C 未接続時はスタブ値 |
+| `TOUCH(...)` 関数 | 実装 | 実機は CST328（I2C）、ホストはモック値 |
 
 ## 字句のみ・実行時未実装
 

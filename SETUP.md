@@ -144,8 +144,10 @@ screen /dev/cu.usbmodem14201 115200   # 終了は Ctrl-A → K → y
 | :--- | :--- | :--- | :--- |
 | **SDA** (データ) | TP_SDA | **GPIO 6** | I2C1 SDA |
 | **SCL** (クロック) | TP_SCL | **GPIO 7** | I2C1 SCL |
-| **INT** (割り込み) | TP_INT | **GPIO 18** | タッチ検知用 |
-| **RST** (リセット) | TP_RST | **GPIO 17** | |
+| **INT** (割り込み) | TP_INT | **GPIO 18** | タッチ検知用（現在はポーリングのため未使用） |
+| **RST** (リセット) | TP_RST | **GPIO 17** | `hal_touch` が使用。**サウンドの XSMT ではない**ので注意 |
+
+※ I2C1（GPIO 6/7）はタッチパネル・IMU(QMI8658)・RTC で共用されています。
 
 ### 7.3 MicroSDカードスロット (SDIO 4bit 接続)
 BASICプログラムのセーブ/ロード（`CAS:` や `0:` ドライブ）に使用します。**本プロジェクトは SDIO(4bit) モード**（PIO 実装）を使用します（ピン定義は `src/hw_config.c`）。

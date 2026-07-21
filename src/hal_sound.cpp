@@ -12,7 +12,9 @@
 #define PIN_I2S_BCK     2
 #define PIN_I2S_LRCK    3
 #define PIN_I2S_DIN     4
-#define PIN_PCM5101_XSMT 17
+// GP17 をミュート解除(XSMT)として扱っていたが、公式回路図では GP17 は
+// タッチパネルのリセット線 (TP_RST)。このボードの DAC にミュート端子は
+// 出ていないため、GP17 は hal_touch が使う。
 
 #define SAMPLE_RATE         48000
 #define AUDIO_BUFFER_SAMPLES    256
@@ -96,10 +98,6 @@ static void __isr dma_handler() {
 }
 
 void hal_sound_init() {
-    gpio_init(PIN_PCM5101_XSMT);
-    gpio_set_dir(PIN_PCM5101_XSMT, GPIO_OUT);
-    gpio_put(PIN_PCM5101_XSMT, 1);
-    
     uint pio_offset = pio_add_program(audio_pio, &i2s_out_program);
     audio_sm = pio_claim_unused_sm(audio_pio, true);
     i2s_out_program_init(audio_pio, audio_sm, pio_offset, PIN_I2S_BCK, PIN_I2S_DIN, SAMPLE_RATE);
