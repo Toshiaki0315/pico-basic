@@ -10,7 +10,7 @@
 * **ターゲットハードウェア:** Waveshare RP2350-Touch-LCD-2.8
 * **主出力 (映像):** 2.8インチタッチLCD（解像度 240x320 または 320x240）。テキスト表示およびグラフィック描画を行う。
 * **主入力:** USB CDC（シリアル通信）を用いたターミナル接続を基本のキーボード入力とする。加えて、LCDのタッチ入力をBASICから取得可能にする。
-* **音声出力:** I2S DAC（PCM5101A）を PIO + DMA で駆動し、48kHz でサウンドを出力する。現状は単音のサイン波で、PSG（矩形波・3重和音）エミュレーションは今後の課題（TASK.md §3 参照）。
+* **音声出力:** I2S DAC（PCM5101A）を PIO + DMA で駆動し、48kHz でサウンドを出力する。PSG 相当の矩形波・3重和音に対応（非同期再生は今後の課題）。
 * **プログラム保存:** ボード上のMicroSDカードスロットを利用し、FatFS経由でテキスト形式のBASICプログラムを保存・読み込みする。
 
 ### 2.2. データ型
@@ -42,7 +42,7 @@ Hu-BASICのコア構文に加え、X1/MZライクなマルチメディア機能�
   * `CIRCLE (x,y), 半径, 色`: 円の描画。
 * **サウンド制御（I2S DAC 出力）:**
   * `BEEP`: 単音のビープ音（880Hz / 200ms）。
-  * `MUSIC "文字列"` / `PLAY "文字列"`: MML（Music Macro Language）による音楽演奏。`PLAY` は `MUSIC` と同一のエイリアス（例: `PLAY "CDEFGAB"`）。単音・ブロッキング再生（演奏が終わるまで次の行に進まない）。
+  * `MUSIC "文字列"[, "文字列", "文字列"]` / `PLAY ...`: MML（Music Macro Language）による音楽演奏。`PLAY` は `MUSIC` と同一のエイリアス。カンマ区切りで最大 3 声を同時発音する（例: `PLAY "O4CEG","O4EGB","O5C"`）。ブロッキング再生（演奏が終わるまで次の行に進まない）。`V`（音量）は声ごとに独立。
   * `SOUND 周波数, 長さ`: 周波数 [Hz] と長さ [ms] を指定した発音。Hu-BASIC 本来の `SOUND reg, data`（PSG レジスタ書き込み）とは異なる暫定仕様。
 * **ハードウェア制御（Pico拡張）:**
   * `TOUCH(n)`: タッチパネルの状態取得。n=0でX座標、1でY座標、2でタッチ有無(0/1)。
@@ -58,7 +58,7 @@ Hu-BASICのコア構文に加え、X1/MZライクなマルチメディア機能�
 1. **HAL (Hardware Abstraction Layer):** Pico SDKの機能をラップする層。
    * `hal_display`: SPI経由でのLCD初期化、文字フォントの描画、グラフィックプリミティブ（Bresenhamの線引きアルゴリズム等）の実装。
    * `hal_sdcard`: SPI経由でのMicroSDアクセスとFatFSの統合。
-   * `hal_sound`: PIO（`src/pio/i2s_out.pio`）+ DMA による I2S 出力。ダブルバッファに波形を生成し、DMA 完了割り込みで空いた側を埋める。MML の解釈は parser 側（`execute_music`）が担当する。
+   * `hal_sound`: PIO（`src/pio/i2s_out.pio`）+ DMA による I2S 出力。3声分の矩形波をダブルバッファ上でミックスし、DMA 完了割り込みで空いた側を埋める。MML の解釈と声の時間軸合成は parser 側（`execute_music`）が担当する。
    * `hal_touch`: I2CまたはSPI経由でのタッチコントローラ（XPT2046等）の読み取り。
 2. **REPL / Line Editor:** シリアル入力を受け付ける。入力した内容はシリアルにエコーバックすると同時に、LCD画面の最下段等にリアルタイム表示（またはスクロール表示）する。
 3. **Lexer (字句解析器):** 入力文字列をTokenに変換。
@@ -99,7 +99,7 @@ Hu-BASICのコア構文に加え、X1/MZライクなマルチメディア機能�
 ### Phase 5: サウンドとタッチ — **サウンドは実機出力済み / タッチは次段**
 
 * parser から `BEEP` / `PLAY` / `MUSIC` / `SOUND`、`TOUCH(n)` を呼び出し可能。
-* **Pico 上:** `hal_sound.cpp` は I2S DAC 出力を実装済み（実機で発音確認済み）。単音サイン波・ブロッキング再生のため、矩形波化と 3重和音は今後の課題。`hal_touch.cpp` は I2C 読取前のスタブ。
+* **Pico 上:** `hal_sound.cpp` は I2S DAC 出力を実装済み（矩形波・3重和音）。ブロッキング再生のため非同期化は今後の課題。`hal_touch.cpp` は I2C 読取前のスタブ。
 
 ---
 
