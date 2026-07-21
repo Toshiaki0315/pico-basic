@@ -30,8 +30,9 @@ static float voice_phase[HAL_SOUND_VOICES] = {0.0f, 0.0f, 0.0f};
 
 // メイン側で書き換え、DMA 割り込みから読むため volatile
 static volatile float voice_freq[HAL_SOUND_VOICES]  = {0.0f, 0.0f, 0.0f};
-static volatile int   voice_volume[HAL_SOUND_VOICES] = {15, 15, 15};
-static volatile int   current_volume = 15; // hal_sound_play / BEEP 用のマスタ音量
+static volatile int   voice_volume[HAL_SOUND_VOICES] =
+    {HAL_SOUND_DEFAULT_VOLUME, HAL_SOUND_DEFAULT_VOLUME, HAL_SOUND_DEFAULT_VOLUME};
+static volatile int   current_volume = HAL_SOUND_DEFAULT_VOLUME; // hal_sound_play / BEEP 用のマスタ音量
 
 // 3声を加算するため、1声あたりの振幅は全体の 1/3 に抑えてクリップを防ぐ
 #define VOICE_MAX_AMPLITUDE (32767.0f / (float)HAL_SOUND_VOICES)
@@ -170,7 +171,7 @@ void hal_sound_set_volume(int volume) {
 
 #else
 // Host Mock implementation
-static int current_volume = 15;
+static int current_volume = HAL_SOUND_DEFAULT_VOLUME;
 
 void hal_sound_init() {
     // Initialization for mock sound

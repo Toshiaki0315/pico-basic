@@ -12,6 +12,11 @@ extern "C" {
 // PSG 相当の同時発音数（AY-3-8910 の 3ch に合わせる）
 #define HAL_SOUND_VOICES 3
 
+// 音量を指定しなかったときの既定値（0-15）。
+// 矩形波は同じ振幅でも耳につきやすいため、最大にはしない。
+// MML の V コマンドや hal_sound_set_volume() で上げ下げできる。
+#define HAL_SOUND_DEFAULT_VOLUME 8
+
 // 1 声分の発音指定。frequency <= 0 は消音（休符）
 typedef struct {
     float frequency;

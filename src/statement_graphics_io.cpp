@@ -491,7 +491,7 @@ static void parse_mml(const char* mml, MmlTrack& track) {
     int octave = 4;
     int default_len = 4;
     int tempo = 120;
-    int volume = 15;
+    int volume = HAL_SOUND_DEFAULT_VOLUME;
 
     int i = 0;
     while (mml[i] != '\0') {
