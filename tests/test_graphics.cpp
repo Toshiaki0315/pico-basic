@@ -70,3 +70,41 @@ TEST_F(GraphicsTest, ClsCommand) {
     parse_and_execute(lex_tokens("CLS"));
     EXPECT_TRUE(mock_hal::was_cls_called());
 }
+
+// ---------------------------------------------------------
+// 座標の書式
+//   Hu-BASIC 本来の括弧付き `(x,y)` と、括弧なしの両方を受け付ける。
+//   括弧付きはマニュアル・仕様書に載っている書式だが未実装だった。
+// ---------------------------------------------------------
+
+TEST_F(GraphicsTest, PsetAcceptsParenthesizedPoint) {
+    parse_and_execute(lex_tokens("PSET (100,100), 15"));
+
+    auto cmds = mock_hal::get_draw_commands();
+    ASSERT_EQ(cmds.size(), 1u) << mock_hal::get_raw_print_buffer();
+    EXPECT_EQ(cmds[0].type, DrawCommand::PSET);
+    EXPECT_EQ(cmds[0].x1, 100);
+    EXPECT_EQ(cmds[0].y1, 100);
+}
+
+TEST_F(GraphicsTest, LineAcceptsParenthesizedPoints) {
+    parse_and_execute(lex_tokens("LINE (0,0)-(100,50), 14"));
+
+    auto cmds = mock_hal::get_draw_commands();
+    ASSERT_EQ(cmds.size(), 1u) << mock_hal::get_raw_print_buffer();
+    EXPECT_EQ(cmds[0].type, DrawCommand::LINE);
+    EXPECT_EQ(cmds[0].x1, 0);
+    EXPECT_EQ(cmds[0].y1, 0);
+    EXPECT_EQ(cmds[0].x2, 100);
+    EXPECT_EQ(cmds[0].y2, 50);
+}
+
+TEST_F(GraphicsTest, CircleAcceptsParenthesizedCenter) {
+    parse_and_execute(lex_tokens("CIRCLE (160,120), 50, 1"));
+
+    auto cmds = mock_hal::get_draw_commands();
+    ASSERT_EQ(cmds.size(), 1u) << mock_hal::get_raw_print_buffer();
+    EXPECT_EQ(cmds[0].type, DrawCommand::CIRCLE);
+    EXPECT_EQ(cmds[0].x1, 160);
+    EXPECT_EQ(cmds[0].y1, 120);
+}

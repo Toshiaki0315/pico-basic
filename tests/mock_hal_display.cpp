@@ -94,6 +94,11 @@ void hal_display_sync() {
     // No-op for mock
 }
 
+void hal_display_sync_rect(int x, int y, int w, int h) {
+    // No-op for mock（実機では指定矩形だけを SPI 転送する）
+    (void)x; (void)y; (void)w; (void)h;
+}
+
 void hal_graphics_line(int x1, int y1, int x2, int y2, uint16_t color) {
     // Record high-level command for existing tests
     draw_commands.push_back({DrawCommand::LINE, x1, y1, x2, y2, 0, color});
@@ -175,6 +180,11 @@ void hal_display_set_mock_input(const char* input) {
 
 void hal_system_wait(int ms) {
     if (ms > 0) usleep(ms * 1000);
+}
+
+int hal_system_break_requested() {
+    // ホストテストでは中断しない（無限ループのテストは max_steps で止める）
+    return 0;
 }
 
 // ---------------------------------------------------------

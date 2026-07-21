@@ -177,7 +177,7 @@ void hal_display_sync() {
 // 更新した矩形だけを転送する。
 // 全画面転送は 153,600 バイト（30MHz で約 41ms）かかり、1文字ごとに呼ぶと
 // その間 CPU が止まって USB からの入力を取りこぼす。文字セル単位なら 128 バイト。
-static void sync_rect(int x0, int y0, int w, int h) {
+void hal_display_sync_rect(int x0, int y0, int w, int h) {
   if (w <= 0 || h <= 0)
     return;
   if (x0 < 0) { w += x0; x0 = 0; }
@@ -309,7 +309,7 @@ void hal_display_print(const char *text) {
   if (needs_full_sync) {
     hal_display_sync();
   } else if (dirty_x1 > 0) {
-    sync_rect(dirty_x0, dirty_y0, dirty_x1 - dirty_x0, dirty_y1 - dirty_y0);
+    hal_display_sync_rect(dirty_x0, dirty_y0, dirty_x1 - dirty_x0, dirty_y1 - dirty_y0);
   }
 }
 
@@ -362,6 +362,12 @@ void hal_display_input(char *buffer, int max_len) {
 void hal_system_wait(int ms) {
   if (ms > 0)
     sleep_ms(ms);
+}
+
+int hal_system_break_requested() {
+  // 待たずに 1 文字だけ覗く。Ctrl-C(0x03) なら中断、それ以外は捨てる
+  int c = getchar_timeout_us(0);
+  return (c == 0x03) ? 1 : 0;
 }
 #else
 // ---------------------------------------------------------

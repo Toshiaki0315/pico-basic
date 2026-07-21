@@ -128,6 +128,15 @@ void run_program(int max_steps) {
     int steps = 0;
 
     while (current_line != -1 && (max_steps == -1 || steps < max_steps)) {
+        // Ctrl-C による中断。無限ループから抜ける唯一の手段なので、
+        // 反応が鈍らないよう十分短い間隔で確認する
+        if ((steps & 0x0F) == 0 && hal_system_break_requested()) {
+            char buf[64];
+            snprintf(buf, sizeof(buf), "Break in %d\n", current_line);
+            basic_print(buf);
+            break;
+        }
+
         uint16_t line_ptr = find_program_line(current_line);
         if (line_ptr == 0xFFFF) break;
         

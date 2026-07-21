@@ -81,6 +81,22 @@ pico-basic は、仮想VRAMを通じてSPIディスプレイに高速な描画�
 
 ---
 
+### 実行中のプログラムを止める（Ctrl-C）
+
+`GOTO` による無限ループなど、実行が終わらないプログラムは **Ctrl-C** で中断できます。
+中断すると `Break in 行番号` が表示され、`Ready` に戻ります。変数やプログラムは保持されるため、`LIST` や `PRINT` で状態を確認できます。
+
+```basic
+10 IF TOUCH(2) THEN PSET (TOUCH(0), TOUCH(1)), 15
+20 GOTO 10
+RUN
+（Ctrl-C を押す）
+Break in 10
+Ready
+```
+
+---
+
 ## 5. サウンド・ハードウェア制御
 
 Raspberry Pi Pico 2の機能を活かした拡張コマンドです。

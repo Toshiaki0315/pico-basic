@@ -11,6 +11,37 @@
 #include <cctype>
 #include <cmath>
 
+// 座標を 1 組読む。Hu-BASIC 本来の `(x,y)` と、括弧を省いた `x,y` の
+// どちらでも書けるようにする（既存プログラム・テストは括弧なしを使っている）
+static void parse_point(const TokenList& tokens, int& pos, int& out_x, int& out_y) {
+    bool parenthesized = (pos < tokens.size && tokens.tokens[pos].type == TokenType::LPAREN);
+    if (parenthesized) pos++;
+
+    Value vx = parse_relation(tokens, pos);
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
+    Value vy = parse_relation(tokens, pos);
+
+    if (parenthesized) {
+        require_token(tokens, pos, TokenType::RPAREN, "Expected ')' after coordinates");
+        pos++;
+    }
+
+    out_x = static_cast<int>(vx.num_val);
+    out_y = static_cast<int>(vy.num_val);
+}
+
+// 色指定（省略時は現在の COLOR）を読む
+static uint16_t parse_optional_color(const TokenList& tokens, int& pos) {
+    uint16_t color = current_color_565;
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
+        pos++;
+        Value vc = parse_relation(tokens, pos);
+        int idx = static_cast<int>(vc.num_val);
+        if (idx >= 0 && idx <= 15) color = PALETTE[idx];
+    }
+    return color;
+}
+
 void execute_wait(const TokenList& tokens, int& pos) {
     pos++; 
     Value val = parse_relation(tokens, pos);
@@ -37,59 +68,51 @@ void execute_color(const TokenList& tokens, int& pos) {
 }
 
 void execute_pset(const TokenList& tokens, int& pos) {
-    pos++; 
-    Value vx = parse_relation(tokens, pos);
-    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
-    Value vy = parse_relation(tokens, pos);
-    
-    uint16_t color = current_color_565;
-    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
-        pos++;
-        Value vc = parse_relation(tokens, pos);
-        int idx = static_cast<int>(vc.num_val);
-        if (idx >= 0 && idx <= 15) color = PALETTE[idx];
-    }
-    hal_graphics_pset(static_cast<int>(vx.num_val), static_cast<int>(vy.num_val), color);
+    pos++;
+    int x, y;
+    parse_point(tokens, pos, x, y);          // PSET (x,y), c  /  PSET x,y,c
+    uint16_t color = parse_optional_color(tokens, pos);
+
+    hal_graphics_pset(x, y, color);
+    // フレームバッファに書くだけでは画面に出ないので、描いた分を転送する
+    hal_display_sync_rect(x, y, 1, 1);
 }
 
 void execute_line(const TokenList& tokens, int& pos) {
-    pos++; 
-    Value vx1 = parse_relation(tokens, pos);
-    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
-    Value vy1 = parse_relation(tokens, pos);
-    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
-    Value vx2 = parse_relation(tokens, pos);
-    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
-    Value vy2 = parse_relation(tokens, pos);
-    
-    uint16_t color = current_color_565;
-    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
-        pos++;
-        Value vc = parse_relation(tokens, pos);
-        int idx = static_cast<int>(vc.num_val);
-        if (idx >= 0 && idx <= 15) color = PALETTE[idx];
-    }
-    hal_graphics_line(static_cast<int>(vx1.num_val), static_cast<int>(vy1.num_val), 
-                      static_cast<int>(vx2.num_val), static_cast<int>(vy2.num_val), color);
+    pos++;
+    int x1, y1, x2, y2;
+    parse_point(tokens, pos, x1, y1);        // LINE (x1,y1)-(x2,y2), c  /  LINE x1,y1,x2,y2,c
+
+    // 括弧付きの書式では 2 点を '-' で繋ぐ。括弧なしなら ',' 区切り
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::MINUS) pos++;
+    else if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
+
+    parse_point(tokens, pos, x2, y2);
+    uint16_t color = parse_optional_color(tokens, pos);
+
+    hal_graphics_line(x1, y1, x2, y2, color);
+
+    // 線を囲む矩形だけを転送する
+    int lx = (x1 < x2) ? x1 : x2;
+    int ly = (y1 < y2) ? y1 : y2;
+    int lw = ((x1 > x2) ? x1 : x2) - lx + 1;
+    int lh = ((y1 > y2) ? y1 : y2) - ly + 1;
+    hal_display_sync_rect(lx, ly, lw, lh);
 }
 
 void execute_circle(const TokenList& tokens, int& pos) {
-    pos++; 
-    Value vx = parse_relation(tokens, pos);
-    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
-    Value vy = parse_relation(tokens, pos);
+    pos++;
+    int cx, cy;
+    parse_point(tokens, pos, cx, cy);        // CIRCLE (x,y), r, c  /  CIRCLE x,y,r,c
+
     if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
     Value vr = parse_relation(tokens, pos);
-    
-    uint16_t color = current_color_565;
-    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
-        pos++;
-        Value vc = parse_relation(tokens, pos);
-        int idx = static_cast<int>(vc.num_val);
-        if (idx >= 0 && idx <= 15) color = PALETTE[idx];
-    }
-    hal_graphics_circle(static_cast<int>(vx.num_val), static_cast<int>(vy.num_val), 
-                        static_cast<int>(vr.num_val), color);
+    int r = static_cast<int>(vr.num_val);
+
+    uint16_t color = parse_optional_color(tokens, pos);
+
+    hal_graphics_circle(cx, cy, r, color);
+    hal_display_sync_rect(cx - r, cy - r, 2 * r + 1, 2 * r + 1);
 }
 
 void execute_gpio(const TokenList& tokens, int& pos) {
