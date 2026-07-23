@@ -1,4 +1,5 @@
 #include "hal_sound.h"
+#include "psg_envelope.h"
 #include <stdio.h>
 
 #if __has_include("pico/stdlib.h")
@@ -73,6 +74,13 @@ static float    psg_noise_phase   = 0.0f;
 static uint32_t psg_lfsr = 1;   // ノイズ生成用 17bit LFSR
 static int      psg_noise_bit = 1;
 
+// エンベロープ状態（割り込みのみ）。振幅と方向を直接持つ
+static float psg_env_phase = 0.0f;   // 0.0〜1.0 で 1 段進む
+static int   psg_env_vol   = 15;     // 現在の振幅 0〜15
+static int   psg_env_dir   = -1;     // +1 上昇 / -1 下降
+static bool  psg_env_hold  = false;  // 端で保持中
+static uint8_t psg_env_shape_prev = 0xFF; // R13 書き込み検出用
+
 // 3声を加算するため、1声あたりの振幅は全体の 1/3 に抑えてクリップを防ぐ
 #define VOICE_MAX_AMPLITUDE (32767.0f / (float)HAL_SOUND_VOICES)
 #define SAMPLES_PER_MS (SAMPLE_RATE / 1000)
@@ -105,7 +113,7 @@ static bool sequencer_next_step() {
 static void fill_psg(uint32_t* buffer, int samples) {
     float tone_inc[3];
     int   vol[3];
-    bool  tone_en[3], noise_en[3], both_off[3];
+    bool  tone_en[3], noise_en[3], both_off[3], use_env[3];
 
     for (int ch = 0; ch < 3; ch++) {
         int period = psg_reg[2 * ch] | ((psg_reg[2 * ch + 1] & 0x0F) << 8);
@@ -116,11 +124,24 @@ static void fill_psg(uint32_t* buffer, int samples) {
         noise_en[ch]  = !(psg_reg[7] & (1 << (ch + 3)));  // R7 bit ch+3
         both_off[ch]  = !tone_en[ch] && !noise_en[ch];
         vol[ch]       = psg_reg[8 + ch] & 0x0F;
+        use_env[ch]   = psg_reg[8 + ch] & 0x10;           // bit4: エンベロープ使用
     }
 
     int nperiod = psg_reg[6] & 0x1F;
     if (nperiod < 1) nperiod = 1;
     float noise_inc = (PSG_CLOCK_HZ / (16.0f * (float)nperiod)) / (float)SAMPLE_RATE;
+
+    // エンベロープ周期。R13 が書き換わったらサイクルを頭から始める
+    uint8_t shape = psg_reg[13] & 0x0F;
+    if (shape != psg_env_shape_prev) {
+        psg_env_shape_prev = shape;
+        psg_env_phase = 0.0f;
+        psg_envelope_init(&psg_env_vol, &psg_env_dir, &psg_env_hold, shape);
+    }
+    int eperiod = psg_reg[11] | (psg_reg[12] << 8);
+    if (eperiod < 1) eperiod = 1;
+    // 1 ステップ（16 段のうち 1 段）あたりの進み。周期 = 2MHz/(256*EP) の 16 倍細かい
+    float env_inc = (PSG_CLOCK_HZ / (256.0f * (float)eperiod)) / (float)SAMPLE_RATE;
 
     for (int i = 0; i < samples; i++) {
         // ノイズ LFSR（AY-3-8910: 17bit、bit0 と bit3 の XOR を帰還）
@@ -131,6 +152,14 @@ static void fill_psg(uint32_t* buffer, int samples) {
             psg_lfsr = (psg_lfsr >> 1) | ((uint32_t)fb << 16);
             psg_noise_bit = psg_lfsr & 1;
         }
+
+        // エンベロープを進める
+        psg_env_phase += env_inc;
+        while (psg_env_phase >= 1.0f) {
+            psg_env_phase -= 1.0f;
+            psg_envelope_step(&psg_env_vol, &psg_env_dir, &psg_env_hold, psg_reg[13] & 0x0F);
+        }
+        float env = (float)psg_env_vol / 15.0f;
 
         float mixed = 0.0f;
         for (int ch = 0; ch < 3; ch++) {
@@ -143,7 +172,10 @@ static void fill_psg(uint32_t* buffer, int samples) {
             // AY ミキサー: (トーン or 無効) AND (ノイズ or 無効)
             int t = tone_en[ch]  ? tone_out      : 1;
             int n = noise_en[ch] ? psg_noise_bit : 1;
-            float amp = VOICE_MAX_AMPLITUDE * ((float)vol[ch] / 15.0f);
+
+            // 音量: bit4 が立っていればエンベロープ、そうでなければ固定
+            float scale = use_env[ch] ? env : ((float)vol[ch] / 15.0f);
+            float amp = VOICE_MAX_AMPLITUDE * scale;
             mixed += (t & n) ? amp : -amp; // 0 中心の矩形波で DC を避ける
         }
 
