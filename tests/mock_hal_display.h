@@ -44,4 +44,12 @@ bool was_cls_called();
 // Inject touch state for TOUCH() function tests
 void set_touch_state(int touched, int x, int y);
 
+// CONSOLE で設定されたスクロール範囲（行）を確認する
+int get_scroll_top();
+int get_scroll_bottom();
+
+// LOCATE / CONSOLE で移動したカーソル位置を確認する
+int get_cursor_x();
+int get_cursor_y();
+
 } // namespace mock_hal

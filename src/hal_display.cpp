@@ -255,10 +255,32 @@ static void char_at(int x, int y, char c, uint16_t fg, uint16_t bg) {
   }
 }
 
+// CONSOLE でスクロール範囲を制限できる。既定は全画面（0 .. TEXT_ROWS-1）
+static int scroll_top_row = 0;
+static int scroll_bottom_row = TEXT_ROWS - 1;
+
+void hal_display_set_scroll_region(int top_row, int bottom_row) {
+  if (top_row < 0) top_row = 0;
+  if (bottom_row > TEXT_ROWS - 1) bottom_row = TEXT_ROWS - 1;
+  if (top_row > bottom_row) return; // 不正な指定は無視
+
+  scroll_top_row = top_row;
+  scroll_bottom_row = bottom_row;
+}
+
+int hal_display_text_rows() { return TEXT_ROWS; }
+int hal_display_text_cols() { return TEXT_COLS; }
+
+// スクロール領域内だけを 1 行分持ち上げ、最下行をクリアする
 static void scroll_up() {
-  memmove(frame_buffer, frame_buffer + (FONT_HEIGHT * LCD_WIDTH),
-          (LCD_HEIGHT - FONT_HEIGHT) * LCD_WIDTH * 2);
-  memset(frame_buffer + (LCD_HEIGHT - FONT_HEIGHT) * LCD_WIDTH, 0,
+  int top_px    = scroll_top_row * FONT_HEIGHT;
+  int region_rows = scroll_bottom_row - scroll_top_row + 1;
+  int region_px = region_rows * FONT_HEIGHT;
+
+  uint16_t* base = frame_buffer + top_px * LCD_WIDTH;
+  memmove(base, base + FONT_HEIGHT * LCD_WIDTH,
+          (region_px - FONT_HEIGHT) * LCD_WIDTH * 2);
+  memset(base + (region_px - FONT_HEIGHT) * LCD_WIDTH, 0,
          FONT_HEIGHT * LCD_WIDTH * 2);
 }
 
@@ -299,9 +321,9 @@ void hal_display_print(const char *text) {
       cursor_x = 0;
       cursor_y++;
     }
-    if (cursor_y >= TEXT_ROWS) {
+    if (cursor_y > scroll_bottom_row) {
       scroll_up();
-      cursor_y = TEXT_ROWS - 1;
+      cursor_y = scroll_bottom_row;
       needs_full_sync = true; // 画面全体がずれるので部分転送では足りない
     }
   }
@@ -368,6 +390,13 @@ int hal_system_break_requested() {
   // 待たずに 1 文字だけ覗く。Ctrl-C(0x03) なら中断、それ以外は捨てる
   int c = getchar_timeout_us(0);
   return (c == 0x03) ? 1 : 0;
+}
+
+int hal_system_get_key() {
+  int c = getchar_timeout_us(0);
+  if (c == PICO_ERROR_TIMEOUT || c < 0) return 0; // 押されていない
+  if (c == 0x03) return 0;                          // Ctrl-C は中断に任せる
+  return c;
 }
 #else
 // ---------------------------------------------------------

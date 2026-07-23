@@ -63,6 +63,7 @@ struct ForLoopContext {
 #define MAX_VARIABLES 128
 #define MAX_ARRAY_HEAP 1024
 #define MAX_FOR_STACK 16
+#define MAX_REPEAT_STACK 16
 #define MAX_CALL_STACK 64
 #define MAX_DATA_BUFFER 256
 #define MAX_PROGRAM_LINES 256
@@ -92,6 +93,11 @@ extern const uint16_t PALETTE[16];
 
 extern ForLoopContext for_stack[MAX_FOR_STACK];
 extern int for_stack_ptr;
+
+// REPEAT があった行番号を覚えておく。戻るときは FOR/NEXT と同じく
+// 「その次の行」から実行を再開する（run_program は行頭から実行するため）
+extern int repeat_stack_line[MAX_REPEAT_STACK];
+extern int repeat_stack_ptr;
 
 extern int call_stack[MAX_CALL_STACK];
 extern int call_stack_ptr;
@@ -141,6 +147,9 @@ void execute_assignment(const TokenList& tokens, int& pos, bool explicit_let);
 void execute_input(const TokenList& tokens, int& pos);
 void execute_end(const TokenList& tokens, int& pos);
 void execute_stop(const TokenList& tokens, int& pos);
+void execute_repeat(const TokenList& tokens, int& pos);
+void execute_until(const TokenList& tokens, int& pos);
+void execute_get(const TokenList& tokens, int& pos);
 void execute_on(const TokenList& tokens, int& pos);
 void execute_mid_statement(const TokenList& tokens, int& pos);
 void execute_not_implemented(const TokenList& tokens, int& pos);
@@ -156,6 +165,8 @@ void execute_brightness(const TokenList& tokens, int& pos);
 void execute_paint(const TokenList& tokens, int& pos);
 void execute_window(const TokenList& tokens, int& pos);
 void execute_poly(const TokenList& tokens, int& pos);
+void execute_console(const TokenList& tokens, int& pos);
+void execute_width(const TokenList& tokens, int& pos);
 
 // WINDOW で設定したユーザー座標系を既定（画面座標）に戻す
 void reset_graphics_window();

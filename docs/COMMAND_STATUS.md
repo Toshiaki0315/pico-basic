@@ -30,6 +30,8 @@
 | `GOTO` / `GOSUB` / `RETURN` | 実装 | |
 | `IF` … `THEN` / `ELSE` | 実装 | |
 | `FOR` / `NEXT` | 実装 | |
+| `REPEAT` / `UNTIL` | 実装 | 後判定ループ。`REPEAT` は行頭に置く |
+| `GET` | 実装 | ノンウェイト 1 文字入力（文字変数は文字、数値変数は文字コード） |
 | `END` / `STOP` | 実装 | |
 | `LET` / 代入 | 実装 | `LET` 省略可 |
 | `DIM` | 実装 | 1D / 2D |
@@ -43,6 +45,8 @@
 | :--- | :--- | :--- |
 | `CLS` | 実装 | |
 | `LOCATE` | 実装 | |
+| `CONSOLE` | 実装 | スクロール領域を行範囲で制限。引数なしで全画面 |
+| `WIDTH` | 部分 | 40×30 のみ対応（フォント 8×8 固定）。他はエラー |
 | `COLOR` | 実装 | パレット索引 |
 | `PSET` / `LINE` / `CIRCLE` | 実装 | HAL 描画。座標は `(x,y)` / `x,y` の両表記可。`LINE` は末尾の `B` / `BF` に対応 |
 | `PAINT` | 実装 | 塗りつぶし |
@@ -66,7 +70,7 @@
 
 次は **`execute_not_implemented`** 経由（実行すると通知メッセージ）:
 
-`INIT`, `NEWON`, `WIDTH`, `CONSOLE`, `REPEAT`, `UNTIL`, `GET`
+`INIT`, `NEWON`
 
 ---
 

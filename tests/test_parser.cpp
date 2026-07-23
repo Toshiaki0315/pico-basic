@@ -125,7 +125,8 @@ TEST_F(ExecutionTest, ForNextWithStep) {
 TEST_F(ExecutionTest, SyntaxErrorInDeferred) {
     store_line(10, lex("PRINT (1+2")); 
     run_program(10);
-    EXPECT_TRUE(mock_hal::get_raw_print_buffer().find("Error in line 10") != std::string::npos);
+    EXPECT_TRUE(mock_hal::get_raw_print_buffer().find("Error 2 in line 10") != std::string::npos)
+        << mock_hal::get_raw_print_buffer();
 }
 
 TEST_F(ExecutionTest, ForNextNested) {
@@ -171,7 +172,8 @@ TEST_F(ExecutionTest, GosubNested) {
 TEST_F(ExecutionTest, ReturnWithoutGosub) {
     store_line(10, lex("RETURN"));
     run_program(5);
-    EXPECT_TRUE(mock_hal::get_raw_print_buffer().find("Error in line 10: RETURN WITHOUT GOSUB") != std::string::npos);
+    EXPECT_TRUE(mock_hal::get_raw_print_buffer().find("Error in line 10: RETURN WITHOUT GOSUB") != std::string::npos)
+        << mock_hal::get_raw_print_buffer();
 }
 
 // ---------------------------------------------------------
@@ -391,9 +393,12 @@ protected:
 };
 
 TEST_F(Phase2ExtensionTest, KeywordStubRouting) {
-    // Assert that these keywords don't throw syntax errors and route safely
-    parse_and_execute(lex("GET A$"));
-    EXPECT_TRUE(mock_hal::get_raw_print_buffer().find("Notice: Command 'GET' is registered but not yet implemented.") != std::string::npos);
+    // まだ未実装のままの命令が、構文エラーではなく通知で流れること
+    parse_and_execute(lex("INIT"));
+    EXPECT_TRUE(mock_hal::get_raw_print_buffer().find("Notice: Command 'INIT' is registered but not yet implemented.") != std::string::npos);
+    mock_hal::reset();
+    parse_and_execute(lex("NEWON"));
+    EXPECT_TRUE(mock_hal::get_raw_print_buffer().find("Notice: Command 'NEWON' is registered but not yet implemented.") != std::string::npos);
     mock_hal::reset();
 }
 

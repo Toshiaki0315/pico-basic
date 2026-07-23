@@ -74,8 +74,17 @@ void hal_display_cls() {
     cls_called = true;
 }
 
+static int mock_cursor_x = 0;
+static int mock_cursor_y = 0;
+
 void hal_display_locate(int x, int y) {
-    // No-op
+    if (x >= 0) mock_cursor_x = x;
+    if (y >= 0) mock_cursor_y = y;
+}
+
+namespace mock_hal {
+    int get_cursor_x() { return mock_cursor_x; }
+    int get_cursor_y() { return mock_cursor_y; }
 }
 
 void hal_graphics_pset(int x, int y, uint16_t color) {
@@ -176,15 +185,42 @@ void hal_display_input(char* buffer, int max_len) {
 void hal_display_set_mock_input(const char* input) {
     strncpy(mock_input_buf, input, sizeof(mock_input_buf) - 1);
     mock_input_buf[sizeof(mock_input_buf) - 1] = '\0';
+    extern int mock_get_key_pos;
+    mock_get_key_pos = 0; // GET 用の読み取り位置も先頭へ
 }
 
 void hal_system_wait(int ms) {
     if (ms > 0) usleep(ms * 1000);
 }
 
+// スクロール範囲（CONSOLE 用）。テストからは記録だけ確認できる
+static int mock_scroll_top = 0;
+static int mock_scroll_bottom = 29; // 320x240 / 8 = 30 行
+
+void hal_display_set_scroll_region(int top_row, int bottom_row) {
+    mock_scroll_top = top_row;
+    mock_scroll_bottom = bottom_row;
+}
+
+int hal_display_text_rows() { return 30; }
+int hal_display_text_cols() { return 40; }
+
+namespace mock_hal {
+    int get_scroll_top()    { return mock_scroll_top; }
+    int get_scroll_bottom() { return mock_scroll_bottom; }
+}
+
 int hal_system_break_requested() {
     // ホストテストでは中断しない（無限ループのテストは max_steps で止める）
     return 0;
+}
+
+// GET が返すキーを 1 文字ずつ供給する。set_mock_input で仕込んだ文字列を先頭から消費する
+int mock_get_key_pos = 0;
+
+int hal_system_get_key() {
+    if (mock_input_buf[mock_get_key_pos] == '\0') return 0;
+    return (unsigned char)mock_input_buf[mock_get_key_pos++];
 }
 
 // ---------------------------------------------------------

@@ -109,6 +109,61 @@ void execute_wait(const TokenList& tokens, int& pos) {
     hal_system_wait(static_cast<int>(val.num_val));
 }
 
+// CONSOLE ys, yl : テキストのスクロール領域を行 ys から yl 行分に制限する。
+// Hu-BASIC の CONSOLE は引数が多いが、本実装では開始行と行数だけを解釈する。
+// 引数なしの CONSOLE で全画面に戻す。
+void execute_console(const TokenList& tokens, int& pos) {
+    pos++;
+
+    if (pos >= tokens.size || tokens.tokens[pos].type == TokenType::END_OF_FILE
+        || tokens.tokens[pos].type == TokenType::COLON) {
+        hal_display_set_scroll_region(0, hal_display_text_rows() - 1);
+        return;
+    }
+
+    int top = static_cast<int>(parse_relation(tokens, pos).num_val);
+
+    int rows = hal_display_text_rows() - top; // 省略時は下端まで
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
+        pos++;
+        rows = static_cast<int>(parse_relation(tokens, pos).num_val);
+    }
+
+    if (top < 0 || rows <= 0 || top >= hal_display_text_rows())
+        throw std::runtime_error("Illegal function call: CONSOLE range");
+
+    int bottom = top + rows - 1;
+    if (bottom > hal_display_text_rows() - 1) bottom = hal_display_text_rows() - 1;
+
+    hal_display_set_scroll_region(top, bottom);
+    // カーソルを領域の先頭へ移動する。これをしないとカーソルが領域外に
+    // 残り、そこに文字が出続けて「CONSOLE が効かない」ように見える
+    hal_display_locate(0, top);
+}
+
+// WIDTH c, l : 文字数・行数の指定。
+// 本実装のフォントは 8x8 固定（40x30）なので、指定値がそれと一致するかだけ
+// 検査し、異なる場合はエラーにする（黙って無視して混乱させない）。
+void execute_width(const TokenList& tokens, int& pos) {
+    pos++;
+
+    if (pos >= tokens.size || tokens.tokens[pos].type == TokenType::END_OF_FILE
+        || tokens.tokens[pos].type == TokenType::COLON) {
+        return; // 引数なしは現状維持
+    }
+
+    int cols = static_cast<int>(parse_relation(tokens, pos).num_val);
+    if (cols != hal_display_text_cols())
+        throw std::runtime_error("Illegal function call: WIDTH only supports 40 columns");
+
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
+        pos++;
+        int rows = static_cast<int>(parse_relation(tokens, pos).num_val);
+        if (rows != hal_display_text_rows())
+            throw std::runtime_error("Illegal function call: WIDTH only supports 30 rows");
+    }
+}
+
 void execute_locate(const TokenList& tokens, int& pos) {
     pos++; 
     Value vx = parse_relation(tokens, pos);

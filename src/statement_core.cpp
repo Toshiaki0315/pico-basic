@@ -449,6 +449,68 @@ void execute_stop(const TokenList& tokens, int& pos) {
     branch_taken = true;
 }
 
+// REPEAT … UNTIL 条件（後判定ループ）。
+// UNTIL の条件が偽の間、REPEAT の次の行へ戻る。
+// FOR/NEXT と同じく行番号で戻るため、REPEAT は行頭に置く前提。
+void execute_repeat(const TokenList& tokens, int& pos) {
+    pos++;
+
+    // 同じ REPEAT に再突入したとき（UNTIL から戻ってきた場合）は
+    // 二重に積まない。行番号で判定する
+    if (repeat_stack_ptr > 0 && repeat_stack_line[repeat_stack_ptr - 1] == current_line) {
+        return;
+    }
+    if (repeat_stack_ptr >= MAX_REPEAT_STACK)
+        throw std::runtime_error("Out of Memory: REPEAT Stack Limit Reached");
+
+    repeat_stack_line[repeat_stack_ptr++] = current_line;
+}
+
+void execute_until(const TokenList& tokens, int& pos) {
+    pos++;
+    if (repeat_stack_ptr == 0) throw std::runtime_error("UNTIL without REPEAT");
+
+    Value cond = parse_relation(tokens, pos);
+    if (cond.type != Value::Type::NUM && cond.type != Value::Type::INT)
+        throw std::runtime_error("Type Mismatch: UNTIL condition must be numeric");
+
+    if (cond.num_val != 0.0f) {
+        // 条件成立 → ループ終了
+        repeat_stack_ptr--;
+    } else {
+        // 条件不成立 → REPEAT の次の行へ戻る
+        int repeat_line = repeat_stack_line[repeat_stack_ptr - 1];
+        uint16_t idx = get_next_program_line(repeat_line);
+        if (idx == 0xFFFF) throw std::runtime_error("No line after REPEAT");
+        current_line = logical_memory[idx + 2] | (logical_memory[idx + 3] << 8);
+        branch_taken = true;
+    }
+}
+
+// GET 変数：キーが押されていれば取得、なければ空（文字変数）/ 0（数値変数）。
+// 待たずに戻るので、ゲームのリアルタイム入力に使える。
+void execute_get(const TokenList& tokens, int& pos) {
+    pos++;
+    require_token(tokens, pos, TokenType::IDENTIFIER, "Syntax Error: GET expects a variable");
+    char var_name[64];
+    strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name) - 1);
+    var_name[sizeof(var_name) - 1] = '\0';
+    pos++;
+
+    int key = hal_system_get_key();
+
+    int nlen = strlen(var_name);
+    bool is_str_var = (nlen > 0 && var_name[nlen - 1] == '$');
+
+    if (is_str_var) {
+        char s[2] = { (key > 0) ? (char)key : '\0', '\0' };
+        set_variable(var_name, Value(s));
+    } else {
+        // 数値変数には文字コードを入れる（未入力は 0）
+        set_variable(var_name, Value(key));
+    }
+}
+
 void execute_on(const TokenList& tokens, int& pos) {
     pos++; 
     Value idx_val = parse_relation(tokens, pos);
@@ -594,9 +656,12 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::LOAD:    execute_load(tokens, pos); break;
 
         case TokenType::INIT: case TokenType::NEWON:
-        case TokenType::WIDTH: case TokenType::CONSOLE:
-        case TokenType::REPEAT: case TokenType::UNTIL: case TokenType::GET:
                                  execute_not_implemented(tokens, pos); break;
+        case TokenType::WIDTH:   execute_width(tokens, pos); break;
+        case TokenType::CONSOLE: execute_console(tokens, pos); break;
+        case TokenType::REPEAT:  execute_repeat(tokens, pos); break;
+        case TokenType::UNTIL:   execute_until(tokens, pos); break;
+        case TokenType::GET:     execute_get(tokens, pos); break;
         case TokenType::WINDOW:  execute_window(tokens, pos); break;
         case TokenType::POLY:    execute_poly(tokens, pos); break;
         case TokenType::BEEP:    execute_beep(tokens, pos); break;

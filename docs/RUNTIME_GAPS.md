@@ -9,9 +9,6 @@
 | 命令 | メモ |
 | :--- | :--- |
 | `INIT`, `NEWON` | メモリモデル・フリーエリア拡張 |
-| `WIDTH`, `CONSOLE` | テキスト解像度・スクロール領域 |
-| `REPEAT` … `UNTIL` | 後判定ループ |
-| `GET` | ノンウェイトキー入力 |
 
 ## 2. ファイル I/O（MicroSD / FatFS）
 
@@ -21,13 +18,15 @@
 
 ## 3. 制御構文で既に実装済み（参照用）
 
-`GOTO`, `GOSUB`, `RETURN`, `FOR`, `NEXT`, `IF`/`THEN`/`ELSE`, `END`, `STOP`, `ON` … `GOTO`/`GOSUB`, `DIM`, `READ`/`DATA`/`RESTORE`, `INPUT`, `LET` 代入など。
+`GOTO`, `GOSUB`, `RETURN`, `FOR`, `NEXT`, `IF`/`THEN`/`ELSE`, `REPEAT`/`UNTIL`, `END`, `STOP`, `ON` … `GOTO`/`GOSUB`, `DIM`, `READ`/`DATA`/`RESTORE`, `INPUT`, `GET`, `LET` 代入など。
+
+**`REPEAT`/`UNTIL` の制限:** `FOR`/`NEXT` と同じく行番号で戻るため、`REPEAT` は行頭に置くこと（同一行に `:` で他の文を続けると戻り先がずれる）。
 
 ## 4. 今後の仕様検討メモ
 
 - **整数 `%` のオーバーフロー**: 仕様は 16bit。内部 `int` との整合テストを増やす価値あり。  
 - **`ELSEIF` / 行ラベル**: Hu-BASIC 方言差の要否を決める。  
-- **エラーコード表示形式**: `Error in line N: ...` と Hu-BASIC コード番号の両立。
+- **エラーコード表示**: 実装済み。`Error <code> in line N: <msg>`（`parser.cpp` の `basic_error_code`）。コードはメッセージのキーワードから推定するため、新しいエラー文言を足したらこの対応表も更新すること。
 
 ---
 

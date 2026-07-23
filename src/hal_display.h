@@ -25,6 +25,15 @@ void hal_display_set_brightness(int level);
 
 // Frame buffer operations
 uint16_t hal_graphics_get_pixel(int x, int y);
+// テキストのスクロール範囲を行単位で制限する（CONSOLE 命令用）。
+// top_row 以上 bottom_row 以下（両端含む）だけがスクロール対象になる。
+// 全画面に戻すには 0 と（行数-1）を渡す。
+void hal_display_set_scroll_region(int top_row, int bottom_row);
+
+// テキスト行数・桁数を返す（WIDTH / CONSOLE の範囲検査用）
+int hal_display_text_rows();
+int hal_display_text_cols();
+
 void hal_display_sync();
 
 // 指定した矩形だけを LCD に転送する。
@@ -41,5 +50,9 @@ void hal_system_wait(int ms);
 // 実行中に中断（Ctrl-C）が要求されたかを調べる。
 // ブロックせずに戻ること。要求されていれば 1、されていなければ 0。
 int hal_system_break_requested();
+
+// キー入力を待たずに 1 文字取得する（BASIC の GET 用）。
+// 押されていなければ 0 を返す。Ctrl-C は中断扱いで捨てる。
+int hal_system_get_key();
 
 void hal_display_set_mock_input(const char* input);

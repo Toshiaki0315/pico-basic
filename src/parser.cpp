@@ -36,12 +36,54 @@ const uint16_t PALETTE[16] = {
 ForLoopContext for_stack[MAX_FOR_STACK];
 int for_stack_ptr = 0;
 
+int repeat_stack_line[MAX_REPEAT_STACK];
+int repeat_stack_ptr = 0;
+
 int call_stack[MAX_CALL_STACK];
 int call_stack_ptr = 0;
 
 Value data_buffer[MAX_DATA_BUFFER];
 int data_buffer_size = 0;
 int data_ptr = 0;
+
+// ---------------------------------------------------------
+// Error reporting
+// ---------------------------------------------------------
+// エラーメッセージから Hu-BASIC のエラーコード（MANUAL の一覧）を推定する。
+// 0 を返したら該当コードなし（メッセージ本文だけを表示する）。
+// メッセージの分類ではなくキーワード照合なので、順序に依存する点に注意。
+static int basic_error_code(const char* msg) {
+    if (strstr(msg, "Out of Memory") || strstr(msg, "Heap Overflow") ||
+        strstr(msg, "Stack Overflow") || strstr(msg, "Program too large")) return 7;   // Out of memory
+    if (strstr(msg, "Syntax Error") || strstr(msg, "Syntax error") ||
+        strstr(msg, "parenthesis") || strstr(msg, "Expected") ||
+        strstr(msg, "Unrecognized")) return 2;                                           // Syntax error
+    if (strstr(msg, "Type Mismatch") || strstr(msg, "Type mismatch")) return 13;        // Type mismatch
+    if (strstr(msg, "Duplicate definition")) return 10;                                 // Duplicate definition
+    if (strstr(msg, "target line not found") || strstr(msg, "No line after") ||
+        strstr(msg, "Undefined line")) return 8;                                        // Undefined line number
+    if (strstr(msg, "out of bounds") || strstr(msg, "Subscript") ||
+        strstr(msg, "Array index")) return 9;                                           // Subscript out of range
+    if (strstr(msg, "File Error") || strstr(msg, "File not found")) return 26;          // File not found
+    if (strstr(msg, "not yet implemented") || strstr(msg, "Reserved")) return 34;       // Reserved feature
+    if (strstr(msg, "Illegal function call") || strstr(msg, "Invalid color") ||
+        strstr(msg, "TOUCH argument") || strstr(msg, "supports")) return 5;             // Illegal function call
+    return 0;
+}
+
+// 実行時エラーを表示する。line < 0 はダイレクトモード（行番号なし）。
+static void report_error(const char* what, int line) {
+    int code = basic_error_code(what);
+    char buf[192];
+    if (line >= 0) {
+        if (code > 0) snprintf(buf, sizeof(buf), "Error %d in line %d: %s\n", code, line, what);
+        else          snprintf(buf, sizeof(buf), "Error in line %d: %s\n", line, what);
+    } else {
+        if (code > 0) snprintf(buf, sizeof(buf), "Error %d: %s\n", code, what);
+        else          snprintf(buf, sizeof(buf), "%s\n", what);
+    }
+    basic_print(buf);
+}
 
 // ---------------------------------------------------------
 // Public API
@@ -88,9 +130,7 @@ bool parse_and_execute(const TokenList& tokens) {
             } else break;
         }
     } catch (const std::exception& e) {
-        char buf[128];
-        snprintf(buf, sizeof(buf), "%s\n", e.what());
-        basic_print(buf);
+        report_error(e.what(), -1); // ダイレクトモード（行番号なし）
     }
     return false;
 }
@@ -102,8 +142,9 @@ void run_program(int max_steps) {
     execute_clear();
 
     for_stack_ptr = 0;
+    repeat_stack_ptr = 0;
     call_stack_ptr = 0;
-    
+
     // Pre-scan DATA statements
     data_buffer_size = 0;
     data_ptr = 0;
@@ -161,9 +202,7 @@ void run_program(int max_steps) {
                 } else break;
             }
         } catch (const std::exception& e) {
-            char buf[128];
-            snprintf(buf, sizeof(buf), "Error in line %d: %s\n", current_line, e.what());
-            basic_print(buf);
+            report_error(e.what(), current_line);
             break;
         }
         
