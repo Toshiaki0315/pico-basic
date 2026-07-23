@@ -534,38 +534,89 @@ void execute_get_at(const TokenList& tokens, int& pos) {
     }
 }
 
+// PUT@ の描画モード（本実装の定義。MANUAL / specification に明記）
+//   0 PSET   … そのまま上書き（既定）
+//   1 OR     … 画面と論理和
+//   2 AND    … 画面と論理積
+//   3 XOR    … 画面と排他的論理和（同じ絵を 2 回置くと消える＝スプライト向き）
+//   4 PRESET … 色を反転して上書き
+enum { PUT_PSET = 0, PUT_OR = 1, PUT_AND = 2, PUT_XOR = 3, PUT_PRESET = 4 };
+
+static uint16_t apply_put_mode(int mode, uint16_t src, uint16_t dst) {
+    switch (mode) {
+        case PUT_OR:     return src | dst;
+        case PUT_AND:    return src & dst;
+        case PUT_XOR:    return src ^ dst;
+        case PUT_PRESET: return (uint16_t)~src;
+        case PUT_PSET:
+        default:         return src;
+    }
+}
+
+// PUT@ (x,y), A [, mode]
+// PUT@ (x1,y1)-(x2,y2), A [, mode]   … 転送先矩形に合わせて拡大縮小する
 void execute_put_at(const TokenList& tokens, int& pos) {
-    pos++; 
-    require_token(tokens, pos, TokenType::LPAREN, "Expected '('"); pos++;
-    Value vx = parse_relation(tokens, pos);
-    require_token(tokens, pos, TokenType::COMMA, "Expected ','"); pos++;
-    Value vy = parse_relation(tokens, pos);
-    require_token(tokens, pos, TokenType::RPAREN, "Expected ')'"); pos++;
-    require_token(tokens, pos, TokenType::COMMA, "Expected ','"); pos++;
-    
+    pos++;
+
+    int px1, py1;
+    parse_point(tokens, pos, px1, py1);
+
+    // 第 2 点があれば拡大縮小、なければ等倍
+    bool has_dst_rect = false;
+    int px2 = px1, py2 = py1;
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::MINUS) {
+        pos++;
+        parse_point(tokens, pos, px2, py2);
+        has_dst_rect = true;
+    }
+
+    require_token(tokens, pos, TokenType::COMMA, "Expected ',' before array name"); pos++;
+
     if (pos >= tokens.size || tokens.tokens[pos].type != TokenType::IDENTIFIER)
         throw std::runtime_error("Expected array name");
-    
     char array_name[64];
-    strncpy(array_name, tokens.tokens[pos].text, sizeof(array_name)-1);
+    strncpy(array_name, tokens.tokens[pos].text, sizeof(array_name) - 1);
+    array_name[sizeof(array_name) - 1] = '\0';
     pos++;
-    
+
+    int mode = PUT_PSET;
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
+        pos++;
+        mode = static_cast<int>(parse_relation(tokens, pos).num_val);
+    }
+
     ArrayRef* arr = get_array(array_name);
     if (!arr) throw std::runtime_error("Array not dimensioned");
-    
+
     int w = static_cast<int>(read_heap_value(arr->start_addr).num_val);
     int h = static_cast<int>(read_heap_value(arr->start_addr + 8).num_val);
-    int px, py;
-    user_to_screen(vx.num_val, vy.num_val, px, py); // WINDOW の座標系に従う
-    
-    int idx = 2;
-    for (int j = 0; j < h; j++) {
-        for (int i = 0; i < w; i++) {
-            uint16_t color = static_cast<uint16_t>(read_heap_value(arr->start_addr + (idx++ * 8)).num_val);
-            hal_graphics_pset(px + i, py + j, color);
+    if (w <= 0 || h <= 0) return;
+
+    // 転送先のサイズ。矩形指定がなければ元画像と同じ
+    int dst_w = has_dst_rect ? (abs(px2 - px1) + 1) : w;
+    int dst_h = has_dst_rect ? (abs(py2 - py1) + 1) : h;
+    int ox = (px1 < px2) ? px1 : px2;
+    int oy = (py1 < py2) ? py1 : py2;
+
+    for (int dy = 0; dy < dst_h; dy++) {
+        for (int dx = 0; dx < dst_w; dx++) {
+            // 転送先ピクセル → 元画像の対応ピクセル（最近傍）
+            int si = has_dst_rect ? (dx * w / dst_w) : dx;
+            int sj = has_dst_rect ? (dy * h / dst_h) : dy;
+
+            uint16_t src = static_cast<uint16_t>(
+                read_heap_value(arr->start_addr + ((2 + sj * w + si) * 8)).num_val);
+
+            int x = ox + dx;
+            int y = oy + dy;
+            uint16_t color = (mode == PUT_PSET)
+                ? src
+                : apply_put_mode(mode, src, hal_graphics_get_pixel(x, y));
+            hal_graphics_pset(x, y, color);
         }
     }
-    hal_display_sync();
+
+    hal_display_sync_rect(ox, oy, dst_w, dst_h);
 }
 
 void execute_save(const TokenList& tokens, int& pos) {

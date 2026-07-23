@@ -141,3 +141,55 @@ TEST_F(AdvancedGraphicsTest, RedimSameArrayIsRejected) {
     EXPECT_NE(mock_hal::get_raw_print_buffer().find("Duplicate definition"), std::string::npos)
         << mock_hal::get_raw_print_buffer();
 }
+
+// ---------------------------------------------------------
+// PUT@ の描画モードと拡大縮小
+// ---------------------------------------------------------
+
+// A に w×h の画像を入れるヘルパ（全画素同じ色）
+static void fill_sprite(const char* dimline, int w, int h, int color_idx) {
+    parse_and_execute(lex(dimline));
+    // GET@ で取り込むのが本筋だが、ここでは PSET で作った矩形を取り込む
+    char buf[64];
+    // 画面に w×h の矩形を描いて GET@ で吸い出す
+    for (int y = 0; y < h; y++)
+        for (int x = 0; x < w; x++) {
+            snprintf(buf, sizeof(buf), "PSET (%d,%d), %d", x, y, color_idx);
+            parse_and_execute(lex(buf));
+        }
+    snprintf(buf, sizeof(buf), "GET@ (0,0)-(%d,%d), A", w - 1, h - 1);
+    parse_and_execute(lex(buf));
+}
+
+TEST_F(AdvancedGraphicsTest, PutAtDefaultOverwrites) {
+    fill_sprite("DIM A(200)", 4, 4, 15); // 白
+    parse_and_execute(lex("PUT@ (100,100), A"));
+
+    EXPECT_EQ(hal_graphics_get_pixel(100, 100), hal_graphics_get_pixel(0, 0))
+        << "等倍 PUT@ で色が復元されない";
+}
+
+TEST_F(AdvancedGraphicsTest, PutAtXorErasesOnSecondPut) {
+    fill_sprite("DIM A(200)", 4, 4, 15);
+
+    // XOR(mode 3) で 2 回置くと元の背景（黒 0）に戻る
+    parse_and_execute(lex("PUT@ (100,100), A, 3"));
+    uint16_t after_first = hal_graphics_get_pixel(100, 100);
+    parse_and_execute(lex("PUT@ (100,100), A, 3"));
+    uint16_t after_second = hal_graphics_get_pixel(100, 100);
+
+    EXPECT_NE(after_first, 0) << "1 回目の XOR で描画されていない";
+    EXPECT_EQ(after_second, 0) << "2 回目の XOR で消えていない（スプライト消去にならない）";
+}
+
+TEST_F(AdvancedGraphicsTest, PutAtScalesToDestRect) {
+    fill_sprite("DIM A(200)", 2, 2, 15); // 2x2 の画像
+
+    // 転送先を 10x10 に拡大
+    parse_and_execute(lex("PUT@ (100,100)-(109,109), A"));
+
+    // 拡大先の四隅と中央が塗られている
+    EXPECT_NE(hal_graphics_get_pixel(100, 100), 0);
+    EXPECT_NE(hal_graphics_get_pixel(109, 109), 0) << "拡大先の右下端が塗られていない";
+    EXPECT_NE(hal_graphics_get_pixel(105, 105), 0);
+}

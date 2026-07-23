@@ -42,6 +42,8 @@ Hu-BASICのコア構文に加え、X1/MZライクなマルチメディア機能�
   * `CIRCLE (x,y), 半径, 色`: 円の描画。
   * `POLY (x,y), 半径, 色, 頂点数 [, スキップ [, 開始角度]]`: 正多角形・星形の描画。スキップは何個先の頂点と結ぶか（1=多角形、2以上=星形）。**Hu-BASIC の引数の意味が資料で確定できないため、本実装ではこの並びを正とする。**
   * `WINDOW (xs,ys)-(xe,ye), (x1,y1)-(x2,y2)`: 画面座標へのユーザー座標系の割り当て。引数なしで解除。以降のグラフィック命令（`GET@` / `PUT@` を含む）の座標はユーザー座標として扱う。
+  * `GET@ (x1,y1)-(x2,y2), A`: 画面の矩形領域を配列に取り込む（先頭2要素に幅・高さ）。
+  * `PUT@ (x,y)[-(x2,y2)], A [, mode]`: 配列の画像を描画。第2点で拡大縮小、`mode` で論理演算（0=PSET / 1=OR / 2=AND / 3=XOR / 4=PRESET）。**mode の番号は本実装の定義。**
 * **サウンド制御（I2S DAC 出力）:**
   * `BEEP`: 単音のビープ音（880Hz / 200ms）。
   * `MUSIC "文字列"[, "文字列", "文字列"]` / `PLAY ...`: MML（Music Macro Language）による音楽演奏。`PLAY` は `MUSIC` と同一のエイリアス。カンマ区切りで最大 3 声を同時発音する（例: `PLAY "O4CEG","O4EGB","O5C"`）。**非同期再生**（演奏を待たずに次の行へ進む。Ctrl-C / `NEW` で停止）。`V`（音量）は声ごとに独立で、既定値は 8。
@@ -82,13 +84,13 @@ Hu-BASICのコア構文に加え、X1/MZライクなマルチメディア機能�
 * Pico SDK の CMake ターゲット（`pico_basic`）とホストテスト（`BUILD_TESTS=ON`）。
 * USB CDC REPL、四則演算、`PRINT`、変数、`lexer`/`parser` のコア。
 
-### Phase 2: LCD 表示の統合 — **達成（部分仕様は未）**
+### Phase 2: LCD 表示の統合 — **達成**
 
 * Waveshare 向け SPI 初期化・フレームバッファ、`PRINT` の LCD エコー。
 * **テキスト:** 8×8 ドットフォント、グリッド上のカーソル、行末折返し、下端での **上スクロール**（`memmove`）、`CLS` / `LOCATE`。
-* **未対応:** `CONSOLE` / `WIDTH` によるテキストウィンドウ分割（parser 側は未実装通知）。
+* **`CONSOLE` / `WIDTH`:** 実装済み（`CONSOLE` はスクロール領域制限、`WIDTH` は 40×30 検査）。
 
-### Phase 3: プログラムの保存と制御構文 — **実装完了（実機確認待ち）**
+### Phase 3: プログラムの保存と制御構文 — **達成（実機確認済み）**
 
 * **制御構文:** `GOTO` / `GOSUB` / `RETURN` / `FOR` / `NEXT` / `IF` … `THEN` / `ELSE` 等は実行パスあり（Hu-BASIC 全命令との一致は [RUNTIME_GAPS.md](docs/RUNTIME_GAPS.md)）。
 * **ファイル:** ホストでは `SAVE` / `LOAD` / `FILES` が stdio で動作。**Pico では FatFS + MicroSD（SDIO 4bit / PIO 実装）** で動作（`hal_sdcard.cpp` / ピン定義は `src/hw_config.c`）。
@@ -98,7 +100,7 @@ Hu-BASICのコア構文に加え、X1/MZライクなマルチメディア機能�
 * `PSET`, `LINE`, `CIRCLE`, `COLOR`, `PAINT`, `GET@`, `PUT@` を parser から `hal_display` に接続済み。
 * 実機でのリフレッシュレート・SPI 帯域の評価は運用ドキュメントに逐次追記する。
 
-### Phase 5: サウンドとタッチ — **実装完了（タッチは実機確認待ち）**
+### Phase 5: サウンドとタッチ — **達成（実機確認済み）**
 
 * parser から `BEEP` / `PLAY` / `MUSIC` / `SOUND`、`TOUCH(n)` を呼び出し可能。
 * **Pico 上:** `hal_sound.cpp` は I2S DAC 出力を実装済み（矩形波・3重和音・非同期再生）。`hal_touch.cpp` は CST328 の I2C 読み取りを実装済み。
