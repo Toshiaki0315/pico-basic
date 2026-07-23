@@ -33,7 +33,10 @@ static uint audio_sm = 0;
 // メインは積むだけで待たないので、演奏中も BASIC を実行できる。
 // 添字は自由に増やし続け、参照時にマスクする（満杯と空を区別するため）。
 // ---------------------------------------------------------
-#define SOUND_QUEUE_SIZE 128 // 2 のべき乗であること
+// 2 のべき乗であること。1 音 = 音符 + 切れ目で 2 ステップ使うので、
+// 256 段でおよそ 128 音まで待たずに積める。これを超える曲は、
+// キューが空くまで PLAY がブロックする（曲は正しく鳴るが、その間 BASIC は止まる）。
+#define SOUND_QUEUE_SIZE 256
 
 typedef struct {
     float    freq[HAL_SOUND_VOICES];
@@ -309,8 +312,10 @@ void hal_sound_play_voices(const HalSoundVoice voices[HAL_SOUND_VOICES], int dur
 
     psg_mode = false; // キュー再生に戻す（PSG と排他）
 
-    // 満杯のときだけ待つ。長い曲でキューを無制限に伸ばさないため
+    // 満杯のときだけ待つ。長い曲でキューを無制限に伸ばさないため。
+    // 停止要求が来たら積むのをやめて抜ける（満杯待ちで固まらないように）
     while ((uint32_t)(queue_tail - queue_head) >= SOUND_QUEUE_SIZE) {
+        if (stop_requested) return;
         tight_loop_contents();
     }
 
