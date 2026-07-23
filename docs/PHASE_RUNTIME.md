@@ -46,7 +46,8 @@
 
 | 項目 | 状態 | 参照 |
 | :--- | :--- | :--- |
-| `BEEP` / `MUSIC` / `PLAY` / `SOUND`（論理） | 実装 | `parser.cpp` → `hal_sound.cpp` |
+| `BEEP` / `MUSIC` / `PLAY` | 実装 | `parser.cpp` → `hal_sound.cpp` |
+| `SOUND`（PSG レジスタ） | 実装（実機確認待ち） | AY-3-8910 相当。トーン3ch・ノイズ・音量。エンベロープ未 |
 | Pico 上の実音出力 | 実装（実機確認済み） | `hal_sound.cpp` + `src/pio/i2s_out.pio` — I2S DAC（PCM5101A）を PIO+DMA で駆動。BCK=GP2 / LRCK=GP3 / DIN=GP4、48kHz |
 | 矩形波（PSG）化・3重和音 | 実装 | `hal_sound.cpp` で 3声の矩形波をミックス。`MUSIC "A","B","C"` で同時発音 |
 | 非同期再生 | 実装（実機確認待ち） | 発音キュー + DMA 割り込みのシーケンサ。`PLAY` は待たずに戻り、Ctrl-C / `NEW` で停止 |

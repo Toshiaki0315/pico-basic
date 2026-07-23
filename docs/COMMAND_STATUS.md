@@ -61,7 +61,7 @@
 | :--- | :--- | :--- |
 | `BEEP` | 実装 | 実機は I2S DAC で発音（880Hz / 200ms）、ホストはログ |
 | `MUSIC` / `PLAY` | 実装 | 同一 `execute_music`（MML サブセット）。カンマ区切りで最大 3 声の和音。**非同期再生**（Ctrl-C / `NEW` で停止） |
-| `SOUND` | 部分 | 実装は `SOUND 周波数, 長さ`。Hu-BASIC の `SOUND reg, data`（PSG レジスタ）とは非互換 |
+| `SOUND` | 実装 | `SOUND reg, data`（PSG レジスタ）。トーン3ch・ノイズ・音量。エンベロープは未 |
 | `WAIT` | 実装 | |
 | `GPIO` | 部分 | Pico 定義時は実 GPIO、ホストはモック |
 | `TOUCH(...)` 関数 | 実装 | 実機は CST328（I2C）、ホストはモック値 |

@@ -17,9 +17,23 @@ TEST_F(SoundLogicTest, BeepCommand) {
     EXPECT_NO_THROW(parse_and_execute(lex("BEEP")));
 }
 
-TEST_F(SoundLogicTest, SoundCommand) {
-    EXPECT_NO_THROW(parse_and_execute(lex("SOUND 440, 500")));
-    EXPECT_NO_THROW(parse_and_execute(lex("SOUND 880, 250")));
+TEST_F(SoundLogicTest, SoundWritesPsgRegisters) {
+    // SOUND は PSG（AY-3-8910 相当）レジスタへの書き込み
+    // 440Hz の周期 TP = 2MHz/(16*440) ≒ 284。R0 は 8bit なので 284 は 28 にマスクされる
+    testing::internal::CaptureStdout();
+    parse_and_execute(lex("SOUND 0, 284"));  // 284 & 0xFF = 28
+    parse_and_execute(lex("SOUND 1, 1"));    // 上位
+    parse_and_execute(lex("SOUND 7, 62"));   // ミキサー（トーン A 有効）
+    parse_and_execute(lex("SOUND 8, 15"));   // ch A 音量 最大
+    std::string out = testing::internal::GetCapturedStdout();
+
+    EXPECT_NE(out.find("PSG R0 = 28"), std::string::npos) << "8bit マスクが効いていない: " << out;
+    EXPECT_NE(out.find("PSG R8 = 15"), std::string::npos) << out;
+}
+
+TEST_F(SoundLogicTest, SoundRejectsBadRegister) {
+    parse_and_execute(lex("SOUND 16, 0"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("SOUND register 0-15"), std::string::npos);
 }
 
 TEST_F(SoundLogicTest, MusicCommandBasic) {

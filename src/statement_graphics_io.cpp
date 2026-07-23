@@ -764,13 +764,19 @@ void execute_beep(const TokenList& tokens, int& pos) {
     hal_sound_beep();
 }
 
+// SOUND reg, data : PSG（AY-3-8910 相当）レジスタへの書き込み。
+// レジスタの意味は hal_sound.h を参照。周波数 = 2MHz / (16 × 周期)。
 void execute_sound(const TokenList& tokens, int& pos) {
-    pos++; 
-    Value freq_val = parse_relation(tokens, pos);
-    require_token(tokens, pos, TokenType::COMMA, "Expected ','"); pos++;
-    Value dur_val = parse_relation(tokens, pos);
-    
-    hal_sound_play(freq_val.num_val, static_cast<int>(dur_val.num_val));
+    pos++;
+    Value reg_val = parse_relation(tokens, pos);
+    require_token(tokens, pos, TokenType::COMMA, "Expected ',' in SOUND"); pos++;
+    Value data_val = parse_relation(tokens, pos);
+
+    int reg = static_cast<int>(reg_val.num_val);
+    if (reg < 0 || reg >= HAL_SOUND_PSG_REGS)
+        throw std::runtime_error("Illegal function call: SOUND register 0-15");
+
+    hal_sound_psg_write(reg, static_cast<int>(data_val.num_val));
 }
 
 // ---------------------------------------------------------

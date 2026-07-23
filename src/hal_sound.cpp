@@ -56,6 +56,23 @@ static volatile bool stop_requested = false;
 
 static volatile int current_volume = HAL_SOUND_DEFAULT_VOLUME; // BEEP / SOUND 用
 
+// ---------------------------------------------------------
+// PSG（AY-3-8910 相当）
+//
+//   psg_reg  … メインが SOUND で書き、割り込みが読む（volatile）
+//   psg_mode … true の間はキューではなく PSG レジスタで合成する
+// 位相・ノイズ LFSR は割り込みだけが触る
+// ---------------------------------------------------------
+#define PSG_CLOCK_HZ 2000000.0f // X1 相当
+
+static volatile uint8_t psg_reg[HAL_SOUND_PSG_REGS];
+static volatile bool    psg_mode = false;
+
+static float    psg_tone_phase[3] = {0.0f, 0.0f, 0.0f};
+static float    psg_noise_phase   = 0.0f;
+static uint32_t psg_lfsr = 1;   // ノイズ生成用 17bit LFSR
+static int      psg_noise_bit = 1;
+
 // 3声を加算するため、1声あたりの振幅は全体の 1/3 に抑えてクリップを防ぐ
 #define VOICE_MAX_AMPLITUDE (32767.0f / (float)HAL_SOUND_VOICES)
 #define SAMPLES_PER_MS (SAMPLE_RATE / 1000)
@@ -83,8 +100,67 @@ static bool sequencer_next_step() {
     return true;
 }
 
+// PSG レジスタから 1 バッファ分を合成する。
+// パラメータはバッファ先頭で 1 回読み、位相・ノイズは 1 サンプルごとに進める。
+static void fill_psg(uint32_t* buffer, int samples) {
+    float tone_inc[3];
+    int   vol[3];
+    bool  tone_en[3], noise_en[3], both_off[3];
+
+    for (int ch = 0; ch < 3; ch++) {
+        int period = psg_reg[2 * ch] | ((psg_reg[2 * ch + 1] & 0x0F) << 8);
+        if (period < 1) period = 1;
+        float freq = PSG_CLOCK_HZ / (16.0f * (float)period);
+        tone_inc[ch]  = freq / (float)SAMPLE_RATE;
+        tone_en[ch]   = !(psg_reg[7] & (1 << ch));        // R7 bit ch: 0=有効
+        noise_en[ch]  = !(psg_reg[7] & (1 << (ch + 3)));  // R7 bit ch+3
+        both_off[ch]  = !tone_en[ch] && !noise_en[ch];
+        vol[ch]       = psg_reg[8 + ch] & 0x0F;
+    }
+
+    int nperiod = psg_reg[6] & 0x1F;
+    if (nperiod < 1) nperiod = 1;
+    float noise_inc = (PSG_CLOCK_HZ / (16.0f * (float)nperiod)) / (float)SAMPLE_RATE;
+
+    for (int i = 0; i < samples; i++) {
+        // ノイズ LFSR（AY-3-8910: 17bit、bit0 と bit3 の XOR を帰還）
+        psg_noise_phase += noise_inc;
+        if (psg_noise_phase >= 1.0f) {
+            psg_noise_phase -= 1.0f;
+            int fb = (psg_lfsr ^ (psg_lfsr >> 3)) & 1;
+            psg_lfsr = (psg_lfsr >> 1) | ((uint32_t)fb << 16);
+            psg_noise_bit = psg_lfsr & 1;
+        }
+
+        float mixed = 0.0f;
+        for (int ch = 0; ch < 3; ch++) {
+            if (both_off[ch]) continue; // トーンもノイズも無効 → 無音（DC を出さない）
+
+            psg_tone_phase[ch] += tone_inc[ch];
+            if (psg_tone_phase[ch] >= 1.0f) psg_tone_phase[ch] -= 1.0f;
+            int tone_out = (psg_tone_phase[ch] < 0.5f) ? 1 : 0;
+
+            // AY ミキサー: (トーン or 無効) AND (ノイズ or 無効)
+            int t = tone_en[ch]  ? tone_out      : 1;
+            int n = noise_en[ch] ? psg_noise_bit : 1;
+            float amp = VOICE_MAX_AMPLITUDE * ((float)vol[ch] / 15.0f);
+            mixed += (t & n) ? amp : -amp; // 0 中心の矩形波で DC を避ける
+        }
+
+        if (mixed > 32767.0f) mixed = 32767.0f;
+        if (mixed < -32768.0f) mixed = -32768.0f;
+        int16_t sample = (int16_t)mixed;
+        buffer[i] = ((uint32_t)(uint16_t)sample << 16) | (uint32_t)(uint16_t)sample;
+    }
+}
+
 static void fill_audio_buffer(uint32_t* buffer, int samples) {
     int i = 0;
+
+    if (psg_mode) {
+        fill_psg(buffer, samples);
+        return;
+    }
 
     if (stop_requested) {
         queue_head = queue_tail;
@@ -199,6 +275,8 @@ void hal_sound_play(float frequency, int duration_ms) {
 void hal_sound_play_voices(const HalSoundVoice voices[HAL_SOUND_VOICES], int duration_ms) {
     if (duration_ms <= 0) return;
 
+    psg_mode = false; // キュー再生に戻す（PSG と排他）
+
     // 満杯のときだけ待つ。長い曲でキューを無制限に伸ばさないため
     while ((uint32_t)(queue_tail - queue_head) >= SOUND_QUEUE_SIZE) {
         tight_loop_contents();
@@ -217,12 +295,27 @@ void hal_sound_play_voices(const HalSoundVoice voices[HAL_SOUND_VOICES], int dur
 
 void hal_sound_stop() {
     // 実際の停止は次のバッファ生成時（最大 5.3ms 後）に割り込み側が行う
+    psg_mode = false;
     stop_requested = true;
 }
 
 int hal_sound_is_playing() {
+    if (psg_mode) return 1; // PSG は明示停止まで鳴り続ける
     if (stop_requested) return 0;
     return (queue_head != queue_tail || step_samples_left > 0) ? 1 : 0;
+}
+
+void hal_sound_psg_write(int reg, int data) {
+    if (reg < 0 || reg >= HAL_SOUND_PSG_REGS) return;
+
+    if (!psg_mode) {
+        // キュー再生から PSG へ切替。レジスタと LFSR を初期化する
+        for (int i = 0; i < HAL_SOUND_PSG_REGS; i++) psg_reg[i] = 0;
+        psg_lfsr = 1;
+        psg_noise_bit = 1;
+    }
+    psg_reg[reg] = (uint8_t)(data & 0xFF);
+    psg_mode = true; // 最後に立てる（それまで割り込みはキュー側を見る）
 }
 
 void hal_sound_startup_chime() {
@@ -295,6 +388,10 @@ void hal_sound_set_volume(int volume) {
     if (volume > 15) volume = 15;
     current_volume = volume;
     printf("[Sound] Volume set to %d\n", current_volume);
+}
+
+void hal_sound_psg_write(int reg, int data) {
+    printf("[Sound] PSG R%d = %d\n", reg, data & 0xFF);
 }
 
 #endif
