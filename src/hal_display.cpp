@@ -386,6 +386,10 @@ void hal_system_wait(int ms) {
     sleep_ms(ms);
 }
 
+uint32_t hal_system_millis() {
+  return to_ms_since_boot(get_absolute_time());
+}
+
 int hal_system_break_requested() {
   // 待たずに 1 文字だけ覗く。Ctrl-C(0x03) なら中断、それ以外は捨てる
   int c = getchar_timeout_us(0);

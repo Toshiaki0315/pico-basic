@@ -256,3 +256,11 @@ void set_touch_state(int touched, int x, int y) {
 }
 } // namespace mock_hal (touch injection)
 
+
+// 起動（正確には最初の呼び出し）からの経過ミリ秒。TIMER 関数用
+#include <chrono>
+uint32_t hal_system_millis() {
+    static const auto start = std::chrono::steady_clock::now();
+    auto now = std::chrono::steady_clock::now();
+    return (uint32_t)std::chrono::duration_cast<std::chrono::milliseconds>(now - start).count();
+}

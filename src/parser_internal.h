@@ -172,6 +172,10 @@ int flatten_array_index(const ArrayRef* arr, int i, int j = -1);
 uint16_t find_program_line(int line_number);
 uint16_t get_next_program_line(int line_number);
 
+// ユーザー座標系（WINDOW）→ 画面座標への変換（statement_graphics_io.cpp）。
+// WINDOW 未設定時は切り捨てて int 化するだけ
+void user_to_screen(float ux, float uy, int& out_x, int& out_y);
+
 // Parsers & Executors
 Value parse_expression(const TokenList& tokens, int& pos);
 Value parse_relation(const TokenList& tokens, int& pos);

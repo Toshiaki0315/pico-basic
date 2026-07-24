@@ -31,6 +31,7 @@ static const Keyword KEYWORDS[] = {
     {"CLS", TokenType::CLS},       {"LOCATE", TokenType::LOCATE},
     {"AUTO", TokenType::AUTO},     {"AND", TokenType::AND},
     {"OR", TokenType::OR},         {"NOT", TokenType::NOT},
+    {"XOR", TokenType::XOR},       {"MOD", TokenType::MOD_OP},
     {"DEF", TokenType::DEF},       {"POKE", TokenType::POKE},
     {"REPEAT", TokenType::REPEAT}, {"UNTIL", TokenType::UNTIL},
     {"GET", TokenType::GET},       {"FILES", TokenType::FILES},
@@ -56,6 +57,7 @@ static const char* const BUILTIN_NAMES[] = {
     "ABS", "INT", "RND", "SGN", "SQR", "SIN", "COS", "TAN", "LOG", "EXP",
     "LEN", "MID$", "LEFT$", "RIGHT$", "CHR$", "ASC", "VAL", "STR$",
     "TAB", "PEEK", "TOUCH",
+    "INSTR", "STRING$", "SPACE$", "HEX$", "POINT",
 };
 
 static bool lookup_keyword(const char* name, TokenType& out) {
@@ -144,6 +146,7 @@ TokenList lex(const char* source) {
             token_list.tokens[token_list.size] = {TokenType::MUL, "*"}; token_list.size++; pos++; continue;
         }
         if (c == '/') { token_list.tokens[token_list.size] = {TokenType::DIV, "/"}; token_list.size++; pos++; continue; }
+        if (c == '\\') { token_list.tokens[token_list.size] = {TokenType::INTDIV, "\\"}; token_list.size++; pos++; continue; }
         if (c == '^') { token_list.tokens[token_list.size] = {TokenType::POWER, "^"}; token_list.size++; pos++; continue; }
         if (c == '(') { token_list.tokens[token_list.size] = {TokenType::LPAREN, "("}; token_list.size++; pos++; continue; }
         if (c == ')') { token_list.tokens[token_list.size] = {TokenType::RPAREN, ")"}; token_list.size++; pos++; continue; }
@@ -274,6 +277,32 @@ TokenList lex(const char* source) {
             token_list.size++;
             pos++;
             continue;
+        }
+
+        // &H（16進）/ &B（2進）リテラル。NUMBER トークンとして原文のまま保持し、
+        // 値への変換は式評価（parse_factor）で行う。LIST でも &H 表記が残る
+        if (c == '&' && pos + 1 < len) {
+            char kind = std::toupper((unsigned char)source[pos + 1]);
+            if (kind == 'H' || kind == 'B') {
+                Token t;
+                t.type = TokenType::NUMBER;
+                int tp = 0;
+                t.text[tp++] = '&';
+                t.text[tp++] = kind;
+                int s = pos + 2;
+                while (s < len && tp < MAX_TOKEN_LEN - 1) {
+                    char d = std::toupper((unsigned char)source[s]);
+                    bool ok = (kind == 'H') ? std::isxdigit((unsigned char)d) : (d == '0' || d == '1');
+                    if (!ok) break;
+                    t.text[tp++] = d;
+                    s++;
+                }
+                if (tp == 2) throw std::runtime_error("Syntax Error: Invalid &-literal");
+                t.text[tp] = '\0';
+                token_list.tokens[token_list.size++] = t;
+                pos = s;
+                continue;
+            }
         }
 
         // Unknown character, skip it

@@ -1,9 +1,12 @@
 #include "parser_internal.h"
 #include "hal_touch.h"
+#include "hal_display.h"
 #include <stdexcept>
 #include <cstring>
 #include <cstdlib>
 #include <cmath>
+
+static int to_int_operand(const Value& v, const char* op);
 
 void require_token(const TokenList& tokens, int& pos, TokenType expected, const char* err_msg) {
     if (pos >= tokens.size || tokens.tokens[pos].type != expected) {
@@ -16,6 +19,7 @@ static bool is_builtin_function(const char* name) {
         "ABS", "INT", "RND", "SGN", "SQR", "SIN", "COS", "TAN", "LOG", "EXP",
         "LEN", "MID$", "LEFT$", "RIGHT$", "CHR$", "ASC", "VAL", "STR$",
         "PEEK", "TOUCH",
+        "INSTR", "STRING$", "SPACE$", "HEX$", "POINT",
     };
     for (const char* n : NAMES) {
         if (strcmp(name, n) == 0) return true;
@@ -127,6 +131,68 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
         char buf[32];
         snprintf(buf, sizeof(buf), "%g", args[0].num_val);
         return Value(buf);
+    } else if (strcmp(var_name, "INSTR") == 0) {
+        // INSTR(文字列, 検索語) または INSTR(開始位置, 文字列, 検索語)。1 始まり、無ければ 0
+        int start = 1;
+        const Value* hay;
+        const Value* nee;
+        if (arg_count == 2) {
+            hay = &args[0]; nee = &args[1];
+        } else {
+            need_args(arg_count == 3 && args[0].is_numeric(), "INSTR");
+            start = (int)args[0].num_val;
+            hay = &args[1]; nee = &args[2];
+        }
+        need_args(hay->type == Value::Type::STR && nee->type == Value::Type::STR, "INSTR");
+        int hlen = (int)strlen(hay->str_val);
+        if (start < 1) start = 1;
+        if (start > hlen) return Value(0);
+        if (nee->str_val[0] == '\0') return Value(start); // 空文字列は開始位置に一致
+        const char* found = strstr(hay->str_val + (start - 1), nee->str_val);
+        return Value(found ? (int)(found - hay->str_val) + 1 : 0);
+    } else if (strcmp(var_name, "STRING$") == 0) {
+        // STRING$(個数, 文字列) / STRING$(個数, 文字コード) — 先頭 1 文字を繰り返す
+        need_args(arg_count == 2 && args[0].is_numeric(), "STRING$");
+        char ch;
+        if (args[1].type == Value::Type::STR) {
+            need_args(args[1].str_val[0] != '\0', "STRING$");
+            ch = args[1].str_val[0];
+        } else {
+            ch = (char)(int)args[1].num_val;
+        }
+        int n = (int)args[0].num_val;
+        if (n < 0) n = 0;
+        if (n > 127) n = 127; // str_val の上限
+        char buf[128];
+        memset(buf, ch, n);
+        buf[n] = '\0';
+        return Value(buf);
+    } else if (strcmp(var_name, "SPACE$") == 0) {
+        need_args(arg_count == 1 && args[0].is_numeric(), "SPACE$");
+        int n = (int)args[0].num_val;
+        if (n < 0) n = 0;
+        if (n > 127) n = 127;
+        char buf[128];
+        memset(buf, ' ', n);
+        buf[n] = '\0';
+        return Value(buf);
+    } else if (strcmp(var_name, "HEX$") == 0) {
+        need_args(arg_count == 1 && args[0].is_numeric(), "HEX$");
+        char buf[16];
+        snprintf(buf, sizeof(buf), "%X", (unsigned)(int)args[0].num_val);
+        return Value(buf);
+    } else if (strcmp(var_name, "POINT") == 0) {
+        // POINT(x, y): 画面の色番号（0-15）を返す。画面外は -1。
+        // 座標は WINDOW のユーザー座標系に従う（描画コマンドと同じ）
+        need_args(arg_count == 2 && args[0].is_numeric() && args[1].is_numeric(), "POINT");
+        int sx, sy;
+        user_to_screen(args[0].num_val, args[1].num_val, sx, sy);
+        if (sx < 0 || sx > 319 || sy < 0 || sy > 239) return Value(-1);
+        uint16_t c565 = hal_graphics_get_pixel(sx, sy);
+        for (int i = 0; i < 16; i++) {
+            if (PALETTE[i] == c565) return Value(i);
+        }
+        return Value(-1); // パレット外の色（通常は起こらない）
     } else if (strcmp(var_name, "TOUCH") == 0) {
         need_args(arg_count == 1 && args[0].is_numeric(), "TOUCH");
         int n = static_cast<int>(args[0].num_val);
@@ -161,6 +227,11 @@ static Value parse_factor(const TokenList& tokens, int& pos) {
     }
     if (t.type == TokenType::NUMBER) {
         pos++;
+        // &H..（16進）/ &B..（2進）リテラル。字句解析が原文のまま渡してくる
+        if (t.text[0] == '&') {
+            long v = strtol(t.text + 2, nullptr, (t.text[1] == 'H') ? 16 : 2);
+            return Value((int)v);
+        }
         float fv = (float)atof(t.text);
         bool has_dot = false;
         for (int i = 0; t.text[i]; i++) if (t.text[i] == '.') { has_dot = true; break; }
@@ -221,6 +292,9 @@ static Value parse_factor(const TokenList& tokens, int& pos) {
             return read_heap_value(arr->start_addr + (flat_idx * 8));
         }
         
+        // TIMER は括弧なしの組み込み値（起動からの経過ミリ秒）
+        if (strcmp(var_name, "TIMER") == 0) return Value((float)hal_system_millis());
+
         Value v_val;
         if (!get_variable(var_name, v_val)) {
             int len = strlen(var_name);
@@ -275,13 +349,39 @@ static Value parse_term(const TokenList& tokens, int& pos) {
     return val;
 }
 
-Value parse_expression(const TokenList& tokens, int& pos) {
+// 整数除算 `\`。乗除より緩く、MOD より強い。両辺を整数に切り詰めて割る
+static Value parse_intdiv_expr(const TokenList& tokens, int& pos) {
     Value val = parse_term(tokens, pos);
+    while (pos < tokens.size && tokens.tokens[pos].type == TokenType::INTDIV) {
+        pos++;
+        Value rhs = parse_term(tokens, pos);
+        int b = to_int_operand(rhs, "\\");
+        if (b == 0) throw std::runtime_error("Division by zero");
+        val = Value(to_int_operand(val, "\\") / b);
+    }
+    return val;
+}
+
+// 剰余 MOD。整数除算より緩く、加減より強い
+static Value parse_mod_expr(const TokenList& tokens, int& pos) {
+    Value val = parse_intdiv_expr(tokens, pos);
+    while (pos < tokens.size && tokens.tokens[pos].type == TokenType::MOD_OP) {
+        pos++;
+        Value rhs = parse_intdiv_expr(tokens, pos);
+        int b = to_int_operand(rhs, "MOD");
+        if (b == 0) throw std::runtime_error("Division by zero");
+        val = Value(to_int_operand(val, "MOD") % b);
+    }
+    return val;
+}
+
+Value parse_expression(const TokenList& tokens, int& pos) {
+    Value val = parse_mod_expr(tokens, pos);
     while (pos < tokens.size) {
         TokenType op = tokens.tokens[pos].type;
         if (op != TokenType::PLUS && op != TokenType::MINUS) break;
         pos++;
-        Value next_val = parse_term(tokens, pos);
+        Value next_val = parse_mod_expr(tokens, pos);
         
         if (op == TokenType::PLUS) {
             if (val.type == Value::Type::STR && next_val.type == Value::Type::STR) {
@@ -371,16 +471,27 @@ static Value parse_logical_and(const TokenList& tokens, int& pos) {
     return val;
 }
 
-// 式全体の入口。OR（ビット和）が最も優先順位が低い。
-//   優先順位: OR < AND < NOT < 比較 < +/- < */  < ^ < 単項-
-// AND/OR/NOT はビット演算。比較は 1/0 を返すので論理積・論理和としても使える
-// （NOT はビット補数なので、論理否定は `X=0` のように比較で書くこと）。
-Value parse_relation(const TokenList& tokens, int& pos) {
+// OR（ビット和）。AND より緩く、XOR より強い
+static Value parse_bit_or(const TokenList& tokens, int& pos) {
     Value val = parse_logical_and(tokens, pos);
     while (pos < tokens.size && tokens.tokens[pos].type == TokenType::OR) {
         pos++;
         Value rhs = parse_logical_and(tokens, pos);
         val = Value(to_int_operand(val, "OR") | to_int_operand(rhs, "OR"));
+    }
+    return val;
+}
+
+// 式全体の入口。XOR が最も優先順位が低い（MS BASIC 系と同じ並び）。
+//   優先順位: XOR < OR < AND < NOT < 比較 < +/- < MOD < \ < */ < ^ < 単項-
+// AND/OR/NOT/XOR はビット演算。比較は 1/0 を返すので論理積・論理和としても使える
+// （NOT はビット補数なので、論理否定は `X=0` のように比較で書くこと）。
+Value parse_relation(const TokenList& tokens, int& pos) {
+    Value val = parse_bit_or(tokens, pos);
+    while (pos < tokens.size && tokens.tokens[pos].type == TokenType::XOR) {
+        pos++;
+        Value rhs = parse_bit_or(tokens, pos);
+        val = Value(to_int_operand(val, "XOR") ^ to_int_operand(rhs, "XOR"));
     }
     return val;
 }

@@ -31,6 +31,9 @@ const char* token_type_to_string(TokenType type) {
         case TokenType::AND: return "AND";
         case TokenType::OR: return "OR";
         case TokenType::NOT: return "NOT";
+        case TokenType::XOR: return "XOR";
+        case TokenType::MOD_OP: return "MOD";
+        case TokenType::INTDIV: return "\\";
         case TokenType::DEF: return "DEF";
         case TokenType::POKE: return "POKE";
         case TokenType::FOR: return "FOR";

@@ -179,3 +179,69 @@ TEST_F(OpDefFnTest, PokeOutOfRangeErrors) {
     parse_and_execute(lex("POKE -1, 5"));
     EXPECT_NE(mock_hal::get_raw_print_buffer().find("out of range"), std::string::npos);
 }
+
+// --- MOD / \ / XOR / &H / 新関数（N-BASIC 互換バッチ） ----------------
+TEST_F(OpDefFnTest, ModOperator) {
+    EXPECT_EQ(eval("10 MOD 3"), "1\n");
+    EXPECT_EQ(eval("8 MOD 4"), "0\n");
+    EXPECT_EQ(eval("2 + 7 MOD 3"), "3\n");   // MOD は + より強い
+}
+
+TEST_F(OpDefFnTest, IntDivOperator) {
+    EXPECT_EQ(eval("7 \\ 2"), "3\n");
+    EXPECT_EQ(eval("10 \\ 3 \\ 2"), "1\n");  // 左結合
+    EXPECT_EQ(eval("7 \\ 2 + 1"), "4\n");    // \ は + より強い
+}
+
+TEST_F(OpDefFnTest, XorOperator) {
+    EXPECT_EQ(eval("6 XOR 3"), "5\n");
+    EXPECT_EQ(eval("1 OR 2 XOR 2"), "1\n");  // XOR は OR より緩い
+    EXPECT_EQ(eval("5 XOR 5"), "0\n");
+}
+
+TEST_F(OpDefFnTest, DivisionByZeroInModIntDiv) {
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT 5 MOD 0"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("Division by zero"), std::string::npos);
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT 5 \\ 0"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("Division by zero"), std::string::npos);
+}
+
+TEST_F(OpDefFnTest, HexBinLiterals) {
+    EXPECT_EQ(eval("&HFF"), "255\n");
+    EXPECT_EQ(eval("&H10"), "16\n");
+    EXPECT_EQ(eval("&B1010"), "10\n");
+    EXPECT_EQ(eval("&H3E"), "62\n");         // SOUND ミキサーの定番値
+}
+
+TEST_F(OpDefFnTest, HexLiteralSurvivesList) {
+    store_line(10, lex("SOUND 7, &H3E"));
+    mock_hal::reset();
+    list_program();
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("&H3E"), std::string::npos);
+}
+
+TEST_F(OpDefFnTest, StringFunctions) {
+    EXPECT_EQ(eval("HEX$(255)"), "FF\n");
+    EXPECT_EQ(eval("STRING$(3, \"AB\")"), "AAA\n");  // 先頭文字を繰り返す
+    EXPECT_EQ(eval("STRING$(2, 66)"), "BB\n");       // 文字コード指定
+    EXPECT_EQ(eval("SPACE$(3) + \"X\""), "   X\n");
+    EXPECT_EQ(eval("INSTR(\"HELLO\", \"LL\")"), "3\n");
+    EXPECT_EQ(eval("INSTR(\"HELLO\", \"Z\")"), "0\n");
+    EXPECT_EQ(eval("INSTR(4, \"AABBAABB\", \"AA\")"), "5\n"); // 開始位置指定
+}
+
+TEST_F(OpDefFnTest, TimerIsMonotonic) {
+    // 値そのものは環境依存なので、数値であり負でないことだけ確認する
+    EXPECT_EQ(eval("TIMER >= 0"), "1\n");
+}
+
+TEST_F(OpDefFnTest, PointReadsPixel) {
+    mock_hal::reset(); // フレームバッファを消してから描く
+    parse_and_execute(lex("WINDOW"));
+    parse_and_execute(lex("PSET (5,5), 4"));
+    parse_and_execute(lex("PRINT POINT(5,5); POINT(6,6); POINT(400,5)"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("40-1"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}

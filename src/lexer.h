@@ -26,7 +26,9 @@ enum class TokenType {
     ELSEIF,
     LABEL,   // *NAME 形式の行ラベル（定義・参照とも）
     REM,     // コメント（REM / ' 以降、行末まで）。本文を text に持つ
-    AND, OR, NOT,  // ビット・論理演算子
+    AND, OR, NOT, XOR,  // ビット・論理演算子
+    MOD_OP,  // 剰余（キーワード MOD。識別子 MOD との衝突を避けた名前）
+    INTDIV,  // 整数除算 `\`
     DEF,     // DEF FN ユーザー定義関数
     POKE,    // 論理メモリへの 1 バイト書き込み（PEEK は組み込み関数）
     FOR,

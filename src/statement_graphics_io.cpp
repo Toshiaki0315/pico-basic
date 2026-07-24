@@ -32,7 +32,7 @@ void reset_graphics_window() {
 }
 
 // ユーザー座標 → 画面座標
-static void user_to_screen(float ux, float uy, int& out_x, int& out_y) {
+void user_to_screen(float ux, float uy, int& out_x, int& out_y) {
     if (!window_active) {
         out_x = (int)ux;
         out_y = (int)uy;

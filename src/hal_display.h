@@ -47,6 +47,9 @@ void hal_display_input(char* buffer, int max_len);
 // System functions
 void hal_system_wait(int ms);
 
+// 起動からの経過ミリ秒（BASIC の TIMER 用）
+uint32_t hal_system_millis();
+
 // 実行中に中断（Ctrl-C）が要求されたかを調べる。
 // ブロックせずに戻ること。要求されていれば 1、されていなければ 0。
 int hal_system_break_requested();
