@@ -25,6 +25,7 @@ enum class TokenType {
     ELSE,
     ELSEIF,
     LABEL,   // *NAME 形式の行ラベル（定義・参照とも）
+    REM,     // コメント（REM / ' 以降、行末まで）。本文を text に持つ
     FOR,
     TO,
     STEP,

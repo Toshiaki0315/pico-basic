@@ -1,0 +1,17 @@
+10 REM ============================
+20 REM  NUMBER GUESSING GAME
+30 REM  guess a number from 1 to 100
+40 REM ============================
+50 CLS
+60 A = INT(RND(100)) + 1
+70 C = 0
+80 PRINT "I HAVE A NUMBER (1-100)."
+90 *ASK
+100 INPUT "YOUR GUESS"; G
+110 C = C + 1
+120 IF G = A THEN *WIN
+130 IF G < A THEN PRINT "TOO LOW" ELSE PRINT "TOO HIGH"
+140 GOTO *ASK
+150 *WIN
+160 PRINT "CORRECT! IN "; C; " TRIES."
+170 END

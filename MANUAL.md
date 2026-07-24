@@ -63,6 +63,7 @@ RUN
 | **`GOSUB`** 行番号\|`*`ラベル | 指定した行番号（または行ラベル）のサブルーチンへジャンプします。 |
 | **`RETURN`** | サブルーチンから、`GOSUB` を呼んだ**すぐ次の文**へ戻ります。 |
 | **`REPEAT`** 処理 **`UNTIL`** 条件 | 条件を満たすまで、`REPEAT` と `UNTIL` の間の処理を繰り返します（後判定ループ）。 |
+| **`REM`** コメント / **`'`** コメント | その行の以降を注釈として無視します。`REM` は行の途中（`:` の後）にも、`'` は文の末尾にも置けます。 |
 
 これらは**文単位で復帰**します。1行に `:` でまとめて書けます。
 ```basic
@@ -257,10 +258,25 @@ Pico-HuBASICを扱う上での重要な仕様と、当時のHu-BASICとの共通
 | **10** | `Duplicate definition` | すでに宣言済みの配列を再度 `DIM` しようとしました。 |
 | **13** | `Type mismatch` | 数値と文字列の型が一致していません。 |
 | **26** | `File not found` | ファイルがSDカード上に見つかりません。 |
-| **34** | `Reserved feature` | `NEWON` で削除された命令を実行しようとしました。 |
+| **34** | `Reserved feature` | 予約されている（未対応の）機能を使おうとしました。 |
 
 ---
 
-## 8. 実装状況（開発者向け）
+## 8. サンプルプログラム
+
+`samples/` フォルダに、機能を一通り使った動くサンプルを用意しています（[samples/README.md](./samples/README.md)）。
+
+| ファイル | 内容 |
+| :--- | :--- |
+| `guess.bas` | 数当てゲーム（`INPUT` / `IF`〜`ELSE` / 行ラベル / `RND`） |
+| `art.bas` | 幾何アート（`POLY` / `CIRCLE` / `PAINT`） |
+| `ball.bas` | 跳ねるボール（`GET@` / `PUT@` スプライト） |
+| `draw.bas` | タッチでお絵かき（`TOUCH()` / `PSET`） |
+| `song.bas` | 演奏＋ビジュアライザ（非同期 `PLAY` ＋描画） |
+| `sfx.bas` | PSG 効果音（`SOUND` のノイズ・エンベロープ） |
+
+---
+
+## 9. 実装状況（開発者向け）
 
 命令ごとの Parser / HAL の状態は [docs/COMMAND_STATUS.md](./docs/COMMAND_STATUS.md) で管理しています（`specification.md` と併せて参照してください）。

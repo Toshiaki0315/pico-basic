@@ -202,6 +202,19 @@ TokenList lex(const char* source) {
             else if (strcmp(upper_ident, "PLAY") == 0) t.type = TokenType::PLAY;
             else if (strcmp(upper_ident, "MUSIC") == 0) t.type = TokenType::MUSIC;
             else if (strcmp(upper_ident, "SOUND") == 0) t.type = TokenType::SOUND;
+            else if (strcmp(upper_ident, "REM") == 0) {
+                // REM 以降は行末までコメント。本文を text に取り込んで行の字句解析を終える
+                t.type = TokenType::REM;
+                int s = pos;
+                while (s < len && (source[s] == ' ' || source[s] == '\t')) s++;
+                int clen = len - s;
+                if (clen >= MAX_TOKEN_LEN) clen = MAX_TOKEN_LEN - 1;
+                if (clen < 0) clen = 0;
+                memcpy(t.text, source + s, clen);
+                t.text[clen] = '\0';
+                token_list.tokens[token_list.size++] = t;
+                break; // この行はこれ以上読まない
+            }
             else if (strcmp(upper_ident, "ABS") == 0 || strcmp(upper_ident, "INT") == 0 || strcmp(upper_ident, "RND") == 0 ||
                      strcmp(upper_ident, "SGN") == 0 || strcmp(upper_ident, "SQR") == 0 ||
                      strcmp(upper_ident, "SIN") == 0 || strcmp(upper_ident, "COS") == 0 || strcmp(upper_ident, "TAN") == 0 ||
@@ -237,6 +250,21 @@ TokenList lex(const char* source) {
 
             token_list.tokens[token_list.size++] = t;
             continue;
+        }
+
+        // ' 以降は行末までコメント（REM と同じ扱い）
+        if (c == '\'') {
+            Token t;
+            t.type = TokenType::REM;
+            int s = pos + 1;
+            while (s < len && (source[s] == ' ' || source[s] == '\t')) s++;
+            int clen = len - s;
+            if (clen >= MAX_TOKEN_LEN) clen = MAX_TOKEN_LEN - 1;
+            if (clen < 0) clen = 0;
+            memcpy(t.text, source + s, clen);
+            t.text[clen] = '\0';
+            token_list.tokens[token_list.size++] = t;
+            break; // この行はこれ以上読まない
         }
 
         // ? は PRINT のショートカット

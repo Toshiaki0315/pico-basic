@@ -17,6 +17,7 @@ void execute_print(const TokenList& tokens, int& pos) {
     bool newline = true;
     while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE &&
            tokens.tokens[pos].type != TokenType::ELSE && tokens.tokens[pos].type != TokenType::ELSEIF &&
+           tokens.tokens[pos].type != TokenType::REM &&
            tokens.tokens[pos].type != TokenType::COLON) {
         if (tokens.tokens[pos].type == TokenType::COMMA) {
             strncat(output, "\t", sizeof(output) - strlen(output) - 1);
@@ -725,6 +726,7 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::INIT: case TokenType::NEWON:
                                  execute_noop_statement(tokens, pos); break;
         case TokenType::LABEL:   pos++; break; // 行頭のラベル定義は実行時は素通り
+        case TokenType::REM:     pos = tokens.size; break; // コメント。行末まで読み飛ばす
         case TokenType::AUTO:    execute_noop_statement(tokens, pos); break; // AUTO は repl が処理。プログラム内では無視
         case TokenType::WIDTH:   execute_width(tokens, pos); break;
         case TokenType::CONSOLE: execute_console(tokens, pos); break;

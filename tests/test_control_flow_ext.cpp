@@ -276,3 +276,43 @@ TEST_F(ControlFlowExtTest, NestedSingleLineForInGosub) {
     run_program(200);
     EXPECT_EQ(mock_hal::get_raw_print_buffer(), "1\n2\n3\nMAIN\n");
 }
+
+// ---------------------------------------------------------
+// REM / ' コメント
+// ---------------------------------------------------------
+TEST_F(ControlFlowExtTest, RemLineIsIgnored) {
+    store_line(10, lex("REM this is a comment"));
+    store_line(20, lex("PRINT 1"));
+    run_program(20);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "1\n");
+}
+
+TEST_F(ControlFlowExtTest, RemAfterColon) {
+    store_line(10, lex("X=5 : REM set x"));
+    store_line(20, lex("PRINT X"));
+    run_program(20);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "5\n");
+}
+
+TEST_F(ControlFlowExtTest, ApostropheComment) {
+    store_line(10, lex("PRINT 7 ' inline note"));
+    run_program(20);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "7\n");
+}
+
+TEST_F(ControlFlowExtTest, RemPreservedInList) {
+    store_line(10, lex("REM hello world"));
+    mock_hal::reset();
+    list_program();
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("REM hello world"), std::string::npos);
+}
+
+TEST_F(ControlFlowExtTest, ColonListsAsColon) {
+    // 以前は ":" が "COLON" と表示されるバグがあった
+    store_line(10, lex("A=1 : B=2"));
+    mock_hal::reset();
+    list_program();
+    std::string out = mock_hal::get_raw_print_buffer();
+    EXPECT_NE(out.find(":"), std::string::npos);
+    EXPECT_EQ(out.find("COLON"), std::string::npos) << out;
+}
