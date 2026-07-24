@@ -146,8 +146,8 @@
 | H4 | CONSOLE | `CONSOLE 10, 5` の後に `PRINT` を何行も出す | **LCD 上で** 10〜14 行目だけがスクロールし、上部は固定される（ターミナル側は端末任せで全画面スクロールする） | [x] |
 | H5 | エラーコード | `PRINT )` のような誤りを実行 | `Error 2 in line ...` のようにコード番号付きで表示される | [x] |
 | H6 | ELSEIF | `10 X=2` / `20 IF X=1 THEN PRINT "A" ELSEIF X=2 THEN PRINT "B" ELSE PRINT "C"` → `RUN` | `B` が表示される（X を 1／9 に変えると `A`／`C`） | [ ] |
-| H7 | 行ラベル | `10 GOTO *SKIP` / `20 PRINT "NG"` / `30 *SKIP` / `40 PRINT "OK"` → `RUN` | `OK` のみ表示（`NG` は出ない）。`LIST` で `*SKIP` が残る | [ ] |
-| H8 | INIT/NEWON | `INIT` および `NEWON &H8000` を実行 | エラーも通知も出ず、そのまま `Ready` に戻る（互換のための空実装） | [ ] |
+| H7 | 行ラベル | `10 GOTO *SKIP` / `20 PRINT "NG"` / `30 *SKIP` / `40 PRINT "OK"` → `RUN` | `OK` のみ表示（`NG` は出ない）。`LIST` で `*SKIP` が残る | [x] |
+| H8 | INIT/NEWON | `INIT` および `NEWON &H8000` を実行 | エラーも通知も出ず、そのまま `Ready` に戻る（互換のための空実装） | [x] |
 
 ---
 
