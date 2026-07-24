@@ -16,8 +16,8 @@
 | A4 | リスト | `10 PRINT "OK"` 登録後 `LIST` | 登録行が表示される | [x] |
 | A5 | 実行の中断 | `10 GOTO 10` を登録して `RUN` → Ctrl-C | `Break in 10` が表示され `Ready` に戻る（電源断が不要） | [x] |
 | A6 | 起動音 | 電源投入 | 起動時に「ピポッ」と 2 音鳴る | [x] |
-| A7 | AUTO 行番号 | `AUTO` → `PRINT 1` と入力して Enter、`PRINT 2` と入力して Enter、何も打たずに Enter → `LIST` | 行 `10`／`20` が自動で振られ登録される。空行で AUTO を抜け `Ready` に戻る | [ ] |
-| A8 | AUTO 開始・刻み | `AUTO 100, 5` → 適当に2行入力 → Ctrl-C → `LIST` | `100`／`105` で登録される。Ctrl-C で AUTO を抜ける | [ ] |
+| A7 | AUTO 行番号 | `AUTO` → `PRINT 1` と入力して Enter、`PRINT 2` と入力して Enter、何も打たずに Enter → `LIST` | 行 `10`／`20` が自動で振られ登録される。空行で AUTO を抜け `Ready` に戻る | [x] |
+| A8 | AUTO 開始・刻み | `AUTO 100, 5` → 適当に2行入力 → Ctrl-C → `LIST` | `100`／`105` で登録される。Ctrl-C で AUTO を抜ける | [x] |
 
 ---
 
