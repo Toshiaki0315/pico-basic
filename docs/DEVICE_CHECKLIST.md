@@ -153,6 +153,7 @@
 | H7 | 行ラベル | `10 GOTO *SKIP` / `20 PRINT "NG"` / `30 *SKIP` / `40 PRINT "OK"` → `RUN` | `OK` のみ表示（`NG` は出ない）。`LIST` で `*SKIP` が残る | [x] |
 | H8 | INIT/NEWON | `INIT` および `NEWON &H8000` を実行 | エラーも通知も出ず、そのまま `Ready` に戻る（互換のための空実装） | [x] |
 | H9 | 単一行 FOR/NEXT | `10 FOR J=1 TO 3 : PRINT J : NEXT J` / `20 PRINT "DONE"` → `RUN` | `1 2 3 DONE` と表示される（1行に収めてもループする） | [x] |
+| H11 | Ctrl-C から CONT | `10 I=I+1` / `20 PRINT I` / `30 GOTO 10` → `RUN` → Ctrl-C → `CONT` | `Break in N` で止まり、`CONT` で続き（I が継続）から再開する | [ ] |
 | H10 | GOSUB の続き実行 | `10 GOSUB 100 : PRINT "BACK" : END` / `100 PRINT "SUB" : RETURN` → `RUN` | `SUB` の後に `BACK` が表示される（RETURN が同じ行の続きに戻る） | [x] |
 
 ---

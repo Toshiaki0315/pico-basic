@@ -65,6 +65,15 @@ const char* token_type_to_string(TokenType type) {
         case TokenType::OPEN: return "OPEN";
         case TokenType::CLOSE: return "CLOSE";
         case TokenType::HASH: return "#";
+        case TokenType::RENUM: return "RENUM";
+        case TokenType::DELETE_CMD: return "DELETE";
+        case TokenType::CONT: return "CONT";
+        case TokenType::TRON: return "TRON";
+        case TokenType::TROFF: return "TROFF";
+        case TokenType::WHILE: return "WHILE";
+        case TokenType::WEND: return "WEND";
+        case TokenType::USING: return "USING";
+        case TokenType::RESUME: return "RESUME";
         case TokenType::LOAD: return "LOAD";
         case TokenType::ON: return "ON";
         case TokenType::COLON: return ":";
@@ -210,6 +219,7 @@ static uint16_t get_end_of_text() {
 }
 
 void store_line(int line_number, const TokenList& tokens) {
+    cont_valid = false; // プログラムを編集したら再開位置は信用できない
     uint16_t ptr = find_program_line(line_number);
     uint16_t end_ptr = get_end_of_text() + 2; 
     
@@ -257,6 +267,7 @@ void store_line(int line_number, const TokenList& tokens) {
 }
 
 void clear_program() {
+    cont_valid = false;
     memset(logical_memory, 0, 8);
     memset(&logical_memory[MEMORY_VAR_BASE], 0, VAR_TABLE_SIZE + ARRAY_TABLE_SIZE);
     
@@ -269,7 +280,7 @@ void clear_program() {
     data_ptr = 0;
 }
 
-void list_program() {
+void list_program(int from_line, int to_line) {
     uint16_t ptr = MEMORY_TEXT_BASE;
     if (logical_memory[ptr] == 0 && logical_memory[ptr+1] == 0 && 
         logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0) return;
@@ -279,6 +290,12 @@ void list_program() {
         if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) break;
         
         uint16_t line_num = prog_line_no(ptr);
+        if (line_num < from_line || line_num > to_line) { // 範囲外はスキップ
+            uint16_t skip_next = prog_next_ptr(ptr);
+            if (skip_next == 0) break;
+            ptr = skip_next;
+            continue;
+        }
         TokenList tokens = detokenize(&logical_memory[ptr+4]);
         
         int bpos = snprintf(buffer, sizeof(buffer), "%d", line_num);
@@ -307,4 +324,70 @@ void list_program() {
 // ---------------------------------------------------------
 TokenList get_detokenized_line(uint16_t line_ptr) {
     return detokenize(&logical_memory[line_ptr+4]);
+}
+
+// ---------------------------------------------------------
+// RENUM: 行番号を newstart から step 刻みで振り直す。
+// GOTO / GOSUB / THEN / ELSE（および ON ... のカンマ区切りリスト）の
+// 飛び先 NUMBER も対応表で書き換える。行ラベルは名前なので影響しない。
+// ---------------------------------------------------------
+void renum_program(int newstart, int step) {
+    // 1) 旧→新の対応表を作る
+    static uint16_t old_no[MAX_PROGRAM_LINES];
+    int count = 0;
+    uint16_t ptr = MEMORY_TEXT_BASE;
+    if (logical_memory[ptr] == 0 && logical_memory[ptr+1] == 0 &&
+        logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0) return; // 空
+    while (ptr < MEMORY_VAR_BASE && count < MAX_PROGRAM_LINES) {
+        if (prog_line_no(ptr) == 0 && ptr != MEMORY_TEXT_BASE) break;
+        old_no[count++] = prog_line_no(ptr);
+        uint16_t next = prog_next_ptr(ptr);
+        if (next == 0) break;
+        ptr = next;
+    }
+    long last = (long)newstart + (long)(count - 1) * step;
+    if (last > 65535) throw std::runtime_error("RENUM: line number overflow");
+
+    auto map_line = [&](int old_line) -> int {
+        for (int i = 0; i < count; i++)
+            if (old_no[i] == old_line) return newstart + i * step;
+        return -1; // 存在しない飛び先はそのまま残す
+    };
+
+    // 2) 飛び先 NUMBER を書き換える（行番号自体はまだ変えないので反復は安定）
+    for (int i = 0; i < count; i++) {
+        uint16_t lp = find_program_line(old_no[i]);
+        if (lp == 0xFFFF) continue;
+        TokenList t = get_detokenized_line(lp);
+        bool changed = false;
+        bool target_mode = false; // GOTO/GOSUB/THEN/ELSE の直後の数値列
+        for (int k = 0; k < t.size; k++) {
+            TokenType ty = t.tokens[k].type;
+            if (ty == TokenType::GOTO || ty == TokenType::GOSUB ||
+                ty == TokenType::THEN || ty == TokenType::ELSE) {
+                target_mode = true;
+                continue;
+            }
+            if (!target_mode) continue;
+            if (ty == TokenType::NUMBER) {
+                int mapped = map_line(atoi(t.tokens[k].text));
+                if (mapped >= 0) {
+                    snprintf(t.tokens[k].text, MAX_TOKEN_LEN, "%d", mapped);
+                    changed = true;
+                }
+            } else if (ty != TokenType::COMMA) { // カンマ区切り（ON ...）は継続
+                target_mode = false;
+            }
+        }
+        if (changed) store_line(old_no[i], t);
+    }
+
+    // 3) 行番号フィールドを一斉に書き換える（並び順は保たれる）
+    ptr = MEMORY_TEXT_BASE;
+    for (int i = 0; i < count && ptr < MEMORY_VAR_BASE; i++) {
+        mem_write_u16((uint16_t)(ptr + 2), (uint16_t)(newstart + i * step));
+        uint16_t next = prog_next_ptr(ptr);
+        if (next == 0) break;
+        ptr = next;
+    }
 }

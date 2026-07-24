@@ -11,10 +11,16 @@ void basic_print(const char* s) {
     printf("%s", s);
 }
 
+static void execute_print_using(const TokenList& tokens, int& pos);
+
 void execute_print(const TokenList& tokens, int& pos) {
     pos++;
     if (pos < tokens.size && tokens.tokens[pos].type == TokenType::HASH) {
         execute_print_file(tokens, pos); // PRINT #n, ...
+        return;
+    }
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::USING) {
+        execute_print_using(tokens, pos); // PRINT USING "書式"; ...
         return;
     }
     char output[512] = "";
@@ -123,6 +129,44 @@ void execute_def(const TokenList& tokens, int& pos) {
     strncpy(f->name, fname, MAX_TOKEN_LEN - 1);  f->name[MAX_TOKEN_LEN - 1] = '\0';
     strncpy(f->param, pname, MAX_TOKEN_LEN - 1); f->param[MAX_TOKEN_LEN - 1] = '\0';
     strncpy(f->body, body, sizeof(f->body) - 1); f->body[sizeof(f->body) - 1] = '\0';
+}
+
+// DELETE 開始[-終了] — 行番号の範囲を削除する（DELETE 100 は 1 行だけ）
+void execute_delete(const TokenList& tokens, int& pos) {
+    pos++; // DELETE
+    int from = -1, to = -1;
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::NUMBER) {
+        from = atoi(tokens.tokens[pos].text); pos++;
+    }
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::MINUS) {
+        pos++;
+        to = 65535;
+        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::NUMBER) {
+            to = atoi(tokens.tokens[pos].text); pos++;
+        }
+    } else if (from >= 0) {
+        to = from; // DELETE 100 → その行だけ
+    }
+    if (from < 0 && to < 0) throw std::runtime_error("Syntax Error: DELETE needs a line range");
+    if (from < 0) from = 0;
+
+    // 消しながら歩くと壊れるので、先に対象の行番号を集める
+    static uint16_t targets[MAX_PROGRAM_LINES];
+    int n = 0;
+    uint16_t ptr = MEMORY_TEXT_BASE;
+    if (!(logical_memory[ptr] == 0 && logical_memory[ptr+1] == 0 &&
+          logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0)) {
+        while (ptr < MEMORY_VAR_BASE && n < MAX_PROGRAM_LINES) {
+            uint16_t ln = prog_line_no(ptr);
+            if (ln == 0 && ptr != MEMORY_TEXT_BASE) break;
+            if ((int)ln >= from && (int)ln <= to) targets[n++] = ln;
+            uint16_t next = prog_next_ptr(ptr);
+            if (next == 0) break;
+            ptr = next;
+        }
+    }
+    TokenList empty;
+    for (int i = 0; i < n; i++) store_line(targets[i], empty);
 }
 
 // POKE アドレス, 値 — 論理メモリ（logical_memory）に 1 バイト書き込む。
@@ -607,6 +651,11 @@ void execute_end(const TokenList& tokens, int& pos) {
 }
 
 void execute_stop(const TokenList& tokens, int& pos) {
+    pos++;
+    // CONT で STOP の直後（同じ行の続き）から再開できるようにする
+    cont_line = current_line;
+    cont_pos = pos;
+    cont_valid = true;
     char buf[64];
     snprintf(buf, sizeof(buf), "Break in %d\n", current_line);
     basic_print(buf);
@@ -618,6 +667,172 @@ void execute_stop(const TokenList& tokens, int& pos) {
 // REPEAT … UNTIL 条件（後判定ループ）。
 // UNTIL の条件が偽の間、REPEAT の次の行へ戻る。
 // FOR/NEXT と同じく行番号で戻るため、REPEAT は行頭に置く前提。
+// 対応する WEND を前方に探して、その直後へ分岐する（WHILE 不成立時）
+static void skip_to_matching_wend(const TokenList& tokens, int pos_after_cond) {
+    int depth = 1;
+    for (int k = pos_after_cond; k < tokens.size; k++) {
+        if (tokens.tokens[k].type == TokenType::WHILE) depth++;
+        else if (tokens.tokens[k].type == TokenType::WEND) {
+            depth--;
+            if (depth == 0) {
+                branch_taken = true;          // 同じ行の WEND の直後から再開
+                branch_resume_pos = k + 1;
+                return;
+            }
+        }
+    }
+    int line = current_line;
+    while (true) {
+        uint16_t idx = get_next_program_line(line);
+        if (idx == 0xFFFF) throw std::runtime_error("WHILE without WEND");
+        line = prog_line_no(idx);
+        static TokenList t; // TokenList は大きいのでスタックに積まない
+        t = get_detokenized_line(find_program_line(line));
+        for (int k = 0; k < t.size; k++) {
+            if (t.tokens[k].type == TokenType::WHILE) depth++;
+            else if (t.tokens[k].type == TokenType::WEND) {
+                depth--;
+                if (depth == 0) {
+                    current_line = line;
+                    branch_taken = true;
+                    branch_resume_pos = k + 1;
+                    return;
+                }
+            }
+        }
+    }
+}
+
+// WHILE 条件 ... WEND — 前判定ループ。WEND が WHILE へ戻り、条件を毎回評価する
+void execute_while(const TokenList& tokens, int& pos) {
+    int while_pos = pos; // WHILE トークン自身の位置（WEND の戻り先）
+    pos++;
+    Value cond = parse_relation(tokens, pos);
+    if (!cond.is_numeric()) throw std::runtime_error("Type Mismatch: WHILE condition must be numeric");
+
+    bool on_top = (while_stack_ptr > 0 &&
+                   while_stack_line[while_stack_ptr - 1] == current_line &&
+                   while_stack_pos[while_stack_ptr - 1] == while_pos);
+    if (cond.num_val != 0.0f) {
+        if (!on_top) {
+            if (while_stack_ptr >= MAX_WHILE_STACK)
+                throw std::runtime_error("Out of Memory: WHILE Stack Limit Reached");
+            while_stack_line[while_stack_ptr] = current_line;
+            while_stack_pos[while_stack_ptr] = while_pos;
+            while_stack_ptr++;
+        }
+        return; // 本体へ
+    }
+    if (on_top) while_stack_ptr--; // ループ終了
+    skip_to_matching_wend(tokens, pos);
+}
+
+void execute_wend(const TokenList& tokens, int& pos) {
+    pos++;
+    if (while_stack_ptr == 0) throw std::runtime_error("WEND without WHILE");
+    current_line = while_stack_line[while_stack_ptr - 1];
+    branch_resume_pos = while_stack_pos[while_stack_ptr - 1]; // WHILE を再評価する
+    branch_taken = true;
+}
+
+// RESUME [NEXT | 行番号 | *ラベル] — エラーハンドラから復帰する
+void execute_resume(const TokenList& tokens, int& pos) {
+    pos++;
+    if (!in_error_handler) throw std::runtime_error("RESUME without error");
+    in_error_handler = false;
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::NEXT) {
+        pos++;
+        uint16_t idx = get_next_program_line(err_line); // エラー行の次から
+        if (idx == 0xFFFF) { current_line = -1; branch_taken = true; return; }
+        current_line = prog_line_no(idx);
+    } else if (pos < tokens.size && (tokens.tokens[pos].type == TokenType::NUMBER ||
+                                     tokens.tokens[pos].type == TokenType::LABEL)) {
+        current_line = parse_branch_target(tokens, pos);
+        if (find_program_line(current_line) == 0xFFFF)
+            throw std::runtime_error("Undefined line number in RESUME");
+    } else {
+        current_line = err_line; // エラーを起こした行をやり直す
+    }
+    branch_taken = true;
+}
+
+// PRINT USING "書式"; 値 [; 値 ...]
+//   # = 数値の桁 / . = 小数点 / & = 文字列全体 / ! = 文字列の先頭 1 文字。
+//   その他の文字はそのまま出力。値が余れば書式を繰り返す。桁あふれは % 付き
+static void execute_print_using(const TokenList& tokens, int& pos) {
+    pos++; // USING
+    Value fmt = parse_relation(tokens, pos);
+    if (fmt.type != Value::Type::STR) throw std::runtime_error("Type Mismatch: USING expects format string");
+    require_token(tokens, pos, TokenType::SEMICOLON, "Syntax Error: Expected ';' after USING format"); pos++;
+
+    Value vals[16];
+    int nvals = 0;
+    bool newline = true;
+    while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE &&
+           tokens.tokens[pos].type != TokenType::COLON &&
+           tokens.tokens[pos].type != TokenType::REM) {
+        if (tokens.tokens[pos].type == TokenType::COMMA ||
+            tokens.tokens[pos].type == TokenType::SEMICOLON) {
+            pos++;
+            newline = false;
+            continue;
+        }
+        if (nvals < 16) vals[nvals++] = parse_relation(tokens, pos);
+        else parse_relation(tokens, pos);
+        newline = true;
+    }
+
+    char out[256] = "";
+    const char* f = fmt.str_val;
+    int flen = (int)strlen(f);
+    int fi = 0, vi = 0, consumed_in_pass = 0;
+    while (vi < nvals) {
+        if (fi >= flen) {
+            if (consumed_in_pass == 0) break; // 値を消費しない書式 → 打ち切り
+            fi = 0;
+            consumed_in_pass = 0;
+        }
+        char c = f[fi];
+        if (c == '#') {
+            int ip = 0, dp = -1;
+            while (fi < flen && f[fi] == '#') { ip++; fi++; }
+            if (fi < flen && f[fi] == '.') {
+                fi++; dp = 0;
+                while (fi < flen && f[fi] == '#') { dp++; fi++; }
+            }
+            Value& v = vals[vi++]; consumed_in_pass++;
+            if (!v.is_numeric()) throw std::runtime_error("Type Mismatch in PRINT USING");
+            int width = ip + (dp >= 0 ? dp + 1 : 0);
+            char nbuf[48];
+            snprintf(nbuf, sizeof(nbuf), "%*.*f", width, (dp >= 0 ? dp : 0), v.num_val);
+            if ((int)strlen(nbuf) > width)
+                strncat(out, "%", sizeof(out) - strlen(out) - 1); // 桁あふれの印
+            strncat(out, nbuf, sizeof(out) - strlen(out) - 1);
+        } else if (c == '&') {
+            fi++;
+            Value& v = vals[vi++]; consumed_in_pass++;
+            strncat(out, v.c_str(), sizeof(out) - strlen(out) - 1);
+        } else if (c == '!') {
+            fi++;
+            Value& v = vals[vi++]; consumed_in_pass++;
+            char one[2] = { (v.type == Value::Type::STR && v.str_val[0]) ? v.str_val[0] : ' ', '\0' };
+            strncat(out, one, sizeof(out) - strlen(out) - 1);
+        } else {
+            char lit[2] = { c, '\0' };
+            strncat(out, lit, sizeof(out) - strlen(out) - 1);
+            fi++;
+        }
+    }
+    // 値を使い切ったら、次のフィールドの手前までのリテラルを出し切る（"[&]" の閉じ括弧など）
+    while (fi < flen && f[fi] != '#' && f[fi] != '&' && f[fi] != '!') {
+        char lit[2] = { f[fi], '\0' };
+        strncat(out, lit, sizeof(out) - strlen(out) - 1);
+        fi++;
+    }
+    if (newline) strncat(out, "\n", sizeof(out) - strlen(out) - 1);
+    basic_print(out);
+}
+
 void execute_repeat(const TokenList& tokens, int& pos) {
     pos++;
 
@@ -678,7 +893,27 @@ void execute_get(const TokenList& tokens, int& pos) {
 }
 
 void execute_on(const TokenList& tokens, int& pos) {
-    pos++; 
+    pos++;
+    // ON ERROR GOTO 行番号（0 で解除）
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::IDENTIFIER &&
+        strcmp(tokens.tokens[pos].text, "ERROR") == 0) {
+        pos++;
+        require_token(tokens, pos, TokenType::GOTO, "Syntax Error: Expected GOTO after ON ERROR"); pos++;
+        int target;
+        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::NUMBER) {
+            target = atoi(tokens.tokens[pos].text); pos++;
+        } else if (pos < tokens.size && tokens.tokens[pos].type == TokenType::LABEL) {
+            target = resolve_label(tokens.tokens[pos].text);
+            if (target < 0) throw std::runtime_error("Undefined label");
+            pos++;
+        } else {
+            throw std::runtime_error("Syntax Error: Expected line number after ON ERROR GOTO");
+        }
+        if (target != 0 && find_program_line(target) == 0xFFFF)
+            throw std::runtime_error("Undefined line number");
+        error_handler_line = target;
+        return;
+    }
     Value idx_val = parse_relation(tokens, pos);
     int idx = static_cast<int>(idx_val.num_val);
     
@@ -831,6 +1066,9 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::SAVE:    execute_save(tokens, pos); break;
         case TokenType::OPEN:    execute_open(tokens, pos); break;
         case TokenType::CLOSE:   execute_close(tokens, pos); break;
+        case TokenType::DELETE_CMD: execute_delete(tokens, pos); break;
+        case TokenType::TRON:    pos++; trace_enabled = true; break;
+        case TokenType::TROFF:   pos++; trace_enabled = false; break;
         case TokenType::LOAD:    execute_load(tokens, pos); break;
 
         case TokenType::INIT: case TokenType::NEWON:
@@ -844,6 +1082,9 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::CONSOLE: execute_console(tokens, pos); break;
         case TokenType::REPEAT:  execute_repeat(tokens, pos); break;
         case TokenType::UNTIL:   execute_until(tokens, pos); break;
+        case TokenType::WHILE:   execute_while(tokens, pos); break;
+        case TokenType::WEND:    execute_wend(tokens, pos); break;
+        case TokenType::RESUME:  execute_resume(tokens, pos); break;
         case TokenType::GET:     execute_get(tokens, pos); break;
         case TokenType::WINDOW:  execute_window(tokens, pos); break;
         case TokenType::POLY:    execute_poly(tokens, pos); break;

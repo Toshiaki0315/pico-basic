@@ -13,6 +13,24 @@ float last_rnd_val = 0.5f;
 int current_line = -1;
 bool branch_taken = false;
 int branch_resume_pos = -1;
+bool trace_enabled = false; // TRON/TROFF
+
+// CONT（STOP / Ctrl-C 後の再開）の保存状態
+int  cont_line  = -1;
+int  cont_pos   = -1;
+bool cont_valid = false;
+
+// ON ERROR GOTO / RESUME / ERR / ERL
+int  err_code = 0;
+int  err_line = 0;
+int  error_handler_line = 0;   // 0 = 無効
+bool in_error_handler   = false;
+
+int while_stack_line[MAX_WHILE_STACK];
+int while_stack_pos[MAX_WHILE_STACK];
+int while_stack_ptr = 0;
+
+static void run_loop(int start_line, int start_pos, int max_steps);
 
 uint16_t current_color_565 = 0xFFFF; // Default White
 const uint16_t PALETTE[16] = {
@@ -85,6 +103,7 @@ static int basic_error_code(const char* msg) {
         strstr(msg, "parenthesis") || strstr(msg, "Expected") ||
         strstr(msg, "Unrecognized")) return 2;                                           // Syntax error
     if (strstr(msg, "Type Mismatch") || strstr(msg, "Type mismatch")) return 13;        // Type mismatch
+    if (strstr(msg, "Division by zero")) return 11;                                      // Division by zero
     if (strstr(msg, "Duplicate definition")) return 10;                                 // Duplicate definition
     if (strstr(msg, "target line not found") || strstr(msg, "No line after") ||
         strstr(msg, "Undefined line")) return 8;                                        // Undefined line number
@@ -132,7 +151,22 @@ bool parse_and_execute(const TokenList& tokens) {
             clear_program();
             return false;
         } else if (tokens.tokens[0].type == TokenType::LIST) {
-            list_program();
+            // LIST / LIST 100 / LIST 100-200 / LIST 100- / LIST -200
+            int from = 0, to = 65535, p = 1;
+            bool single = false;
+            if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
+                from = atoi(tokens.tokens[p].text); p++;
+                single = true;
+            }
+            if (p < tokens.size && tokens.tokens[p].type == TokenType::MINUS) {
+                p++;
+                single = false;
+                if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
+                    to = atoi(tokens.tokens[p].text); p++;
+                }
+            }
+            if (single) to = from;
+            list_program(from, to);
             return false;
         } else if (tokens.tokens[0].type == TokenType::RUN) {
             run_program();
@@ -145,6 +179,30 @@ bool parse_and_execute(const TokenList& tokens) {
             return false;
         } else if (tokens.tokens[0].type == TokenType::FILES) {
             int p = 0; execute_files(tokens, p);
+            return false;
+        } else if (tokens.tokens[0].type == TokenType::CONT) {
+            if (!cont_valid) {
+                basic_print("Can't continue\n");
+            } else {
+                cont_valid = false; // 再開は 1 回きり（次の STOP/Break で再び有効になる）
+                run_loop(cont_line, cont_pos, -1);
+            }
+            return false;
+        } else if (tokens.tokens[0].type == TokenType::RENUM) {
+            // RENUM [新開始 [, 刻み]] — 既定 10, 10
+            int start = 10, stp = 10, p = 1;
+            if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
+                start = atoi(tokens.tokens[p].text); p++;
+                if (p < tokens.size && tokens.tokens[p].type == TokenType::COMMA) {
+                    p++;
+                    if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
+                        stp = atoi(tokens.tokens[p].text); p++;
+                    }
+                }
+            }
+            if (start < 1) start = 10;
+            if (stp < 1) stp = 10;
+            renum_program(start, stp);
             return false;
         } else if (tokens.tokens[0].type == TokenType::AUTO) {
             // AUTO [開始番号 [, 刻み]] — 行番号自動生成モードを要求する。
@@ -191,6 +249,12 @@ void run_program(int max_steps) {
     for_stack_ptr = 0;
     repeat_stack_ptr = 0;
     call_stack_ptr = 0;
+    while_stack_ptr = 0;
+    cont_valid = false;
+    error_handler_line = 0;
+    in_error_handler = false;
+    err_code = 0;
+    err_line = 0;
 
     // Pre-scan DATA statements and line labels
     data_buffer_size = 0;
@@ -233,15 +297,25 @@ void run_program(int max_steps) {
     // Interpreter loop
     ptr = MEMORY_TEXT_BASE;
     if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) return;
-    current_line = prog_line_no(ptr);
+    run_loop(prog_line_no(ptr), -1, max_steps);
+}
+
+// 実行ループ本体。RUN は先頭行から、CONT は中断位置から入る。
+// start_pos が 0 以上なら、その行をその位置（文の区切り）から再開する。
+static void run_loop(int start_line, int start_pos, int max_steps) {
+    current_line = start_line;
     int steps = 0;
-    int resume_pos = -1; // 次の行を行頭ではなく途中から始める場合の位置（-1 は行頭）
+    int resume_pos = start_pos; // 次の行を行頭ではなく途中から始める場合の位置（-1 は行頭）
 
     while (current_line != -1 && (max_steps == -1 || steps < max_steps)) {
         // Ctrl-C による中断。無限ループから抜ける唯一の手段なので、
         // 反応が鈍らないよう十分短い間隔で確認する
         if ((steps & 0x0F) == 0 && hal_system_break_requested()) {
             hal_sound_stop(); // 非同期で鳴っている演奏も止める
+            // CONT でこの行の頭から再開できるようにする
+            cont_line = current_line;
+            cont_pos = -1;
+            cont_valid = true;
             char buf[64];
             snprintf(buf, sizeof(buf), "Break in %d\n", current_line);
             basic_print(buf);
@@ -250,7 +324,14 @@ void run_program(int max_steps) {
 
         uint16_t line_ptr = find_program_line(current_line);
         if (line_ptr == 0xFFFF) break;
-        
+
+        // TRON: 実行する行番号を [N] 形式で流す
+        if (trace_enabled) {
+            char tb[16];
+            snprintf(tb, sizeof(tb), "[%d]", current_line);
+            basic_print(tb);
+        }
+
         TokenList tokens = get_detokenized_line(line_ptr);
         int pos = 0;
         // 直前の分岐が「行の途中」への復帰（RETURN / NEXT / UNTIL）を要求していたら
@@ -272,6 +353,16 @@ void run_program(int max_steps) {
                 } else break;
             }
         } catch (const std::exception& e) {
+            // ON ERROR GOTO が設定されていればハンドラへ飛ぶ（ハンドラ内のエラーは通常表示）
+            if (error_handler_line > 0 && !in_error_handler) {
+                int code = basic_error_code(e.what());
+                err_code = (code > 0) ? code : 99; // 表に無いエラーは 99
+                err_line = current_line;
+                in_error_handler = true;
+                current_line = error_handler_line;
+                steps++;
+                continue;
+            }
             report_error(e.what(), current_line);
             break;
         }

@@ -109,6 +109,24 @@ extern bool branch_taken;
 // 分岐後に行内のどの位置から実行を再開するか。-1 は行頭（pos 0）から。
 // RETURN / NEXT / UNTIL が「同じ行の続き」に戻るために使う（文単位の復帰）。
 extern int branch_resume_pos;
+extern bool trace_enabled; // TRON/TROFF（実行行トレース）
+
+// CONT（STOP / Ctrl-C 後の再開）
+extern int  cont_line;
+extern int  cont_pos;
+extern bool cont_valid;
+
+// ON ERROR GOTO / RESUME / ERR / ERL
+extern int  err_code;            // 直近のエラーコード（ERR）
+extern int  err_line;            // エラーが起きた行（ERL）
+extern int  error_handler_line;  // ON ERROR GOTO の飛び先（0=無効）
+extern bool in_error_handler;    // ハンドラ実行中（RESUME で解除）
+
+// WHILE / WEND
+#define MAX_WHILE_STACK 8
+extern int while_stack_line[MAX_WHILE_STACK];
+extern int while_stack_pos[MAX_WHILE_STACK];
+extern int while_stack_ptr;
 
 extern uint16_t current_color_565;
 extern const uint16_t PALETTE[16];
@@ -248,6 +266,7 @@ void execute_music(const TokenList& tokens, int& pos);
 
 TokenList get_detokenized_line(uint16_t line_ptr);
 void clear_program();
-void list_program();
+void list_program(int from_line, int to_line); // 既定引数は parser.h 側
+void renum_program(int newstart, int step);
 void store_line(int line_number, const TokenList& tokens);
 

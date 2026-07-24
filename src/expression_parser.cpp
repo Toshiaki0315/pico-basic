@@ -295,8 +295,10 @@ static Value parse_factor(const TokenList& tokens, int& pos) {
             return read_heap_value(arr->start_addr + (flat_idx * 8));
         }
         
-        // TIMER は括弧なしの組み込み値（起動からの経過ミリ秒）
+        // TIMER / ERR / ERL は括弧なしの組み込み値
         if (strcmp(var_name, "TIMER") == 0) return Value((float)hal_system_millis());
+        if (strcmp(var_name, "ERR") == 0) return Value(err_code);
+        if (strcmp(var_name, "ERL") == 0) return Value(err_line);
 
         Value v_val;
         if (!get_variable(var_name, v_val)) {
