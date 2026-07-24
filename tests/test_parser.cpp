@@ -213,9 +213,7 @@ TEST_F(ExecutionTest, GosubSubroutineComputesResult) {
 }
 
 TEST_F(ExecutionTest, GosubDeepNesting) {
-    // 4 段のネストが LIFO で正しく戻る。
-    // GOSUB は行番号単位で復帰するため、各サブルーチンは行を分けて書く
-    // （`GOSUB … : 文` のように同じ行に続けた文は復帰時に実行されない）
+    // 4 段のネストが LIFO で正しく戻る（各サブルーチンを別行で書いた場合）
     store_line(10, lex("GOSUB 100"));
     store_line(20, lex("PRINT 1"));
     store_line(30, lex("END"));

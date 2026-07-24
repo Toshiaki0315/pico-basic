@@ -20,15 +20,16 @@
 
 `GOTO`, `GOSUB`, `RETURN`, `FOR`, `NEXT`, `IF`/`THEN`/`ELSEIF`/`ELSE`, `REPEAT`/`UNTIL`, `END`, `STOP`, `ON` … `GOTO`/`GOSUB`, `DIM`, `READ`/`DATA`/`RESTORE`, `INPUT`, `GET`, `LET` 代入など。`GOTO`/`GOSUB`/`IF … THEN` は行番号のほか `*ラベル` を受け付ける。
 
-**行番号単位で戻る制御構文の制限:** `GOSUB`/`RETURN`・`FOR`/`NEXT`・`REPEAT`/`UNTIL` はいずれも
-「戻り先＝行番号」で管理し、文（`:` 区切り）単位では戻れない。したがって次の書き方は避ける:
+**文単位の復帰に対応済み:** `GOSUB`/`RETURN`・`FOR`/`NEXT`・`REPEAT`/`UNTIL` は
+「戻り先＝(行番号, 行内位置)」で管理し、文（`:` 区切り）単位で正しく戻る。
 
-- `GOSUB 100 : PRINT X` … `RETURN` は**次の行**へ戻るので、同じ行の `PRINT X` は実行されない。`GOSUB` は行末（その行の最後の文）に置く。
-- `FOR J=1 TO 3 : … : NEXT J` … 単一行に収めた `FOR`/`NEXT` はループせず 1 回で抜ける。`FOR` と `NEXT` は別々の行に置く。
-- `REPEAT` は行頭に置く（`REPEAT` の直後に `:` で文を続けると戻り先がずれる）。
+- `GOSUB 100 : PRINT X` … `RETURN` は GOSUB の直後（同じ行の `PRINT X`）へ戻る。
+- `FOR J=1 TO 3 : … : NEXT J` … 単一行の `FOR`/`NEXT` も正しくループする。
+- `REPEAT : … : UNTIL c` … 単一行の `REPEAT`/`UNTIL` も可。
 
-いずれも行番号ベースの実行ループ（`run_program`）に由来する。文単位の再開に対応するには呼び出し
-スタックに「行内の位置」も積む必要があり、影響が大きいため現状は上記を運用ルールとする。
+実装: 実行ループ（`run_program`）が `branch_resume_pos`（行内の再開位置）を持ち、
+`RETURN` / `NEXT` / `UNTIL` が復帰先の位置を指定する。呼び出しスタック・REPEAT スタック・
+FOR コンテキストにそれぞれ行内位置を保存している。
 
 ## 4. 今後の仕様検討メモ
 

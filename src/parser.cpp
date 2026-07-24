@@ -12,6 +12,7 @@ float last_rnd_val = 0.5f;
 
 int current_line = -1;
 bool branch_taken = false;
+int branch_resume_pos = -1;
 
 uint16_t current_color_565 = 0xFFFF; // Default White
 const uint16_t PALETTE[16] = {
@@ -37,9 +38,11 @@ ForLoopContext for_stack[MAX_FOR_STACK];
 int for_stack_ptr = 0;
 
 int repeat_stack_line[MAX_REPEAT_STACK];
+int repeat_stack_pos[MAX_REPEAT_STACK];
 int repeat_stack_ptr = 0;
 
 int call_stack[MAX_CALL_STACK];
+int call_stack_pos[MAX_CALL_STACK];
 int call_stack_ptr = 0;
 
 Value data_buffer[MAX_DATA_BUFFER];
@@ -231,6 +234,7 @@ void run_program(int max_steps) {
     if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) return;
     current_line = logical_memory[ptr+2] | (logical_memory[ptr+3] << 8);
     int steps = 0;
+    int resume_pos = -1; // 次の行を行頭ではなく途中から始める場合の位置（-1 は行頭）
 
     while (current_line != -1 && (max_steps == -1 || steps < max_steps)) {
         // Ctrl-C による中断。無限ループから抜ける唯一の手段なので、
@@ -248,8 +252,16 @@ void run_program(int max_steps) {
         
         TokenList tokens = get_detokenized_line(line_ptr);
         int pos = 0;
+        // 直前の分岐が「行の途中」への復帰（RETURN / NEXT / UNTIL）を要求していたら
+        // その位置から再開する。復帰位置は文の区切り（`:`）を指すので 1 つ読み飛ばす。
+        if (resume_pos >= 0) {
+            pos = resume_pos;
+            if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COLON) pos++;
+        }
+        resume_pos = -1;
         branch_taken = false;
-        
+        branch_resume_pos = -1;
+
         try {
             while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE) {
                 execute_statement(tokens, pos);
@@ -262,8 +274,11 @@ void run_program(int max_steps) {
             report_error(e.what(), current_line);
             break;
         }
-        
-        if (!branch_taken) {
+
+        if (branch_taken) {
+            // 制御構文が行内復帰位置を指定していれば次の行でそこから再開する
+            resume_pos = branch_resume_pos;
+        } else {
             uint16_t next_ptr = logical_memory[line_ptr] | (logical_memory[line_ptr+1] << 8);
             if (next_ptr == 0 || (logical_memory[next_ptr+2] == 0 && logical_memory[next_ptr+3] == 0)) {
                 current_line = -1;

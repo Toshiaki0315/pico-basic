@@ -218,3 +218,61 @@ TEST_F(ControlFlowExtTest, AutoNotRequestedWithoutCommand) {
     int start = -1, step = -1;
     EXPECT_FALSE(auto_mode_requested(&start, &step));
 }
+
+// ---------------------------------------------------------
+// 文単位の復帰（同一行の GOSUB/FOR/REPEAT が続きを実行する）
+// run_program が branch_resume_pos で行内位置に戻れることの検証
+// ---------------------------------------------------------
+TEST_F(ControlFlowExtTest, SingleLineForNextLoops) {
+    store_line(10, lex("FOR J=1 TO 3 : PRINT J : NEXT J"));
+    store_line(20, lex("PRINT \"DONE\""));
+    run_program(100);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "1\n2\n3\nDONE\n");
+}
+
+TEST_F(ControlFlowExtTest, SingleLineRepeatUntilLoops) {
+    store_line(10, lex("I=0"));
+    store_line(20, lex("REPEAT : I=I+1 : PRINT I : UNTIL I>=3"));
+    store_line(30, lex("PRINT \"OUT\""));
+    run_program(100);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "1\n2\n3\nOUT\n");
+}
+
+TEST_F(ControlFlowExtTest, GosubResumesRestOfLine) {
+    store_line(10, lex("GOSUB 100 : PRINT \"BACK\" : END"));
+    store_line(100, lex("PRINT \"SUB\" : RETURN"));
+    run_program(100);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "SUB\nBACK\n");
+}
+
+TEST_F(ControlFlowExtTest, SequentialGosubOnOneLine) {
+    store_line(10, lex("GOSUB 100 : GOSUB 200 : PRINT \"END\" : END"));
+    store_line(100, lex("PRINT \"A\" : RETURN"));
+    store_line(200, lex("PRINT \"B\" : RETURN"));
+    run_program(100);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "A\nB\nEND\n");
+}
+
+TEST_F(ControlFlowExtTest, OnGosubResumesRestOfLine) {
+    store_line(10, lex("FOR K=1 TO 2 : ON K GOSUB 100,200 : PRINT K : NEXT K : END"));
+    store_line(100, lex("PRINT \"one\" : RETURN"));
+    store_line(200, lex("PRINT \"two\" : RETURN"));
+    run_program(200);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "one\n1\ntwo\n2\n");
+}
+
+TEST_F(ControlFlowExtTest, IfThenGosubResumesRestOfLine) {
+    store_line(10, lex("IF 1 THEN GOSUB 100 : PRINT \"after\""));
+    store_line(20, lex("END"));
+    store_line(100, lex("PRINT \"insub\" : RETURN"));
+    run_program(100);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "insub\nafter\n");
+}
+
+TEST_F(ControlFlowExtTest, NestedSingleLineForInGosub) {
+    // サブルーチン内の単一行 FOR も正しくループする
+    store_line(10, lex("GOSUB 100 : PRINT \"MAIN\" : END"));
+    store_line(100, lex("FOR I=1 TO 3 : PRINT I : NEXT I : RETURN"));
+    run_program(200);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "1\n2\n3\nMAIN\n");
+}

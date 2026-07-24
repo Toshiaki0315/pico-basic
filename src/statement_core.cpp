@@ -127,28 +127,27 @@ void execute_gosub(const TokenList& tokens, int& pos) {
     int target = parse_branch_target(tokens, pos);
     if (find_program_line(target) == 0xFFFF) throw std::runtime_error("GOSUB target line not found");
     if (call_stack_ptr >= MAX_CALL_STACK) throw std::runtime_error("Out of Memory: Call Stack Limit Reached");
-    call_stack[call_stack_ptr++] = current_line;
+    // 復帰先は「GOSUB を呼んだ行の、GOSUB の直後」。pos は次の文の区切り（`:`）か行末を指す
+    call_stack[call_stack_ptr] = current_line;
+    call_stack_pos[call_stack_ptr] = pos;
+    call_stack_ptr++;
     current_line = target;
     branch_taken = true;
 }
 
 void execute_return(const TokenList& tokens, int& pos) {
-    pos++; 
+    pos++;
     if (call_stack_ptr == 0) throw std::runtime_error("RETURN WITHOUT GOSUB");
-    int returned_from = call_stack[--call_stack_ptr];
-    uint16_t returned_idx = find_program_line(returned_from);
-    if (returned_idx != 0xFFFF) {
-        uint16_t next_idx = get_next_program_line(returned_from);
-        if (next_idx != 0xFFFF) {
-            current_line = logical_memory[next_idx+2] | (logical_memory[next_idx+3] << 8);
-            branch_taken = true;
-        } else {
-            current_line = -1;
-            branch_taken = true;
-        }
-    } else {
+    call_stack_ptr--;
+    int returned_from = call_stack[call_stack_ptr];
+    int resume        = call_stack_pos[call_stack_ptr];
+    if (find_program_line(returned_from) == 0xFFFF)
         throw std::runtime_error("Original line disappeared during GOSUB");
-    }
+    // GOSUB の直後（同じ行の続き）から再開する。GOSUB が行末なら resume は行末を指し、
+    // 実行ループはその行で何もせず次の行へ進む（＝従来どおり次の行に戻るのと同じ）
+    current_line = returned_from;
+    branch_resume_pos = resume;
+    branch_taken = true;
 }
 
 // THEN / ELSE の直後を実行する。`*LABEL` や行番号だけなら GOTO 扱いにする
@@ -286,10 +285,10 @@ void execute_next(const TokenList& tokens, int& pos) {
     
     bool cont = (ctx.step > 0) ? (v_val.num_val <= ctx.target) : (v_val.num_val >= ctx.target);
     if (cont) {
+        // ループ本体の先頭（FOR の直後）へ戻る。FOR と同じ行に本体があってもよい
         branch_taken = true;
-        uint16_t idx = get_next_program_line(ctx.loop_start_line);
-        if (idx != 0xFFFF) current_line = logical_memory[idx+2] | (logical_memory[idx+3] << 8);
-        else throw std::runtime_error("No line after FOR");
+        current_line = ctx.loop_start_line;
+        branch_resume_pos = ctx.loop_start_pos;
     } else {
         for_stack_ptr--;
     }
@@ -519,7 +518,9 @@ void execute_repeat(const TokenList& tokens, int& pos) {
     if (repeat_stack_ptr >= MAX_REPEAT_STACK)
         throw std::runtime_error("Out of Memory: REPEAT Stack Limit Reached");
 
-    repeat_stack_line[repeat_stack_ptr++] = current_line;
+    repeat_stack_line[repeat_stack_ptr] = current_line;
+    repeat_stack_pos[repeat_stack_ptr] = pos; // REPEAT の直後（ループ本体の先頭）
+    repeat_stack_ptr++;
 }
 
 void execute_until(const TokenList& tokens, int& pos) {
@@ -534,11 +535,9 @@ void execute_until(const TokenList& tokens, int& pos) {
         // 条件成立 → ループ終了
         repeat_stack_ptr--;
     } else {
-        // 条件不成立 → REPEAT の次の行へ戻る
-        int repeat_line = repeat_stack_line[repeat_stack_ptr - 1];
-        uint16_t idx = get_next_program_line(repeat_line);
-        if (idx == 0xFFFF) throw std::runtime_error("No line after REPEAT");
-        current_line = logical_memory[idx + 2] | (logical_memory[idx + 3] << 8);
+        // 条件不成立 → REPEAT の直後（ループ本体の先頭）へ戻る
+        current_line = repeat_stack_line[repeat_stack_ptr - 1];
+        branch_resume_pos = repeat_stack_pos[repeat_stack_ptr - 1];
         branch_taken = true;
     }
 }
@@ -578,50 +577,43 @@ void execute_on(const TokenList& tokens, int& pos) {
         throw std::runtime_error("Syntax Error: Expected GOTO or GOSUB");
     pos++;
     
+    // GOSUB からの復帰を行内の続きに戻せるよう、一致後もリストを最後まで読み進めて
+    // pos を ON 文全体の後ろ（`:` か行末）に置く
     int current_idx = 1;
+    int target = -1;
     bool found = false;
-    while (pos < tokens.size) {
-        int target;
+    while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE &&
+           tokens.tokens[pos].type != TokenType::COLON) {
+        int t;
         if (tokens.tokens[pos].type == TokenType::LABEL) {
-            target = resolve_label(tokens.tokens[pos].text);
-            if (target < 0) throw std::runtime_error("Undefined label");
+            t = resolve_label(tokens.tokens[pos].text);
+            if (t < 0) throw std::runtime_error("Undefined label");
             pos++;
         } else {
             require_token(tokens, pos, TokenType::NUMBER, "Expected line number");
-            target = atoi(tokens.tokens[pos].text);
+            t = atoi(tokens.tokens[pos].text);
             pos++;
         }
-        
-        if (current_idx == idx) {
-            if (type == TokenType::GOTO) {
-                current_line = target;
-                branch_taken = true;
-                found = true;
-                break;
-            } else {
-                if (call_stack_ptr >= MAX_CALL_STACK) throw std::runtime_error("GOSUB Stack Overflow");
-                call_stack[call_stack_ptr++] = current_line;
-                current_line = target;
-                branch_taken = true;
-                found = true;
-                break;
-            }
-        }
-        
+        if (current_idx == idx) { target = t; found = true; }
+
         if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
             pos++;
             current_idx++;
         } else break;
     }
-    
-    if (!found) {
-        while (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
-            pos++;
-            if (pos < tokens.size && (tokens.tokens[pos].type == TokenType::NUMBER ||
-                                      tokens.tokens[pos].type == TokenType::LABEL)) pos++;
-            else break;
+
+    if (found) {
+        if (find_program_line(target) == 0xFFFF) throw std::runtime_error("GOTO target line not found");
+        if (type == TokenType::GOSUB) {
+            if (call_stack_ptr >= MAX_CALL_STACK) throw std::runtime_error("GOSUB Stack Overflow");
+            call_stack[call_stack_ptr] = current_line;
+            call_stack_pos[call_stack_ptr] = pos; // ON 文全体の後ろへ復帰する
+            call_stack_ptr++;
         }
+        current_line = target;
+        branch_taken = true;
     }
+    // idx が範囲外なら何もせず次の文／行へ進む
 }
 
 void execute_mid_statement(const TokenList& tokens, int& pos) {

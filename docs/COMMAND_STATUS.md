@@ -31,7 +31,7 @@
 | `GOTO` / `GOSUB` / `RETURN` | 実装 | |
 | `IF` … `THEN` / `ELSE` | 実装 | |
 | `FOR` / `NEXT` | 実装 | |
-| `REPEAT` / `UNTIL` | 実装 | 後判定ループ。`REPEAT` は行頭に置く |
+| `REPEAT` / `UNTIL` | 実装 | 後判定ループ。文単位で復帰（単一行 `REPEAT : … : UNTIL` も可） |
 | `GET` | 実装 | ノンウェイト 1 文字入力（文字変数は文字、数値変数は文字コード） |
 | `END` / `STOP` | 実装 | |
 | `LET` / 代入 | 実装 | `LET` 省略可 |

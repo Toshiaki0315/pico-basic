@@ -88,6 +88,9 @@ extern float last_rnd_val;
 
 extern int current_line;
 extern bool branch_taken;
+// 分岐後に行内のどの位置から実行を再開するか。-1 は行頭（pos 0）から。
+// RETURN / NEXT / UNTIL が「同じ行の続き」に戻るために使う（文単位の復帰）。
+extern int branch_resume_pos;
 
 extern uint16_t current_color_565;
 extern const uint16_t PALETTE[16];
@@ -98,9 +101,11 @@ extern int for_stack_ptr;
 // REPEAT があった行番号を覚えておく。戻るときは FOR/NEXT と同じく
 // 「その次の行」から実行を再開する（run_program は行頭から実行するため）
 extern int repeat_stack_line[MAX_REPEAT_STACK];
+extern int repeat_stack_pos[MAX_REPEAT_STACK];  // REPEAT 直後の行内位置（文単位の復帰用）
 extern int repeat_stack_ptr;
 
 extern int call_stack[MAX_CALL_STACK];
+extern int call_stack_pos[MAX_CALL_STACK];       // GOSUB 呼び出し直後の行内位置（復帰先）
 extern int call_stack_ptr;
 
 // 行ラベル表。RUN のたびに run_program の先読みで作り直す。
