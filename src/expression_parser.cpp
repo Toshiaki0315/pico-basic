@@ -213,8 +213,8 @@ static Value parse_power_expr(const TokenList& tokens, int& pos);
 
 static Value parse_factor(const TokenList& tokens, int& pos) {
     if (pos >= tokens.size) return Value(0.0f);
-    Token t = tokens.tokens[pos];
-    
+    const Token& t = tokens.tokens[pos]; // 132 バイトの Token を毎回コピーしない
+
     if (t.type == TokenType::PLUS) {
         pos++; 
         Value v = parse_factor(tokens, pos);
@@ -246,11 +246,9 @@ static Value parse_factor(const TokenList& tokens, int& pos) {
         pos++; return Value((const char*)t.text);
     }
     if (t.type == TokenType::IDENTIFIER) {
-        char var_name[64];
-        strncpy(var_name, t.text, sizeof(var_name)-1);
-        var_name[sizeof(var_name)-1] = '\0';
+        const char* var_name = t.text; // トークンのテキストは null 終端済み。コピー不要
         pos++;
-        
+
         if (pos < tokens.size && tokens.tokens[pos].type == TokenType::LPAREN) {
             pos++; 
             Value args[16];
@@ -331,83 +329,6 @@ static Value parse_power_expr(const TokenList& tokens, int& pos) {
     return val;
 }
 
-static Value parse_term(const TokenList& tokens, int& pos) {
-    Value val = parse_power_expr(tokens, pos);
-    while (pos < tokens.size) {
-        TokenType op = tokens.tokens[pos].type;
-        if (op != TokenType::MUL && op != TokenType::DIV) break;
-        pos++;
-        Value next_val = parse_power_expr(tokens, pos);
-        
-        if (val.type == Value::Type::STR || next_val.type == Value::Type::STR) {
-            throw std::runtime_error("Type Mismatch: Cannot multiply/divide strings");
-        }
-        
-        if (op == TokenType::MUL) {
-            val.num_val *= next_val.num_val;
-        } else {
-            if (next_val.num_val == 0.0f) throw std::runtime_error("Division by zero");
-            val.num_val /= next_val.num_val;
-        }
-        val.type = Value::Type::NUM;
-    }
-    return val;
-}
-
-// 整数除算 `\`。乗除より緩く、MOD より強い。両辺を整数に切り詰めて割る
-static Value parse_intdiv_expr(const TokenList& tokens, int& pos) {
-    Value val = parse_term(tokens, pos);
-    while (pos < tokens.size && tokens.tokens[pos].type == TokenType::INTDIV) {
-        pos++;
-        Value rhs = parse_term(tokens, pos);
-        int b = to_int_operand(rhs, "\\");
-        if (b == 0) throw std::runtime_error("Division by zero");
-        val = Value(to_int_operand(val, "\\") / b);
-    }
-    return val;
-}
-
-// 剰余 MOD。整数除算より緩く、加減より強い
-static Value parse_mod_expr(const TokenList& tokens, int& pos) {
-    Value val = parse_intdiv_expr(tokens, pos);
-    while (pos < tokens.size && tokens.tokens[pos].type == TokenType::MOD_OP) {
-        pos++;
-        Value rhs = parse_intdiv_expr(tokens, pos);
-        int b = to_int_operand(rhs, "MOD");
-        if (b == 0) throw std::runtime_error("Division by zero");
-        val = Value(to_int_operand(val, "MOD") % b);
-    }
-    return val;
-}
-
-Value parse_expression(const TokenList& tokens, int& pos) {
-    Value val = parse_mod_expr(tokens, pos);
-    while (pos < tokens.size) {
-        TokenType op = tokens.tokens[pos].type;
-        if (op != TokenType::PLUS && op != TokenType::MINUS) break;
-        pos++;
-        Value next_val = parse_mod_expr(tokens, pos);
-        
-        if (op == TokenType::PLUS) {
-            if (val.type == Value::Type::STR && next_val.type == Value::Type::STR) {
-                char buf[128];
-                snprintf(buf, sizeof(buf), "%s%s", val.str_val, next_val.str_val);
-                val = Value(buf);
-            } else if (val.type != Value::Type::STR && next_val.type != Value::Type::STR) {
-                val.num_val += next_val.num_val;
-                val.type = Value::Type::NUM;
-            } else {
-                throw std::runtime_error("Type Mismatch: Cannot add string and number");
-            }
-        } else {
-            if (val.type == Value::Type::STR || next_val.type == Value::Type::STR) throw std::runtime_error("Type Mismatch: Cannot subtract strings");
-            val.num_val -= next_val.num_val;
-            val.type = Value::Type::NUM;
-        }
-    }
-    return val;
-}
-
 // 数値（INT/NUM）を int に切り詰める。ビット演算の被演算子に使う
 static int to_int_operand(const Value& v, const char* op) {
     if (v.type == Value::Type::STR) {
@@ -418,85 +339,132 @@ static int to_int_operand(const Value& v, const char* op) {
     return (v.type == Value::Type::INT) ? v.int_val : (int)v.num_val;
 }
 
-// 比較演算（= < > <= >= <>）。真は 1、偽は 0 を返す
-static Value parse_comparison(const TokenList& tokens, int& pos) {
-    Value val = parse_expression(tokens, pos);
-    while (pos < tokens.size) {
-        TokenType op = tokens.tokens[pos].type;
-        if (op == TokenType::ASSIGN || op == TokenType::GT || op == TokenType::LT ||
-            op == TokenType::GTE || op == TokenType::LTE || op == TokenType::NEQ) {
-            pos++;
-            Value next_val = parse_expression(tokens, pos);
-            
-            if ((val.type == Value::Type::STR) != (next_val.type == Value::Type::STR)) throw std::runtime_error("Type Mismatch: Cannot compare string and number");
-            
-            bool result = false;
-            if (val.type != Value::Type::STR) {
-                float a = val.num_val, b = next_val.num_val;
-                if (op == TokenType::ASSIGN) result = (a == b);
-                else if (op == TokenType::GT) result = (a > b);
-                else if (op == TokenType::LT) result = (a < b);
-                else if (op == TokenType::GTE) result = (a >= b);
-                else if (op == TokenType::LTE) result = (a <= b);
-                else if (op == TokenType::NEQ) result = (a != b);
-            } else {
-                const char* a = val.str_val, *b = next_val.str_val;
-                int cmp = strcmp(a, b);
-                if (op == TokenType::ASSIGN) result = (cmp == 0);
-                else if (op == TokenType::GT) result = (cmp > 0);
-                else if (op == TokenType::LT) result = (cmp < 0);
-                else if (op == TokenType::GTE) result = (cmp >= 0);
-                else if (op == TokenType::LTE) result = (cmp <= 0);
-                else if (op == TokenType::NEQ) result = (cmp != 0);
-            }
-            val = Value(result ? 1.0f : 0.0f);
-        } else break;
+// ---------------------------------------------------------
+// 二項演算子は優先順位クライミングで 1 ループにまとめる。
+// 以前は演算子ごとに関数を重ねて 8 段の呼び出しになっていたが、
+// 単純な式でも毎回 8 段降りるのが式評価のオーバーヘッドの大半だった。
+//
+//   優先順位（大きいほど強く結合）: XOR < OR < AND < 比較 < +/- < MOD < \ < */
+//   単項 NOT は比較より緩く AND より強い（下の parse_operand で処理）。
+//   ^（べき乗・右結合）と単項 +/- は parse_power_expr / parse_factor に残す。
+// ---------------------------------------------------------
+static const int PREC_COMPARE = 4; // NOT の被演算子はこの強さ以上を食う
+
+static int binop_prec(TokenType t) {
+    switch (t) {
+        case TokenType::XOR:    return 1;
+        case TokenType::OR:     return 2;
+        case TokenType::AND:    return 3;
+        case TokenType::ASSIGN: case TokenType::NEQ:
+        case TokenType::LT: case TokenType::GT:
+        case TokenType::LTE: case TokenType::GTE: return PREC_COMPARE; // 比較
+        case TokenType::PLUS: case TokenType::MINUS: return 5;
+        case TokenType::MOD_OP: return 6;
+        case TokenType::INTDIV: return 7;
+        case TokenType::MUL: case TokenType::DIV: return 8;
+        default: return 0; // 二項演算子ではない
     }
-    return val;
 }
 
-// NOT（単項・ビット補数）。比較より緩く、AND より強い
-static Value parse_not_expr(const TokenList& tokens, int& pos) {
+static Value parse_binary(const TokenList& tokens, int& pos, int min_prec);
+
+// 被演算子: 先頭の単項 NOT（連鎖可）＋ べき乗式
+static Value parse_operand(const TokenList& tokens, int& pos) {
     if (pos < tokens.size && tokens.tokens[pos].type == TokenType::NOT) {
         pos++;
-        Value v = parse_not_expr(tokens, pos); // 右結合
+        // NOT は比較より緩いので、被演算子として比較以上の強さの式を取る
+        Value v = parse_binary(tokens, pos, PREC_COMPARE);
         return Value(~to_int_operand(v, "NOT"));
     }
-    return parse_comparison(tokens, pos);
+    return parse_power_expr(tokens, pos);
 }
 
-// AND（ビット積）。OR より強く、NOT より緩い
-static Value parse_logical_and(const TokenList& tokens, int& pos) {
-    Value val = parse_not_expr(tokens, pos);
-    while (pos < tokens.size && tokens.tokens[pos].type == TokenType::AND) {
-        pos++;
-        Value rhs = parse_not_expr(tokens, pos);
-        val = Value(to_int_operand(val, "AND") & to_int_operand(rhs, "AND"));
+// op を a, b に適用する。各演算子の型規則・エラーは従来どおり
+static Value apply_binop(TokenType op, const Value& a, const Value& b) {
+    switch (op) {
+        case TokenType::MUL:
+        case TokenType::DIV: {
+            if (a.type == Value::Type::STR || b.type == Value::Type::STR)
+                throw std::runtime_error("Type Mismatch: Cannot multiply/divide strings");
+            if (op == TokenType::DIV) {
+                if (b.num_val == 0.0f) throw std::runtime_error("Division by zero");
+                return Value(a.num_val / b.num_val);
+            }
+            return Value(a.num_val * b.num_val);
+        }
+        case TokenType::INTDIV: {
+            int d = to_int_operand(b, "\\");
+            if (d == 0) throw std::runtime_error("Division by zero");
+            return Value(to_int_operand(a, "\\") / d);
+        }
+        case TokenType::MOD_OP: {
+            int d = to_int_operand(b, "MOD");
+            if (d == 0) throw std::runtime_error("Division by zero");
+            return Value(to_int_operand(a, "MOD") % d);
+        }
+        case TokenType::PLUS: {
+            if (a.type == Value::Type::STR && b.type == Value::Type::STR) {
+                char buf[128];
+                snprintf(buf, sizeof(buf), "%s%s", a.str_val, b.str_val);
+                return Value(buf);
+            }
+            if (a.type != Value::Type::STR && b.type != Value::Type::STR)
+                return Value(a.num_val + b.num_val);
+            throw std::runtime_error("Type Mismatch: Cannot add string and number");
+        }
+        case TokenType::MINUS: {
+            if (a.type == Value::Type::STR || b.type == Value::Type::STR)
+                throw std::runtime_error("Type Mismatch: Cannot subtract strings");
+            return Value(a.num_val - b.num_val);
+        }
+        case TokenType::AND: return Value(to_int_operand(a, "AND") & to_int_operand(b, "AND"));
+        case TokenType::OR:  return Value(to_int_operand(a, "OR")  | to_int_operand(b, "OR"));
+        case TokenType::XOR: return Value(to_int_operand(a, "XOR") ^ to_int_operand(b, "XOR"));
+        default: { // 比較演算子（真 1 / 偽 0）
+            if ((a.type == Value::Type::STR) != (b.type == Value::Type::STR))
+                throw std::runtime_error("Type Mismatch: Cannot compare string and number");
+            int c; // a<b:-1 a==b:0 a>b:1
+            if (a.type != Value::Type::STR) {
+                c = (a.num_val < b.num_val) ? -1 : (a.num_val > b.num_val) ? 1 : 0;
+            } else {
+                int r = strcmp(a.str_val, b.str_val);
+                c = (r < 0) ? -1 : (r > 0) ? 1 : 0;
+            }
+            bool result = false;
+            switch (op) {
+                case TokenType::ASSIGN: result = (c == 0); break;
+                case TokenType::NEQ:    result = (c != 0); break;
+                case TokenType::LT:     result = (c < 0);  break;
+                case TokenType::GT:     result = (c > 0);  break;
+                case TokenType::LTE:    result = (c <= 0); break;
+                case TokenType::GTE:    result = (c >= 0); break;
+                default: break;
+            }
+            return Value(result ? 1.0f : 0.0f);
+        }
     }
-    return val;
 }
 
-// OR（ビット和）。AND より緩く、XOR より強い
-static Value parse_bit_or(const TokenList& tokens, int& pos) {
-    Value val = parse_logical_and(tokens, pos);
-    while (pos < tokens.size && tokens.tokens[pos].type == TokenType::OR) {
+// min_prec 以上の強さの二項演算子だけを結合する（左結合）
+static Value parse_binary(const TokenList& tokens, int& pos, int min_prec) {
+    Value left = parse_operand(tokens, pos);
+    while (pos < tokens.size) {
+        TokenType op = tokens.tokens[pos].type;
+        int prec = binop_prec(op);
+        if (prec == 0 || prec < min_prec) break;
         pos++;
-        Value rhs = parse_logical_and(tokens, pos);
-        val = Value(to_int_operand(val, "OR") | to_int_operand(rhs, "OR"));
+        Value right = parse_binary(tokens, pos, prec + 1);
+        left = apply_binop(op, left, right);
     }
-    return val;
+    return left;
 }
 
-// 式全体の入口。XOR が最も優先順位が低い（MS BASIC 系と同じ並び）。
-//   優先順位: XOR < OR < AND < NOT < 比較 < +/- < MOD < \ < */ < ^ < 単項-
-// AND/OR/NOT/XOR はビット演算。比較は 1/0 を返すので論理積・論理和としても使える
-// （NOT はビット補数なので、論理否定は `X=0` のように比較で書くこと）。
+// `+`/`-` の直下（比較を含まない算術式）が要る箇所向け。DATA の事前評価などが使う
+Value parse_expression(const TokenList& tokens, int& pos) {
+    return parse_binary(tokens, pos, 5);
+}
+
+// 式全体の入口。XOR（最弱）から降りる
 Value parse_relation(const TokenList& tokens, int& pos) {
-    Value val = parse_bit_or(tokens, pos);
-    while (pos < tokens.size && tokens.tokens[pos].type == TokenType::XOR) {
-        pos++;
-        Value rhs = parse_bit_or(tokens, pos);
-        val = Value(to_int_operand(val, "XOR") ^ to_int_operand(rhs, "XOR"));
-    }
-    return val;
+    return parse_binary(tokens, pos, 1);
 }

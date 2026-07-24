@@ -70,33 +70,78 @@ static Value read_compact_value(uint16_t addr) {
     return v;
 }
 
-bool get_variable(const char* name, Value& out_val) {
-    for (int i = 0; i < MAX_VARIABLES; ++i) {
+// ---------------------------------------------------------
+// 変数名 → スロット番号のハッシュ索引。
+//
+// 変数は 16 バイト固定スロットに直線状に並ぶ。ループ内で同じ変数を何度も
+// 引くため、線形走査＋strncmp をやめてハッシュで O(1) 参照する。
+// スロットは個別削除されない（NEW/CLEAR で一括消去）ので、線形プローブで
+// 空きに当たれば「存在しない」と確定できる。索引は遅延構築し、CLEAR で無効化。
+// ---------------------------------------------------------
+#define VAR_HASH_SIZE 256  // MAX_VARIABLES(128) の 2 倍、2 のべき乗
+static int16_t var_hash_tbl[VAR_HASH_SIZE];
+static bool    var_hash_valid = false;
+
+static inline uint32_t var_hash(const char* n) {
+    uint32_t h = 2166136261u; // FNV-1a（先頭 8 文字、null で打ち切り）
+    for (int i = 0; i < 8 && n[i]; i++) { h ^= (uint8_t)n[i]; h *= 16777619u; }
+    return h;
+}
+
+static void var_hash_put(int slot) {
+    uint16_t addr = MEMORY_VAR_BASE + (slot * 16);
+    uint32_t h = var_hash((const char*)&logical_memory[addr]) & (VAR_HASH_SIZE - 1);
+    while (var_hash_tbl[h] >= 0) h = (h + 1) & (VAR_HASH_SIZE - 1);
+    var_hash_tbl[h] = (int16_t)slot;
+}
+
+static void build_var_hash() {
+    for (int i = 0; i < VAR_HASH_SIZE; i++) var_hash_tbl[i] = -1;
+    for (int i = 0; i < MAX_VARIABLES; i++) {
         uint16_t addr = MEMORY_VAR_BASE + (i * 16);
-        bool active = logical_memory[addr + 9] != 0;
-        if (active && strncmp((const char*)&logical_memory[addr], name, 8) == 0) {
-            out_val = read_compact_value(addr);
-            return true;
-        }
+        if (logical_memory[addr + 9] != 0) var_hash_put(i);
     }
-    return false;
+    var_hash_valid = true;
+}
+
+void invalidate_var_hash() { var_hash_valid = false; }
+
+// スロットのアドレスを返す。無ければ 0xFFFF
+static uint16_t find_var_slot(const char* name) {
+    if (!var_hash_valid) build_var_hash();
+    uint32_t h = var_hash(name) & (VAR_HASH_SIZE - 1);
+    for (int probe = 0; probe < VAR_HASH_SIZE; probe++) {
+        int slot = var_hash_tbl[h];
+        if (slot < 0) return 0xFFFF; // 空き → 存在しない
+        uint16_t addr = MEMORY_VAR_BASE + (slot * 16);
+        if (logical_memory[addr + 9] != 0 &&
+            strncmp((const char*)&logical_memory[addr], name, 8) == 0) return addr;
+        h = (h + 1) & (VAR_HASH_SIZE - 1);
+    }
+    return 0xFFFF;
+}
+
+bool get_variable(const char* name, Value& out_val) {
+    uint16_t addr = find_var_slot(name);
+    if (addr == 0xFFFF) return false;
+    out_val = read_compact_value(addr);
+    return true;
 }
 
 void set_variable(const char* name, const Value& val) {
-    for (int i = 0; i < MAX_VARIABLES; ++i) {
-        uint16_t addr = MEMORY_VAR_BASE + (i * 16);
-        bool active = logical_memory[addr + 9] != 0;
-        if (active && strncmp((const char*)&logical_memory[addr], name, 8) == 0) {
-            write_compact_value(addr, val);
-            return;
-        }
+    uint16_t addr = find_var_slot(name);
+    if (addr != 0xFFFF) {
+        write_compact_value(addr, val);
+        return;
     }
+    // 新規変数: 空きスロットに置き、ハッシュにも登録する
     for (int i = 0; i < MAX_VARIABLES; ++i) {
-        uint16_t addr = MEMORY_VAR_BASE + (i * 16);
-        if (logical_memory[addr + 9] == 0) {
-            logical_memory[addr + 9] = 1;
-            strncpy((char*)&logical_memory[addr], name, 8);
-            write_compact_value(addr, val);
+        uint16_t saddr = MEMORY_VAR_BASE + (i * 16);
+        if (logical_memory[saddr + 9] == 0) {
+            logical_memory[saddr + 9] = 1;
+            strncpy((char*)&logical_memory[saddr], name, 8);
+            write_compact_value(saddr, val);
+            if (var_hash_valid) var_hash_put(i);
             return;
         }
     }

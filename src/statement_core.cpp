@@ -64,6 +64,7 @@ void execute_clear() {
     memset(&logical_memory[ARRAY_TABLE_BASE], 0, ARRAY_TABLE_SIZE);
     string_heap_ptr = STRING_HEAP_BASE;
     array_heap_inner_ptr = DATA_HEAP_BASE;
+    invalidate_var_hash(); // 変数表を消したので索引を作り直す
     user_func_count = 0; // DEF FN も初期化（プログラムは実行中に再定義する）
     basic_files_close_all(); // RUN / CLEAR のたびにファイルも初期状態へ
 }
@@ -550,13 +551,12 @@ void execute_dim(const TokenList& tokens, int& pos) {
 }
 
 void execute_assignment(const TokenList& tokens, int& pos, bool explicit_let) {
-    char var_name[64];
     if (explicit_let) {
         pos++;
         require_token(tokens, pos, TokenType::IDENTIFIER, "Syntax Error: Expected identifier after LET");
     }
-    strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name)-1);
-    var_name[sizeof(var_name)-1] = '\0';
+    // トークンのテキストは null 終端済みで評価中は不変なので、コピーせず参照する
+    const char* var_name = tokens.tokens[pos].text;
     pos++;
     
     int arr_idx, arr_idx2;

@@ -24,6 +24,20 @@ struct Value {
         str_val[sizeof(str_val) - 1] = '\0';
     }
 
+    // 128 バイトの str_val は文字列型のときだけ意味を持つ。数値のコピーで
+    // 未使用のバッファまで複製しないよう、型に応じて必要分だけ写す。
+    // 式評価は Value を値渡しで何度も複製するため、ここが速度に効く。
+    Value(const Value& o) : type(o.type), num_val(o.num_val), int_val(o.int_val) {
+        if (o.type == Type::STR) memcpy(str_val, o.str_val, sizeof(str_val));
+        else str_val[0] = '\0';
+    }
+    Value& operator=(const Value& o) {
+        type = o.type; num_val = o.num_val; int_val = o.int_val;
+        if (o.type == Type::STR) memcpy(str_val, o.str_val, sizeof(str_val));
+        else str_val[0] = '\0';
+        return *this;
+    }
+
     float get_num() const {
         return num_val;
     }
@@ -182,6 +196,7 @@ void require_token(const TokenList& tokens, int& pos, TokenType expected, const 
 // Memory / Program Managers
 bool get_variable(const char* name, Value& out_val);
 void set_variable(const char* name, const Value& val);
+void invalidate_var_hash(); // 変数表を一括変更したら索引を無効化
 ArrayRef* get_array(const char* name);
 void write_heap_value(uint16_t addr, const Value& val);
 Value read_heap_value(uint16_t addr);
