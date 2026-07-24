@@ -245,3 +245,38 @@ TEST_F(OpDefFnTest, PointReadsPixel) {
     EXPECT_NE(mock_hal::get_raw_print_buffer().find("40-1"), std::string::npos)
         << mock_hal::get_raw_print_buffer();
 }
+
+// --- 半角カタカナ（JIS X 0201, 0xA1-0xDF）---------------------------
+TEST_F(OpDefFnTest, KatakanaBytesPassThroughString) {
+    // "スコア" = BD BA B1。文字列内のバイトがそのまま出力される
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT \"\xBD\xBA\xB1\""));
+    std::string out = mock_hal::get_raw_print_buffer();
+    ASSERT_EQ(out.size(), 4u); // 3 バイト + 改行
+    EXPECT_EQ((unsigned char)out[0], 0xBD);
+    EXPECT_EQ((unsigned char)out[1], 0xBA);
+    EXPECT_EQ((unsigned char)out[2], 0xB1);
+}
+
+TEST_F(OpDefFnTest, KatakanaViaChr) {
+    // CHR$(&HB1) = ア。&HB1..&HB3 でアイウ
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT CHR$(&HB1); CHR$(&HB2); CHR$(&HB3)"));
+    std::string out = mock_hal::get_raw_print_buffer();
+    ASSERT_GE(out.size(), 3u);
+    EXPECT_EQ((unsigned char)out[0], 0xB1);
+    EXPECT_EQ((unsigned char)out[1], 0xB2);
+    EXPECT_EQ((unsigned char)out[2], 0xB3);
+}
+
+TEST_F(OpDefFnTest, KatakanaLenCountsBytes) {
+    // 半角カタカナは 1 バイト = 1 文字
+    EXPECT_EQ(eval("LEN(\"\xB1\xB2\xB3\")"), "3\n");
+}
+
+TEST_F(OpDefFnTest, KatakanaMidExtracts) {
+    // MID$/ASC も 1 バイト単位で扱える
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT ASC(MID$(\"\xB1\xB2\xB3\", 2, 1))"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "178\n"); // 0xB2 = 178
+}

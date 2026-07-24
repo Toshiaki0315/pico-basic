@@ -90,7 +90,7 @@ TokenList lex(const char* source) {
 
         char c = source[pos];
 
-        if (std::isspace(c)) {
+        if (std::isspace((unsigned char)c)) {
             pos++;
             continue;
         }
@@ -180,10 +180,10 @@ TokenList lex(const char* source) {
             continue;
         }
 
-        if (std::isdigit(c)) {
+        if (std::isdigit((unsigned char)c)) {
             int start = pos;
             bool has_dot = false;
-            while (pos < len && (std::isdigit(source[pos]) || source[pos] == '.')) {
+            while (pos < len && (std::isdigit((unsigned char)source[pos]) || source[pos] == '.')) {
                 if (source[pos] == '.') {
                     if (has_dot) break;
                     has_dot = true;
@@ -200,9 +200,9 @@ TokenList lex(const char* source) {
             continue;
         }
 
-        if (std::isalpha(c)) {
+        if (std::isalpha((unsigned char)c)) {
             int start = pos;
-            while (pos < len && (std::isalnum(source[pos]) || source[pos] == '$' || source[pos] == '%' || source[pos] == '#' || source[pos] == '@' || source[pos] == '_')) {
+            while (pos < len && (std::isalnum((unsigned char)source[pos]) || source[pos] == '$' || source[pos] == '%' || source[pos] == '#' || source[pos] == '@' || source[pos] == '_')) {
                 pos++;
             }
             char ident[MAX_TOKEN_LEN];

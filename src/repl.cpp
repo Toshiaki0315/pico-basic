@@ -103,7 +103,8 @@ void repl_start() {
                     printf("\b \b");
                     hal_display_print("\b \b");
                 }
-            } else if (c >= 32 && c <= 126) {
+            } else if ((c >= 32 && c <= 126) || (c >= 0xA1 && c <= 0xDF)) {
+                // 印字可能 ASCII と JIS X 0201 半角カタカナ（0xA1-0xDF）を受け付ける
                 last_terminator = 0; // 改行の対を待つ状態を解除する
                 if (input_ptr < MAX_LINE_LEN - 1) {
                     input_buffer[input_ptr++] = static_cast<char>(c);

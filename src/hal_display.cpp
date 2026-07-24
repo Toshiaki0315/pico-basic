@@ -244,10 +244,10 @@ void hal_graphics_circle(int x0, int y0, int radius, uint16_t color) {
 }
 
 static void char_at(int x, int y, char c, uint16_t fg, uint16_t bg) {
-  if (c < 0 || c > 127)
-    c = ' ';
+  // バイトを 0-255 として扱う。0xA1-0xDF は JIS X 0201 半角カタカナ
+  unsigned idx = (unsigned char)c;
   for (int j = 0; j < 8; j++) {
-    uint8_t row = BASIC_FONT[(int)c][j];
+    uint8_t row = BASIC_FONT[idx][j];
     for (int i = 0; i < 8; i++) {
       uint16_t color = (row & (0x80 >> i)) ? fg : bg;
       hal_graphics_pset(x + i, y + j, color);
@@ -368,7 +368,8 @@ void hal_display_input(char *buffer, int max_len) {
         printf("\b \b");
         hal_display_print("\b \b");
       }
-    } else if (c >= 32 && c <= 126) {
+    } else if ((c >= 32 && c <= 126) || (c >= 0xA1 && c <= 0xDF)) {
+      // 印字可能 ASCII と半角カタカナ（0xA1-0xDF）
       if (input_ptr < max_len - 1) {
         buffer[input_ptr++] = static_cast<char>(c);
         buffer[input_ptr] = '\0';
