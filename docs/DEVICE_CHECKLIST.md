@@ -150,8 +150,8 @@
 | H6 | ELSEIF | `10 X=2` / `20 IF X=1 THEN PRINT "A" ELSEIF X=2 THEN PRINT "B" ELSE PRINT "C"` → `RUN` | `B` が表示される（X を 1／9 に変えると `A`／`C`） | [x] |
 | H7 | 行ラベル | `10 GOTO *SKIP` / `20 PRINT "NG"` / `30 *SKIP` / `40 PRINT "OK"` → `RUN` | `OK` のみ表示（`NG` は出ない）。`LIST` で `*SKIP` が残る | [x] |
 | H8 | INIT/NEWON | `INIT` および `NEWON &H8000` を実行 | エラーも通知も出ず、そのまま `Ready` に戻る（互換のための空実装） | [x] |
-| H9 | 単一行 FOR/NEXT | `10 FOR J=1 TO 3 : PRINT J : NEXT J` / `20 PRINT "DONE"` → `RUN` | `1 2 3 DONE` と表示される（1行に収めてもループする） | [ ] |
-| H10 | GOSUB の続き実行 | `10 GOSUB 100 : PRINT "BACK" : END` / `100 PRINT "SUB" : RETURN` → `RUN` | `SUB` の後に `BACK` が表示される（RETURN が同じ行の続きに戻る） | [ ] |
+| H9 | 単一行 FOR/NEXT | `10 FOR J=1 TO 3 : PRINT J : NEXT J` / `20 PRINT "DONE"` → `RUN` | `1 2 3 DONE` と表示される（1行に収めてもループする） | [x] |
+| H10 | GOSUB の続き実行 | `10 GOSUB 100 : PRINT "BACK" : END` / `100 PRINT "SUB" : RETURN` → `RUN` | `SUB` の後に `BACK` が表示される（RETURN が同じ行の続きに戻る） | [x] |
 
 ---
 
