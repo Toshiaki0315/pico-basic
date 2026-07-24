@@ -176,6 +176,64 @@ TEST_F(ExecutionTest, ReturnWithoutGosub) {
         << mock_hal::get_raw_print_buffer();
 }
 
+TEST_F(ExecutionTest, GosubInsideForLoop) {
+    // ループの各回でサブルーチンを呼ぶ。呼び出しごとに正しく復帰する
+    store_line(10, lex("FOR I=1 TO 3"));
+    store_line(20, lex("GOSUB 100"));
+    store_line(30, lex("NEXT I"));
+    store_line(40, lex("END"));
+    store_line(100, lex("PRINT I"));
+    store_line(110, lex("RETURN"));
+    run_program(50);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "1\n2\n3\n");
+}
+
+TEST_F(ExecutionTest, OnGosubDispatch) {
+    store_line(10, lex("K=2 : ON K GOSUB 100, 200, 300"));
+    store_line(20, lex("PRINT \"BACK\" : END"));
+    store_line(100, lex("PRINT \"ONE\" : RETURN"));
+    store_line(200, lex("PRINT \"TWO\" : RETURN"));
+    store_line(300, lex("PRINT \"THREE\" : RETURN"));
+    run_program(50);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "TWO\nBACK\n");
+}
+
+TEST_F(ExecutionTest, GosubSubroutineComputesResult) {
+    // 変数で引数を渡し、結果を変数で受け取るサブルーチン（4 の階乗）
+    store_line(10, lex("N=4 : GOSUB 100"));
+    store_line(20, lex("PRINT F"));
+    store_line(30, lex("END"));
+    store_line(100, lex("F=1"));
+    store_line(110, lex("FOR J=1 TO N"));
+    store_line(120, lex("F=F*J"));
+    store_line(130, lex("NEXT J"));
+    store_line(140, lex("RETURN"));
+    run_program(200);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "24\n");
+}
+
+TEST_F(ExecutionTest, GosubDeepNesting) {
+    // 4 段のネストが LIFO で正しく戻る。
+    // GOSUB は行番号単位で復帰するため、各サブルーチンは行を分けて書く
+    // （`GOSUB … : 文` のように同じ行に続けた文は復帰時に実行されない）
+    store_line(10, lex("GOSUB 100"));
+    store_line(20, lex("PRINT 1"));
+    store_line(30, lex("END"));
+    store_line(100, lex("GOSUB 200"));
+    store_line(110, lex("PRINT 2"));
+    store_line(120, lex("RETURN"));
+    store_line(200, lex("GOSUB 300"));
+    store_line(210, lex("PRINT 3"));
+    store_line(220, lex("RETURN"));
+    store_line(300, lex("GOSUB 400"));
+    store_line(310, lex("PRINT 4"));
+    store_line(320, lex("RETURN"));
+    store_line(400, lex("PRINT 5"));
+    store_line(410, lex("RETURN"));
+    run_program(50);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "5\n4\n3\n2\n1\n");
+}
+
 // ---------------------------------------------------------
 // System Commands Test
 // ---------------------------------------------------------

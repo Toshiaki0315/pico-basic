@@ -20,7 +20,15 @@
 
 `GOTO`, `GOSUB`, `RETURN`, `FOR`, `NEXT`, `IF`/`THEN`/`ELSEIF`/`ELSE`, `REPEAT`/`UNTIL`, `END`, `STOP`, `ON` … `GOTO`/`GOSUB`, `DIM`, `READ`/`DATA`/`RESTORE`, `INPUT`, `GET`, `LET` 代入など。`GOTO`/`GOSUB`/`IF … THEN` は行番号のほか `*ラベル` を受け付ける。
 
-**`REPEAT`/`UNTIL` の制限:** `FOR`/`NEXT` と同じく行番号で戻るため、`REPEAT` は行頭に置くこと（同一行に `:` で他の文を続けると戻り先がずれる）。
+**行番号単位で戻る制御構文の制限:** `GOSUB`/`RETURN`・`FOR`/`NEXT`・`REPEAT`/`UNTIL` はいずれも
+「戻り先＝行番号」で管理し、文（`:` 区切り）単位では戻れない。したがって次の書き方は避ける:
+
+- `GOSUB 100 : PRINT X` … `RETURN` は**次の行**へ戻るので、同じ行の `PRINT X` は実行されない。`GOSUB` は行末（その行の最後の文）に置く。
+- `FOR J=1 TO 3 : … : NEXT J` … 単一行に収めた `FOR`/`NEXT` はループせず 1 回で抜ける。`FOR` と `NEXT` は別々の行に置く。
+- `REPEAT` は行頭に置く（`REPEAT` の直後に `:` で文を続けると戻り先がずれる）。
+
+いずれも行番号ベースの実行ループ（`run_program`）に由来する。文単位の再開に対応するには呼び出し
+スタックに「行内の位置」も積む必要があり、影響が大きいため現状は上記を運用ルールとする。
 
 ## 4. 今後の仕様検討メモ
 
