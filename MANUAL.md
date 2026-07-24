@@ -1,6 +1,17 @@
 # pico-basic ユーザーマニュアル
 
-pico-basic は、Raspberry Pi Pico 2 (RP2350) 上で動作する、SHARP X1 turbo (CZ-8FB02) 互換のネイティブ BASIC インタプリタです。1980年代のマイコンの操作感そのままに、現代の強力なハードウェア機能（カラー液晶、SDカード、GPIO制御）を扱うことができます。
+pico-basic は、Raspberry Pi Pico 2 (RP2350) 上で動作するネイティブ BASIC インタプリタです。1980年代のマイコンの操作感そのままに、現代のハードウェア機能（カラー液晶、タッチパネル、SDカード、PSG 音源、GPIO 制御）を扱うことができます。
+
+SHARP X1 turbo (CZ-8FB02) の **Hu-BASIC を土台に、独自に拡張した仕様**です。Hu-BASIC の互換実装ではないので、当時のプログラムをそのまま動かすことは想定していません。命令ごとの出自は下の「この BASIC の成り立ち」を参照してください。
+
+## この BASIC の成り立ち
+
+| 由来 | 主な命令・機能 |
+| :--- | :--- |
+| **Hu-BASIC（X1 turbo）** | 基本文法、`SOUND`（AY-3-8910 相当の PSG レジスタ）、`GET@`/`PUT@`、`CONSOLE`、`REPEAT`〜`UNTIL`、`INIT`/`NEWON`（空実装） |
+| **S-BASIC（シャープ）** | `AUTO`（行番号自動生成） |
+| **N88-BASIC（NEC）** | `OPEN`/`PRINT #`/`INPUT #`/`EOF`、`ON ERROR GOTO`/`RESUME`/`ERR`/`ERL`、`PRINT USING`、`WHILE`/`WEND`、`RENUM`、`DELETE`、範囲 `LIST`、`CONT`、`TRON`/`TROFF`、`MOD`、`\`、`&H`/`&B`、`INSTR`/`STRING$`/`SPACE$`/`HEX$` |
+| **本実装の独自拡張** | 行ラベル `*NAME`、`GOSUB`/`FOR`/`WHILE` の**文単位の復帰**、`TOUCH()`、`POINT`、`TIMER`、`POLY`、`WINDOW`、`BRIGHTNESS`、`GPIO`、`POKE`/`PEEK`（論理メモリ）、**Ctrl-P による画面の BMP 保存**、半角カタカナ表示 |
 
 ## 1. 基本的な使い方
 

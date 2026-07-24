@@ -51,7 +51,7 @@
 | `AND` / `OR` / `NOT` / `XOR` | 実装 | ビット演算子（優先順位 XOR<OR<AND<NOT<比較）。比較は 1/0 なので論理用途にも使える |
 | `MOD` / `\` | 実装 | 剰余・整数除算（乗除より緩く加減より強い）。0 除算はエラー |
 | `&H` / `&B` リテラル | 実装 | 16進・2進の数値表記。`LIST` でも表記を保持 |
-| `INSTR` / `STRING$` / `SPACE$` / `HEX$` | 実装 | 文字列関数（N-BASIC 互換バッチ） |
+| `INSTR` / `STRING$` / `SPACE$` / `HEX$` | 実装 | 文字列関数（N-BASIC 由来） |
 | `POINT(x,y)` / `TIMER` | 実装 | 画素の色番号（WINDOW 座標系対応・画面外 -1）／起動からの経過 ms |
 | `PRINT` / `INPUT` | 実装 | |
 | `READ` / `DATA` / `RESTORE` | 実装 | |
