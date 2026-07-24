@@ -16,6 +16,8 @@
 | A4 | リスト | `10 PRINT "OK"` 登録後 `LIST` | 登録行が表示される | [x] |
 | A5 | 実行の中断 | `10 GOTO 10` を登録して `RUN` → Ctrl-C | `Break in 10` が表示され `Ready` に戻る（電源断が不要） | [x] |
 | A6 | 起動音 | 電源投入 | 起動時に「ピポッ」と 2 音鳴る | [x] |
+| A9 | 画面保存（Ctrl-P） | `CIRCLE (160,120),50,14` を実行 → **Ctrl-P** → `FILES` → SD を PC で開く | `[screen saved: SCR00.BMP]` がシリアルに出て `SCR00.BMP` が作られ、PC で開くと画面と同じ絵（文字も写る）が見える | [ ] |
+| A10 | 実行中の画面保存 | `10 GOTO 10` などを `RUN` した状態で **Ctrl-P** | 実行を止めずに保存され、`SCR01.BMP` のように番号が進む | [ ] |
 | A7 | AUTO 行番号 | `AUTO` → `PRINT 1` と入力して Enter、`PRINT 2` と入力して Enter、何も打たずに Enter → `LIST` | 行 `10`／`20` が自動で振られ登録される。空行で AUTO を抜け `Ready` に戻る | [x] |
 | A8 | AUTO 開始・刻み | `AUTO 100, 5` → 適当に2行入力 → Ctrl-C → `LIST` | `100`／`105` で登録される。Ctrl-C で AUTO を抜ける | [x] |
 

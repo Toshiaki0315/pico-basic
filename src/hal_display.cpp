@@ -4,6 +4,7 @@
 
 #if __has_include("pico/stdlib.h")
 #include "hal_font.h"
+#include "screenshot.h"
 #include "hardware/pwm.h"
 #include "hardware/spi.h"
 #include "pico/stdlib.h"
@@ -394,6 +395,15 @@ uint32_t hal_system_millis() {
 int hal_system_break_requested() {
   // 待たずに 1 文字だけ覗く。Ctrl-C(0x03) なら中断、それ以外は捨てる
   int c = getchar_timeout_us(0);
+  if (c == 0x10) { // Ctrl-P: 実行中でも画面を BMP で保存できる
+    char shot[16];
+    // 通知はシリアルだけ。LCD に書くと撮った直後の画面が崩れる
+    if (screenshot_save_next(shot, sizeof(shot)))
+      printf("\n[screen saved: %s]\n", shot);
+    else
+      printf("\n[screen save failed]\n");
+    return 0; // 中断ではない
+  }
   return (c == 0x03) ? 1 : 0;
 }
 

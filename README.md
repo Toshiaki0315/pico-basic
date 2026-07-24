@@ -20,7 +20,7 @@
 | **入力** | タッチパネル `TOUCH()`、ノンウェイトキー入力 `GET` |
 | **日本語** | JIS X 0201 **半角カタカナ**（`&HA1`〜`&HDF`）を 8×8 字形で表示。X1 turbo と同じ方式 |
 | **ストレージ** | MicroSD に `SAVE`/`LOAD`（プログラム）、`OPEN`/`PRINT #`/`INPUT #`/`EOF`（データファイル。ハイスコア保存など）。カードの抜き差しにも追従 |
-| **開発体験** | `AUTO`（行番号自動生成）、`RENUM`（飛び先も書き換え）、範囲 `LIST`、`DELETE`、`CONT`（Ctrl-C の続きから再開）、`TRON`/`TROFF`、`PRINT USING`、エラーコード表示 |
+| **開発体験** | **Ctrl-P で画面を BMP 保存**、`AUTO`（行番号自動生成）、`RENUM`（飛び先も書き換え）、範囲 `LIST`、`DELETE`、`CONT`（Ctrl-C の続きから再開）、`TRON`/`TROFF`、`PRINT USING`、エラーコード表示 |
 
 実装済み命令の全一覧は [docs/COMMAND_STATUS.md](./docs/COMMAND_STATUS.md) を参照してください。
 

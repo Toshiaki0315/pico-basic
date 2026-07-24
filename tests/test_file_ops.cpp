@@ -1,8 +1,10 @@
 #include <gtest/gtest.h>
 #include "parser.h"
+#include "lexer.h"
 #include "mock_hal_display.h"
 #include <cstdio>
 #include <fstream>
+#include <vector>
 #include <string>
 #include <filesystem>
 #include <cstring>
@@ -270,4 +272,86 @@ TEST_F(SeqFileTest, DoubleSigilVariableStillWorks) {
     mock_hal::reset();
     run("PRINT PI#");
     EXPECT_EQ(mock_hal::get_raw_print_buffer(), "3.5\n");
+}
+
+// ---------------------------------------------------------
+// スクリーンショット（Ctrl-P で保存する BMP）
+// 画素取得もファイル出力も HAL 経由なので、ホストで中身まで検証できる
+// ---------------------------------------------------------
+#include "screenshot.h"
+#include "parser_internal.h"   // PALETTE
+
+class ScreenshotTest : public ::testing::Test {
+protected:
+    void SetUp() override { mock_hal::reset(); std::remove("SHOT.BMP"); }
+    void TearDown() override { std::remove("SHOT.BMP"); }
+
+    static std::vector<unsigned char> read_file(const char* p) {
+        std::ifstream f(p, std::ios::binary);
+        return std::vector<unsigned char>((std::istreambuf_iterator<char>(f)),
+                                           std::istreambuf_iterator<char>());
+    }
+    static uint32_t le32(const std::vector<unsigned char>& b, size_t o) {
+        return (uint32_t)b[o] | ((uint32_t)b[o+1] << 8) |
+               ((uint32_t)b[o+2] << 16) | ((uint32_t)b[o+3] << 24);
+    }
+};
+
+TEST_F(ScreenshotTest, WritesValidBmpHeader) {
+    ASSERT_TRUE(screenshot_save("SHOT.BMP"));
+    auto b = read_file("SHOT.BMP");
+    ASSERT_GE(b.size(), 54u);
+    EXPECT_EQ(b[0], 'B');
+    EXPECT_EQ(b[1], 'M');
+    EXPECT_EQ(le32(b, 10), 54u);       // 画素データの開始位置
+    EXPECT_EQ(le32(b, 14), 40u);       // BITMAPINFOHEADER
+    EXPECT_EQ(le32(b, 18), 320u);      // 幅
+    EXPECT_EQ(le32(b, 22), 240u);      // 高さ
+    EXPECT_EQ(b[28], 24);              // 24bit
+    EXPECT_EQ(le32(b, 30), 0u);        // 無圧縮
+    // 54 + 320*3*240 とファイルサイズが一致する
+    EXPECT_EQ(b.size(), 54u + 320u * 3u * 240u);
+    EXPECT_EQ(le32(b, 2), (uint32_t)b.size());
+}
+
+TEST_F(ScreenshotTest, PixelsRoundTripAsBgr) {
+    // 赤（パレット 4）を 1 点打ち、BMP の該当位置が BGR=00,00,FF になること
+    parse_and_execute(lex("PSET (5,5), 4"));
+    ASSERT_TRUE(screenshot_save("SHOT.BMP"));
+    auto b = read_file("SHOT.BMP");
+
+    const int stride = 320 * 3;
+    // BMP は下から上に並ぶので、画面の y 行はファイル上の (239-y) 行目
+    size_t off = 54 + (size_t)(239 - 5) * stride + 5 * 3;
+    ASSERT_LT(off + 2, b.size());
+    EXPECT_EQ(b[off + 0], 0x00) << "B";
+    EXPECT_EQ(b[off + 1], 0x00) << "G";
+    EXPECT_EQ(b[off + 2], 0xFF) << "R";
+
+    // 打っていない画素は黒
+    size_t off2 = 54 + (size_t)(239 - 6) * stride + 6 * 3;
+    EXPECT_EQ(b[off2 + 0], 0x00);
+    EXPECT_EQ(b[off2 + 1], 0x00);
+    EXPECT_EQ(b[off2 + 2], 0x00);
+}
+
+TEST_F(ScreenshotTest, WhiteAndBlackAreExact) {
+    // RGB565→888 で白が 0xFFFFFF に戻る（上位ビットの複製が効いている）
+    parse_and_execute(lex("PSET (0,0), 15"));  // 白
+    ASSERT_TRUE(screenshot_save("SHOT.BMP"));
+    auto b = read_file("SHOT.BMP");
+    size_t off = 54 + (size_t)(239 - 0) * (320 * 3) + 0;
+    EXPECT_EQ(b[off + 0], 0xFF);
+    EXPECT_EQ(b[off + 1], 0xFF);
+    EXPECT_EQ(b[off + 2], 0xFF);
+}
+
+TEST_F(ScreenshotTest, AutoNumbersFilenames) {
+    std::remove("SCR00.BMP"); std::remove("SCR01.BMP");
+    char n1[16] = "", n2[16] = "";
+    ASSERT_TRUE(screenshot_save_next(n1, sizeof(n1)));
+    EXPECT_STREQ(n1, "SCR00.BMP");
+    ASSERT_TRUE(screenshot_save_next(n2, sizeof(n2)));
+    EXPECT_STREQ(n2, "SCR01.BMP") << "既存ファイルを上書きしてしまう";
+    std::remove("SCR00.BMP"); std::remove("SCR01.BMP");
 }

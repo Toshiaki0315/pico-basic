@@ -3,6 +3,7 @@
 #include "hal_sound.h"
 #include "lexer.h"
 #include "parser.h"
+#include "screenshot.h"
 #include <stdio.h>
 #include <cstring>
 #include <cctype>
@@ -103,6 +104,16 @@ void repl_start() {
                     printf("\b \b");
                     hal_display_print("\b \b");
                 }
+            } else if (c == 0x10) { // Ctrl-P: 画面を BMP で SD に保存
+                // 先に撮ってから知らせる（メッセージが写り込まないように）。
+                // 通知はシリアルだけに出し、LCD の内容は一切触らない
+                char shot[16];
+                if (screenshot_save_next(shot, sizeof(shot)))
+                    printf("\n[screen saved: %s]\n", shot);
+                else
+                    printf("\n[screen save failed]\n");
+                // 入力途中の行を打ち直さずに済むよう、そのまま再表示する
+                if (input_ptr > 0) printf("%s", input_buffer);
             } else if ((c >= 32 && c <= 126) || (c >= 0xA1 && c <= 0xDF)) {
                 // 印字可能 ASCII と JIS X 0201 半角カタカナ（0xA1-0xDF）を受け付ける
                 last_terminator = 0; // 改行の対を待つ状態を解除する

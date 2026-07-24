@@ -28,6 +28,7 @@
 | `SAVE` / `LOAD` | 実装 | 実機は FatFS + MicroSD、ホストは `fopen` |
 | `FILES` | 実装 | 実機は SD ルート、ホストは `opendir` カレント |
 | `KILL` / `NAME` | 実装 | 同上（`hal_sdcard` 経由） |
+| 画面保存（Ctrl-P） | 実装 | LCD を 24bit BMP で SD へ（`SCR00.BMP`〜）。実行中も可。`screenshot.cpp` は HAL 依存のみでホストテスト可能 |
 | `OPEN` / `CLOSE` | 実装 | シーケンシャルファイル。`OPEN f$ FOR INPUT\|OUTPUT\|APPEND AS #n`（#1〜#4） |
 | `PRINT #` / `INPUT #` | 実装 | 値を "," 区切りの行で往復。`EOF(n)` で終端判定。END/RUN/NEW で自動 CLOSE |
 

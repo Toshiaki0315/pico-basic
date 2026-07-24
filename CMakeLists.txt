@@ -60,6 +60,7 @@ if(BUILD_TESTS)
         src/expression_parser.cpp
         src/statement_core.cpp
         src/statement_graphics_io.cpp
+        src/screenshot.cpp
         src/hal_touch.cpp
         src/hal_sdcard.cpp
     )
@@ -135,6 +136,7 @@ else()
         src/expression_parser.cpp
         src/statement_core.cpp
         src/statement_graphics_io.cpp
+        src/screenshot.cpp
     )
 
     if (TARGET pico_stdlib)
