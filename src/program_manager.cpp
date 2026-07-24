@@ -183,30 +183,58 @@ static void update_program_links() {
     }
 }
 
-uint16_t find_program_line(int line_number) {
-    uint16_t ptr = MEMORY_TEXT_BASE;
-    if (logical_memory[ptr] == 0 && logical_memory[ptr+1] == 0 && 
-        logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0) return 0xFFFF;
+// ---------------------------------------------------------
+// 行番号 → ノード位置の索引キャッシュ。
+//
+// 実行ループは 1 行実行するたびに find_program_line を呼ぶ。連結リストを
+// 頭から歩くと長いプログラムのループが O(n^2) になるため、初回参照時に
+// 索引を作って二分探索する。プログラムを書き換える操作（store_line /
+// clear_program / renum_program）で無効化し、次の参照で作り直す。
+// ---------------------------------------------------------
+static uint16_t line_index_no[MAX_PROGRAM_LINES];
+static uint16_t line_index_ptr[MAX_PROGRAM_LINES];
+static int line_index_count = -1; // -1 = 無効
 
-    while (true) {
-        if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) return 0xFFFF;
-        uint16_t current_line = prog_line_no(ptr);
-        if (current_line == line_number) return ptr;
-        uint16_t next_ptr = prog_next_ptr(ptr);
-        if (next_ptr == 0) return 0xFFFF;
-        ptr = next_ptr;
+static void invalidate_line_index() { line_index_count = -1; }
+
+static void build_line_index() {
+    line_index_count = 0;
+    uint16_t ptr = MEMORY_TEXT_BASE;
+    if (logical_memory[ptr] == 0 && logical_memory[ptr+1] == 0 &&
+        logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0) return;
+    while (ptr < MEMORY_VAR_BASE && line_index_count < MAX_PROGRAM_LINES) {
+        if (prog_line_no(ptr) == 0 && ptr != MEMORY_TEXT_BASE) break;
+        line_index_no[line_index_count]  = prog_line_no(ptr);
+        line_index_ptr[line_index_count] = ptr;
+        line_index_count++;
+        uint16_t next = prog_next_ptr(ptr);
+        if (next == 0) break;
+        ptr = next;
     }
 }
 
-uint16_t get_next_program_line(int line_number) {
-    uint16_t ptr = MEMORY_TEXT_BASE;
-    while (true) {
-        uint16_t next_ptr = prog_next_ptr(ptr);
-        if (next_ptr == 0) return 0xFFFF;
-        uint16_t current_line = prog_line_no(ptr);
-        if (current_line > line_number) return ptr;
-        ptr = next_ptr;
+uint16_t find_program_line(int line_number) {
+    if (line_index_count < 0) build_line_index();
+    int lo = 0, hi = line_index_count - 1;
+    while (lo <= hi) {
+        int mid = (lo + hi) / 2;
+        if (line_index_no[mid] == line_number) return line_index_ptr[mid];
+        if (line_index_no[mid] < line_number) lo = mid + 1;
+        else hi = mid - 1;
     }
+    return 0xFFFF;
+}
+
+uint16_t get_next_program_line(int line_number) {
+    if (line_index_count < 0) build_line_index();
+    // line_number より大きい最初の行を探す
+    int lo = 0, hi = line_index_count;
+    while (lo < hi) {
+        int mid = (lo + hi) / 2;
+        if (line_index_no[mid] <= line_number) lo = mid + 1;
+        else hi = mid;
+    }
+    return (lo < line_index_count) ? line_index_ptr[lo] : 0xFFFF;
 }
 
 static uint16_t get_end_of_text() {
@@ -220,6 +248,7 @@ static uint16_t get_end_of_text() {
 
 void store_line(int line_number, const TokenList& tokens) {
     cont_valid = false; // プログラムを編集したら再開位置は信用できない
+    invalidate_line_index();
     uint16_t ptr = find_program_line(line_number);
     uint16_t end_ptr = get_end_of_text() + 2; 
     
@@ -232,6 +261,7 @@ void store_line(int line_number, const TokenList& tokens) {
             logical_memory[end_ptr+1] = 0;
         }
         update_program_links();
+        invalidate_line_index(); // 既存行を消したので索引は古い
     }
 
     if (tokens.size == 0 || (tokens.size == 1 && tokens.tokens[0].type == TokenType::END_OF_FILE)) return;
@@ -264,10 +294,12 @@ void store_line(int line_number, const TokenList& tokens) {
     }
 
     update_program_links();
+    invalidate_line_index(); // 挿入で配置が変わった
 }
 
 void clear_program() {
     cont_valid = false;
+    invalidate_line_index();
     memset(logical_memory, 0, 8);
     memset(&logical_memory[MEMORY_VAR_BASE], 0, VAR_TABLE_SIZE + ARRAY_TABLE_SIZE);
     
@@ -390,4 +422,5 @@ void renum_program(int newstart, int step) {
         if (next == 0) break;
         ptr = next;
     }
+    invalidate_line_index(); // 行番号が変わったので索引を作り直す
 }
