@@ -126,11 +126,11 @@ void execute_def(const TokenList& tokens, int& pos) {
 void execute_poke(const TokenList& tokens, int& pos) {
     pos++; // POKE
     Value addr_v = parse_relation(tokens, pos);
-    if (addr_v.type != Value::Type::NUM && addr_v.type != Value::Type::INT)
+    if (!addr_v.is_numeric())
         throw std::runtime_error("Type Mismatch: POKE address must be numeric");
     require_token(tokens, pos, TokenType::COMMA, "Syntax Error: Expected ',' in POKE"); pos++;
     Value val_v = parse_relation(tokens, pos);
-    if (val_v.type != Value::Type::NUM && val_v.type != Value::Type::INT)
+    if (!val_v.is_numeric())
         throw std::runtime_error("Type Mismatch: POKE value must be numeric");
 
     int addr = static_cast<int>(addr_v.num_val);
@@ -165,6 +165,27 @@ Value call_user_func(const char* name, const Value& arg) {
     return result;
 }
 
+// 変数名の直後に `(添字[, 添字2])` があれば読み取る（READ / INPUT / 代入の共通処理）。
+// 添字が無ければ arr_idx = -1 のまま返す。
+static void parse_optional_indices(const TokenList& tokens, int& pos, int& arr_idx, int& arr_idx2) {
+    arr_idx = -1;
+    arr_idx2 = -1;
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::LPAREN) {
+        pos++;
+        Value idx_val = parse_relation(tokens, pos);
+        if (!idx_val.is_numeric()) throw std::runtime_error("Type Mismatch: Array index");
+        arr_idx = static_cast<int>(idx_val.num_val);
+        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
+            pos++;
+            Value idx2_val = parse_relation(tokens, pos);
+            if (!idx2_val.is_numeric()) throw std::runtime_error("Type Mismatch: Array index");
+            arr_idx2 = static_cast<int>(idx2_val.num_val);
+        }
+        require_token(tokens, pos, TokenType::RPAREN, "Syntax Error: Expected ')'");
+        pos++;
+    }
+}
+
 void execute_read(const TokenList& tokens, int& pos) {
     pos++; 
     while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE) {
@@ -174,21 +195,8 @@ void execute_read(const TokenList& tokens, int& pos) {
         var_name[sizeof(var_name)-1] = '\0';
         pos++;
         
-        int arr_idx = -1, arr_idx2 = -1;
-        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::LPAREN) {
-            pos++;
-            Value idx_val = parse_relation(tokens, pos);
-            if ((idx_val.type != Value::Type::NUM && idx_val.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: Array index");
-            arr_idx = static_cast<int>(idx_val.num_val);
-            if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
-                pos++;
-                Value idx2_val = parse_relation(tokens, pos);
-                if ((idx2_val.type != Value::Type::NUM && idx2_val.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: Array index");
-                arr_idx2 = static_cast<int>(idx2_val.num_val);
-            }
-            require_token(tokens, pos, TokenType::RPAREN, "Syntax Error: Expected ')'");
-            pos++;
-        }
+        int arr_idx, arr_idx2;
+        parse_optional_indices(tokens, pos, arr_idx, arr_idx2);
         
         if (data_ptr >= data_buffer_size) throw std::runtime_error("Out of DATA");
         Value val = data_buffer[data_ptr++];
@@ -223,7 +231,7 @@ static int parse_branch_target(const TokenList& tokens, int& pos) {
         return line;
     }
     Value v = parse_relation(tokens, pos);
-    if (v.type != Value::Type::NUM && v.type != Value::Type::INT)
+    if (!v.is_numeric())
         throw std::runtime_error("Type Mismatch: branch requires number");
     return static_cast<int>(v.num_val);
 }
@@ -235,17 +243,22 @@ void execute_goto(const TokenList& tokens, int& pos) {
     branch_taken = true;
 }
 
+// GOSUB のフレームを積んで target へ分岐する。
+// 復帰先は「現在行の resume_pos の位置」（呼び出し文の直後の `:` か行末）。
+static void gosub_branch(int target, int resume_pos, const char* overflow_msg) {
+    if (call_stack_ptr >= MAX_CALL_STACK) throw std::runtime_error(overflow_msg);
+    call_stack[call_stack_ptr] = current_line;
+    call_stack_pos[call_stack_ptr] = resume_pos;
+    call_stack_ptr++;
+    current_line = target;
+    branch_taken = true;
+}
+
 void execute_gosub(const TokenList& tokens, int& pos) {
     pos++;
     int target = parse_branch_target(tokens, pos);
     if (find_program_line(target) == 0xFFFF) throw std::runtime_error("GOSUB target line not found");
-    if (call_stack_ptr >= MAX_CALL_STACK) throw std::runtime_error("Out of Memory: Call Stack Limit Reached");
-    // 復帰先は「GOSUB を呼んだ行の、GOSUB の直後」。pos は次の文の区切り（`:`）か行末を指す
-    call_stack[call_stack_ptr] = current_line;
-    call_stack_pos[call_stack_ptr] = pos;
-    call_stack_ptr++;
-    current_line = target;
-    branch_taken = true;
+    gosub_branch(target, pos, "Out of Memory: Call Stack Limit Reached");
 }
 
 void execute_return(const TokenList& tokens, int& pos) {
@@ -289,7 +302,7 @@ void execute_if(const TokenList& tokens, int& pos) {
     pos++; // IF を飛ばす（以降 ELSEIF ごとにこのループを回す）
     while (true) {
         Value condition_result = parse_relation(tokens, pos);
-        if (condition_result.type != Value::Type::NUM && condition_result.type != Value::Type::INT)
+        if (!condition_result.is_numeric())
             throw std::runtime_error("Type Mismatch: IF condition must be numeric");
 
         // 通常は THEN が必要だが、`IF 条件 GOTO 行` / `IF 条件 GOSUB 行` のように
@@ -345,18 +358,18 @@ void execute_for(const TokenList& tokens, int& pos) {
     require_token(tokens, pos, TokenType::ASSIGN, "Syntax Error: Expected '=' in FOR");
     pos++;
     Value start_val = parse_relation(tokens, pos);
-    if ((start_val.type != Value::Type::NUM && start_val.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: FOR start value");
+    if (!start_val.is_numeric()) throw std::runtime_error("Type Mismatch: FOR start value");
     
     require_token(tokens, pos, TokenType::TO, "Syntax Error: Expected TO in FOR");
     pos++;
     Value end_val = parse_relation(tokens, pos);
-    if ((end_val.type != Value::Type::NUM && end_val.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: FOR end value");
+    if (!end_val.is_numeric()) throw std::runtime_error("Type Mismatch: FOR end value");
     
     float step_val = 1.0f;
     if (pos < tokens.size && tokens.tokens[pos].type == TokenType::STEP) {
         pos++;
         Value step_v = parse_relation(tokens, pos);
-        if ((step_v.type != Value::Type::NUM && step_v.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: FOR step value");
+        if (!step_v.is_numeric()) throw std::runtime_error("Type Mismatch: FOR step value");
         step_val = step_v.num_val;
     }
     
@@ -418,7 +431,7 @@ void execute_dim(const TokenList& tokens, int& pos) {
     require_token(tokens, pos, TokenType::LPAREN, "Syntax Error: Expected '(' after DIM variable");
     pos++;
     Value size1_val = parse_relation(tokens, pos);
-    if ((size1_val.type != Value::Type::NUM && size1_val.type != Value::Type::INT) || size1_val.num_val < 0)
+    if (!size1_val.is_numeric() || size1_val.num_val < 0)
         throw std::runtime_error("Syntax Error: Invalid Array Size");
     int dim1_count = static_cast<int>(size1_val.num_val) + 1;
 
@@ -426,7 +439,7 @@ void execute_dim(const TokenList& tokens, int& pos) {
     if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
         pos++;
         Value size2_val = parse_relation(tokens, pos);
-        if ((size2_val.type != Value::Type::NUM && size2_val.type != Value::Type::INT) || size2_val.num_val < 0)
+        if (!size2_val.is_numeric() || size2_val.num_val < 0)
             throw std::runtime_error("Syntax Error: Invalid Array Size");
         dim2_count = static_cast<int>(size2_val.num_val) + 1;
     }
@@ -497,21 +510,8 @@ void execute_assignment(const TokenList& tokens, int& pos, bool explicit_let) {
     var_name[sizeof(var_name)-1] = '\0';
     pos++;
     
-    int arr_idx = -1, arr_idx2 = -1;
-    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::LPAREN) {
-        pos++;
-        Value idx_val = parse_relation(tokens, pos);
-        if ((idx_val.type != Value::Type::NUM && idx_val.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: Array index");
-        arr_idx = static_cast<int>(idx_val.num_val);
-        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
-            pos++;
-            Value idx2_val = parse_relation(tokens, pos);
-            if ((idx2_val.type != Value::Type::NUM && idx2_val.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: Array index");
-            arr_idx2 = static_cast<int>(idx2_val.num_val);
-        }
-        require_token(tokens, pos, TokenType::RPAREN, "Syntax Error: Expected ')'");
-        pos++;
-    }
+    int arr_idx, arr_idx2;
+    parse_optional_indices(tokens, pos, arr_idx, arr_idx2);
     
     require_token(tokens, pos, TokenType::ASSIGN, "Syntax Error: Expected assignment");
     pos++;
@@ -557,21 +557,8 @@ void execute_input(const TokenList& tokens, int& pos) {
         var_name[sizeof(var_name)-1] = '\0';
         pos++;
         
-        int arr_idx = -1, arr_idx2 = -1;
-        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::LPAREN) {
-            pos++;
-            Value idx_val = parse_relation(tokens, pos);
-            if ((idx_val.type != Value::Type::NUM && idx_val.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: Array index");
-            arr_idx = static_cast<int>(idx_val.num_val);
-            if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
-                pos++;
-                Value idx2_val = parse_relation(tokens, pos);
-                if ((idx2_val.type != Value::Type::NUM && idx2_val.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: Array index");
-                arr_idx2 = static_cast<int>(idx2_val.num_val);
-            }
-            require_token(tokens, pos, TokenType::RPAREN, "Syntax Error: Expected ')'");
-            pos++;
-        }
+        int arr_idx, arr_idx2;
+        parse_optional_indices(tokens, pos, arr_idx, arr_idx2);
         
         char in_buf[128] = "";
         hal_display_input(in_buf, sizeof(in_buf));
@@ -641,7 +628,7 @@ void execute_until(const TokenList& tokens, int& pos) {
     if (repeat_stack_ptr == 0) throw std::runtime_error("UNTIL without REPEAT");
 
     Value cond = parse_relation(tokens, pos);
-    if (cond.type != Value::Type::NUM && cond.type != Value::Type::INT)
+    if (!cond.is_numeric())
         throw std::runtime_error("Type Mismatch: UNTIL condition must be numeric");
 
     if (cond.num_val != 0.0f) {
@@ -718,13 +705,11 @@ void execute_on(const TokenList& tokens, int& pos) {
     if (found) {
         if (find_program_line(target) == 0xFFFF) throw std::runtime_error("GOTO target line not found");
         if (type == TokenType::GOSUB) {
-            if (call_stack_ptr >= MAX_CALL_STACK) throw std::runtime_error("GOSUB Stack Overflow");
-            call_stack[call_stack_ptr] = current_line;
-            call_stack_pos[call_stack_ptr] = pos; // ON 文全体の後ろへ復帰する
-            call_stack_ptr++;
+            gosub_branch(target, pos, "GOSUB Stack Overflow"); // ON 文全体の後ろへ復帰する
+        } else {
+            current_line = target;
+            branch_taken = true;
         }
-        current_line = target;
-        branch_taken = true;
     }
     // idx が範囲外なら何もせず次の文／行へ進む
 }

@@ -12,56 +12,63 @@ void require_token(const TokenList& tokens, int& pos, TokenType expected, const 
 }
 
 static bool is_builtin_function(const char* name) {
-    return strcmp(name, "ABS") == 0 || strcmp(name, "INT") == 0 || strcmp(name, "RND") == 0 || 
-           strcmp(name, "SGN") == 0 || strcmp(name, "SQR") == 0 ||
-           strcmp(name, "SIN") == 0 || strcmp(name, "COS") == 0 || strcmp(name, "TAN") == 0 ||
-           strcmp(name, "LOG") == 0 || strcmp(name, "EXP") == 0 ||
-           strcmp(name, "LEN") == 0 || strcmp(name, "MID$") == 0 || 
-           strcmp(name, "LEFT$") == 0 || strcmp(name, "RIGHT$") == 0 ||
-           strcmp(name, "CHR$") == 0 || strcmp(name, "ASC") == 0 ||
-           strcmp(name, "VAL") == 0 || strcmp(name, "STR$") == 0 ||
-           strcmp(name, "PEEK") == 0 ||
-           strcmp(name, "TOUCH") == 0;
+    static const char* const NAMES[] = {
+        "ABS", "INT", "RND", "SGN", "SQR", "SIN", "COS", "TAN", "LOG", "EXP",
+        "LEN", "MID$", "LEFT$", "RIGHT$", "CHR$", "ASC", "VAL", "STR$",
+        "PEEK", "TOUCH",
+    };
+    for (const char* n : NAMES) {
+        if (strcmp(name, n) == 0) return true;
+    }
+    return false;
+}
+
+// 引数の数・型が合わないときの共通エラー（メッセージは従来と同一）
+static void need_args(bool ok, const char* fn_name) {
+    if (!ok) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "Type Mismatch/Arg Count in %s", fn_name);
+        throw std::runtime_error(buf);
+    }
 }
 
 static Value evaluate_builtin_function(const char* var_name, Value* args, int arg_count) {
     if (strcmp(var_name, "ABS") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in ABS");
+        need_args(arg_count == 1 && args[0].is_numeric(), "ABS");
         return Value(std::abs(args[0].num_val));
     } else if (strcmp(var_name, "INT") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in INT");
+        need_args(arg_count == 1 && args[0].is_numeric(), "INT");
         return Value(std::floor(args[0].num_val));
     } else if (strcmp(var_name, "SGN") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in SGN");
+        need_args(arg_count == 1 && args[0].is_numeric(), "SGN");
         return Value((args[0].num_val > 0) ? 1.0f : (args[0].num_val < 0) ? -1.0f : 0.0f);
     } else if (strcmp(var_name, "SQR") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in SQR");
+        need_args(arg_count == 1 && args[0].is_numeric(), "SQR");
         if (args[0].num_val < 0) throw std::runtime_error("Math Error: SQR of negative number");
         return Value(std::sqrt(args[0].num_val));
     } else if (strcmp(var_name, "SIN") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in SIN");
+        need_args(arg_count == 1 && args[0].is_numeric(), "SIN");
         return Value(std::sin(args[0].num_val));
     } else if (strcmp(var_name, "COS") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in COS");
+        need_args(arg_count == 1 && args[0].is_numeric(), "COS");
         return Value(std::cos(args[0].num_val));
     } else if (strcmp(var_name, "TAN") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in TAN");
+        need_args(arg_count == 1 && args[0].is_numeric(), "TAN");
         return Value(std::tan(args[0].num_val));
     } else if (strcmp(var_name, "LOG") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in LOG");
+        need_args(arg_count == 1 && args[0].is_numeric(), "LOG");
         if (args[0].num_val <= 0) throw std::runtime_error("Math Error: LOG of non-positive number");
         return Value(std::log(args[0].num_val));
     } else if (strcmp(var_name, "EXP") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in EXP");
+        need_args(arg_count == 1 && args[0].is_numeric(), "EXP");
         return Value(std::exp(args[0].num_val));
     } else if (strcmp(var_name, "PEEK") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT))
-            throw std::runtime_error("Type Mismatch/Arg Count in PEEK");
+        need_args(arg_count == 1 && args[0].is_numeric(), "PEEK");
         int addr = static_cast<int>(args[0].num_val);
         if (addr < 0 || addr > 65535) throw std::runtime_error("Illegal function call: PEEK address out of range");
         return Value((int)logical_memory[addr]); // 論理メモリの 1 バイト（0-255）
     } else if (strcmp(var_name, "RND") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in RND");
+        need_args(arg_count == 1 && args[0].is_numeric(), "RND");
         float n = args[0].num_val;
         if (n < 0) {
             srand(static_cast<unsigned int>(std::abs(n)));
@@ -74,11 +81,10 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
             return Value(last_rnd_val * n);
         }
     } else if (strcmp(var_name, "LEN") == 0) {
-        if (arg_count != 1 || args[0].type != Value::Type::STR) throw std::runtime_error("Type Mismatch/Arg Count in LEN");
+        need_args(arg_count == 1 && args[0].type == Value::Type::STR, "LEN");
         return Value((float)strlen(args[0].str_val));
     } else if (strcmp(var_name, "MID$") == 0) {
-        if (arg_count != 3 || args[0].type != Value::Type::STR || (args[1].type != Value::Type::NUM && args[1].type != Value::Type::INT) || (args[2].type != Value::Type::NUM && args[2].type != Value::Type::INT))
-            throw std::runtime_error("Type Mismatch/Arg Count in MID$");
+        need_args(arg_count == 3 && args[0].type == Value::Type::STR && args[1].is_numeric() && args[2].is_numeric(), "MID$");
         int start = static_cast<int>(args[1].num_val) - 1; 
         int len = static_cast<int>(args[2].num_val);
         char* s = args[0].str_val;
@@ -89,8 +95,7 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
         snprintf(buf, sizeof(buf), "%.*s", len, s + start);
         return Value(buf);
     } else if (strcmp(var_name, "LEFT$") == 0) {
-        if (arg_count != 2 || args[0].type != Value::Type::STR || (args[1].type != Value::Type::NUM && args[1].type != Value::Type::INT))
-            throw std::runtime_error("Type Mismatch/Arg Count in LEFT$");
+        need_args(arg_count == 2 && args[0].type == Value::Type::STR && args[1].is_numeric(), "LEFT$");
         int len = static_cast<int>(args[1].num_val);
         char* s = args[0].str_val;
         if (len < 0) len = 0;
@@ -99,8 +104,7 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
         snprintf(buf, sizeof(buf), "%.*s", len, s);
         return Value(buf);
     } else if (strcmp(var_name, "RIGHT$") == 0) {
-        if (arg_count != 2 || args[0].type != Value::Type::STR || (args[1].type != Value::Type::NUM && args[1].type != Value::Type::INT))
-            throw std::runtime_error("Type Mismatch/Arg Count in RIGHT$");
+        need_args(arg_count == 2 && args[0].type == Value::Type::STR && args[1].is_numeric(), "RIGHT$");
         int len = static_cast<int>(args[1].num_val);
         char* s = args[0].str_val;
         int s_len = strlen(s);
@@ -108,23 +112,23 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
         if (len >= s_len) return Value(s);
         return Value(s + s_len - len);
     } else if (strcmp(var_name, "CHR$") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in CHR$");
+        need_args(arg_count == 1 && args[0].is_numeric(), "CHR$");
         char buf[2] = {(char)args[0].num_val, '\0'};
         return Value(buf);
     } else if (strcmp(var_name, "ASC") == 0) {
-        if (arg_count != 1 || args[0].type != Value::Type::STR) throw std::runtime_error("Type Mismatch/Arg Count in ASC");
+        need_args(arg_count == 1 && args[0].type == Value::Type::STR, "ASC");
         if (args[0].str_val[0] == '\0') return Value(0.0f);
         return Value((float)static_cast<unsigned char>(args[0].str_val[0]));
     } else if (strcmp(var_name, "VAL") == 0) {
-        if (arg_count != 1 || args[0].type != Value::Type::STR) throw std::runtime_error("Type Mismatch/Arg Count in VAL");
+        need_args(arg_count == 1 && args[0].type == Value::Type::STR, "VAL");
         return Value((float)atof(args[0].str_val));
     } else if (strcmp(var_name, "STR$") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in STR$");
+        need_args(arg_count == 1 && args[0].is_numeric(), "STR$");
         char buf[32];
         snprintf(buf, sizeof(buf), "%g", args[0].num_val);
         return Value(buf);
     } else if (strcmp(var_name, "TOUCH") == 0) {
-        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in TOUCH");
+        need_args(arg_count == 1 && args[0].is_numeric(), "TOUCH");
         int n = static_cast<int>(args[0].num_val);
         switch (n) {
             case 0: return Value((float)hal_touch_get_x());
@@ -145,7 +149,7 @@ static Value parse_factor(const TokenList& tokens, int& pos) {
     if (t.type == TokenType::PLUS) {
         pos++; 
         Value v = parse_factor(tokens, pos);
-        if ((v.type != Value::Type::NUM && v.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: Unary + on string");
+        if (!v.is_numeric()) throw std::runtime_error("Type Mismatch: Unary + on string");
         return v;
     }
     if (t.type == TokenType::MINUS) {
@@ -202,11 +206,11 @@ static Value parse_factor(const TokenList& tokens, int& pos) {
             if (!arr) throw std::runtime_error("Array not dimensioned");
             int flat_idx;
             if (arg_count == 1) {
-                if ((args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT))
+                if (!args[0].is_numeric())
                     throw std::runtime_error("Type Mismatch: Array index must be numeric");
                 flat_idx = flatten_array_index(arr, static_cast<int>(args[0].num_val));
             } else if (arg_count == 2) {
-                if ((args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT) || (args[1].type != Value::Type::NUM && args[1].type != Value::Type::INT))
+                if (!args[0].is_numeric() || !args[1].is_numeric())
                     throw std::runtime_error("Type Mismatch: Array index must be numeric");
                 flat_idx = flatten_array_index(arr,
                     static_cast<int>(args[0].num_val),

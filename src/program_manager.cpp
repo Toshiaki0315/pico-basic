@@ -135,7 +135,7 @@ static TokenList detokenize(const uint8_t* buffer) {
 
 static void update_program_links() {
     uint16_t ptr = MEMORY_TEXT_BASE;
-    uint16_t first_next = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+    uint16_t first_next = prog_next_ptr(ptr);
     if (first_next == 0 && logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0) return;
 
     while (ptr < MEMORY_VAR_BASE) {
@@ -155,8 +155,7 @@ static void update_program_links() {
         code_ptr++; 
         
         uint16_t actual_next = code_ptr;
-        logical_memory[ptr] = actual_next & 0xFF;
-        logical_memory[ptr+1] = (actual_next >> 8) & 0xFF;
+        mem_write_u16(ptr, actual_next);
 
         if (actual_next + 4 >= MEMORY_VAR_BASE || 
             (logical_memory[actual_next] == 0 && logical_memory[actual_next+1] == 0 &&
@@ -176,9 +175,9 @@ uint16_t find_program_line(int line_number) {
 
     while (true) {
         if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) return 0xFFFF;
-        uint16_t current_line = logical_memory[ptr+2] | (logical_memory[ptr+3] << 8);
+        uint16_t current_line = prog_line_no(ptr);
         if (current_line == line_number) return ptr;
-        uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+        uint16_t next_ptr = prog_next_ptr(ptr);
         if (next_ptr == 0) return 0xFFFF;
         ptr = next_ptr;
     }
@@ -187,9 +186,9 @@ uint16_t find_program_line(int line_number) {
 uint16_t get_next_program_line(int line_number) {
     uint16_t ptr = MEMORY_TEXT_BASE;
     while (true) {
-        uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+        uint16_t next_ptr = prog_next_ptr(ptr);
         if (next_ptr == 0) return 0xFFFF;
-        uint16_t current_line = logical_memory[ptr+2] | (logical_memory[ptr+3] << 8);
+        uint16_t current_line = prog_line_no(ptr);
         if (current_line > line_number) return ptr;
         ptr = next_ptr;
     }
@@ -198,7 +197,7 @@ uint16_t get_next_program_line(int line_number) {
 static uint16_t get_end_of_text() {
     uint16_t ptr = MEMORY_TEXT_BASE;
     while (true) {
-        uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+        uint16_t next_ptr = prog_next_ptr(ptr);
         if (next_ptr == 0) return ptr;
         ptr = next_ptr;
     }
@@ -209,7 +208,7 @@ void store_line(int line_number, const TokenList& tokens) {
     uint16_t end_ptr = get_end_of_text() + 2; 
     
     if (ptr != 0xFFFF) {
-        uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+        uint16_t next_ptr = prog_next_ptr(ptr);
         memmove(&logical_memory[ptr], &logical_memory[next_ptr], end_ptr - next_ptr);
         end_ptr -= (next_ptr - ptr);
         if (end_ptr + 2 < MEMORY_VAR_BASE) {
@@ -223,9 +222,9 @@ void store_line(int line_number, const TokenList& tokens) {
 
     uint16_t insert_ptr = MEMORY_TEXT_BASE;
     while (true) {
-        uint16_t next_ptr = logical_memory[insert_ptr] | (logical_memory[insert_ptr+1] << 8);
+        uint16_t next_ptr = prog_next_ptr(insert_ptr);
         if (next_ptr == 0) break;
-        uint16_t current_line = logical_memory[insert_ptr+2] | (logical_memory[insert_ptr+3] << 8);
+        uint16_t current_line = prog_line_no(insert_ptr);
         if (current_line > line_number) break;
         insert_ptr = next_ptr;
     }
@@ -239,8 +238,7 @@ void store_line(int line_number, const TokenList& tokens) {
     }
     
     memmove(&logical_memory[insert_ptr + total_len], &logical_memory[insert_ptr], end_ptr - insert_ptr);
-    logical_memory[insert_ptr+2] = line_number & 0xFF;
-    logical_memory[insert_ptr+3] = (line_number >> 8) & 0xFF;
+    mem_write_u16((uint16_t)(insert_ptr + 2), (uint16_t)line_number);
     memcpy(&logical_memory[insert_ptr+4], buffer, code_len);
     
     uint16_t new_end = end_ptr + total_len;
@@ -274,7 +272,7 @@ void list_program() {
     while (ptr < MEMORY_VAR_BASE) {
         if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) break;
         
-        uint16_t line_num = logical_memory[ptr+2] | (logical_memory[ptr+3] << 8);
+        uint16_t line_num = prog_line_no(ptr);
         TokenList tokens = detokenize(&logical_memory[ptr+4]);
         
         int bpos = snprintf(buffer, sizeof(buffer), "%d", line_num);
@@ -292,7 +290,7 @@ void list_program() {
         snprintf(buffer + bpos, sizeof(buffer) - bpos, "\n");
         basic_print(buffer);
         
-        uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+        uint16_t next_ptr = prog_next_ptr(ptr);
         if (next_ptr == 0) break;
         ptr = next_ptr;
     }

@@ -28,6 +28,11 @@ struct Value {
         return num_val;
     }
 
+    // 数値（NUM / INT）かどうか。型チェックはこれを使う
+    bool is_numeric() const {
+        return type == Type::NUM || type == Type::INT;
+    }
+
     const char* c_str() const {
         if (type == Type::STR) return str_val;
         static char buf[32];
@@ -81,6 +86,19 @@ struct ForLoopContext {
 // Shared State
 // ---------------------------------------------------------
 extern uint8_t logical_memory[65536];
+
+// 論理メモリの 16bit リトルエンディアン読み書き
+inline uint16_t mem_read_u16(uint16_t addr) {
+    return (uint16_t)(logical_memory[addr] | (logical_memory[addr + 1] << 8));
+}
+inline void mem_write_u16(uint16_t addr, uint16_t v) {
+    logical_memory[addr]     = (uint8_t)(v & 0xFF);
+    logical_memory[addr + 1] = (uint8_t)(v >> 8);
+}
+
+// プログラム行ノードのレイアウト: [次ノードへのポインタ(2)][行番号(2)][トークン列...]
+inline uint16_t prog_next_ptr(uint16_t node) { return mem_read_u16(node); }
+inline uint16_t prog_line_no(uint16_t node)  { return mem_read_u16((uint16_t)(node + 2)); }
 
 extern uint16_t string_heap_ptr;
 extern uint16_t array_heap_inner_ptr;

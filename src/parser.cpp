@@ -199,7 +199,7 @@ void run_program(int max_steps) {
     uint16_t ptr = MEMORY_TEXT_BASE;
     while (true) {
         if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) break;
-        int line_no = logical_memory[ptr+2] | (logical_memory[ptr+3] << 8);
+        int line_no = prog_line_no(ptr);
         TokenList tokens = get_detokenized_line(ptr);
 
         // 行頭のラベル定義（`100 *LOOP ...`）を表に登録する
@@ -224,7 +224,7 @@ void run_program(int max_steps) {
                 else if (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE) break;
             }
         }
-        uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+        uint16_t next_ptr = prog_next_ptr(ptr);
         if (next_ptr == 0) break;
         ptr = next_ptr;
     }
@@ -232,7 +232,7 @@ void run_program(int max_steps) {
     // Interpreter loop
     ptr = MEMORY_TEXT_BASE;
     if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) return;
-    current_line = logical_memory[ptr+2] | (logical_memory[ptr+3] << 8);
+    current_line = prog_line_no(ptr);
     int steps = 0;
     int resume_pos = -1; // 次の行を行頭ではなく途中から始める場合の位置（-1 は行頭）
 
@@ -279,11 +279,11 @@ void run_program(int max_steps) {
             // 制御構文が行内復帰位置を指定していれば次の行でそこから再開する
             resume_pos = branch_resume_pos;
         } else {
-            uint16_t next_ptr = logical_memory[line_ptr] | (logical_memory[line_ptr+1] << 8);
+            uint16_t next_ptr = prog_next_ptr(line_ptr);
             if (next_ptr == 0 || (logical_memory[next_ptr+2] == 0 && logical_memory[next_ptr+3] == 0)) {
                 current_line = -1;
             } else {
-                current_line = logical_memory[next_ptr+2] | (logical_memory[next_ptr+3] << 8);
+                current_line = prog_line_no(next_ptr);
             }
         }
         steps++;

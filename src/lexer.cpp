@@ -4,6 +4,74 @@
 #include <cstdio>
 #include <stdexcept>
 
+// ---------------------------------------------------------
+// キーワード表。新しい命令はここに 1 行足すだけでよい。
+// 別名（GET@ / GET_AT など）は同じ TokenType で複数行登録する。
+// ---------------------------------------------------------
+struct Keyword {
+    const char* name;
+    TokenType   type;
+};
+
+static const Keyword KEYWORDS[] = {
+    {"PRINT", TokenType::PRINT},   {"LET", TokenType::LET},
+    {"GOTO", TokenType::GOTO},     {"GOSUB", TokenType::GOSUB},
+    {"RETURN", TokenType::RETURN}, {"IF", TokenType::IF},
+    {"THEN", TokenType::THEN},     {"ELSEIF", TokenType::ELSEIF},
+    {"ELSE", TokenType::ELSE},     {"FOR", TokenType::FOR},
+    {"TO", TokenType::TO},         {"STEP", TokenType::STEP},
+    {"NEXT", TokenType::NEXT},     {"NEW", TokenType::NEW},
+    {"LIST", TokenType::LIST},     {"RUN", TokenType::RUN},
+    {"READ", TokenType::READ},     {"DATA", TokenType::DATA},
+    {"RESTORE", TokenType::RESTORE}, {"DIM", TokenType::DIM},
+    {"INPUT", TokenType::INPUT},   {"END", TokenType::END},
+    {"STOP", TokenType::STOP},     {"INIT", TokenType::INIT},
+    {"CLEAR", TokenType::CLEAR},   {"NEWON", TokenType::NEWON},
+    {"WIDTH", TokenType::WIDTH},   {"CONSOLE", TokenType::CONSOLE},
+    {"CLS", TokenType::CLS},       {"LOCATE", TokenType::LOCATE},
+    {"AUTO", TokenType::AUTO},     {"AND", TokenType::AND},
+    {"OR", TokenType::OR},         {"NOT", TokenType::NOT},
+    {"DEF", TokenType::DEF},       {"POKE", TokenType::POKE},
+    {"REPEAT", TokenType::REPEAT}, {"UNTIL", TokenType::UNTIL},
+    {"GET", TokenType::GET},       {"FILES", TokenType::FILES},
+    {"SAVE", TokenType::SAVE},     {"LOAD", TokenType::LOAD},
+    {"KILL", TokenType::KILL},     {"NAME", TokenType::NAME},
+    {"AS", TokenType::AS},         {"ON", TokenType::ON},
+    {"GPIO", TokenType::GPIO},     {"WINDOW", TokenType::WINDOW},
+    {"PSET", TokenType::PSET},     {"LINE", TokenType::LINE},
+    {"CIRCLE", TokenType::CIRCLE}, {"POLY", TokenType::POLY},
+    {"PAINT", TokenType::PAINT},
+    // マニュアル記載の `GET@` / `PUT@` が本来の書式。
+    // `GET_AT` / `PUT_AT` は既存プログラム互換のために残す
+    {"GET@", TokenType::GET_AT},   {"GET_AT", TokenType::GET_AT},
+    {"PUT@", TokenType::PUT_AT},   {"PUT_AT", TokenType::PUT_AT},
+    {"COLOR", TokenType::COLOR},   {"BRIGHTNESS", TokenType::BRIGHTNESS},
+    {"WAIT", TokenType::WAIT},     {"BEEP", TokenType::BEEP},
+    {"PLAY", TokenType::PLAY},     {"MUSIC", TokenType::MUSIC},
+    {"SOUND", TokenType::SOUND},   {"REM", TokenType::REM},
+};
+
+// 組み込み関数名。キーワードではないが、変数名の検査（8 文字制限など）を通さない
+static const char* const BUILTIN_NAMES[] = {
+    "ABS", "INT", "RND", "SGN", "SQR", "SIN", "COS", "TAN", "LOG", "EXP",
+    "LEN", "MID$", "LEFT$", "RIGHT$", "CHR$", "ASC", "VAL", "STR$",
+    "TAB", "PEEK", "TOUCH",
+};
+
+static bool lookup_keyword(const char* name, TokenType& out) {
+    for (const Keyword& k : KEYWORDS) {
+        if (strcmp(name, k.name) == 0) { out = k.type; return true; }
+    }
+    return false;
+}
+
+static bool is_builtin_name(const char* name) {
+    for (const char* b : BUILTIN_NAMES) {
+        if (strcmp(name, b) == 0) return true;
+    }
+    return false;
+}
+
 TokenList lex(const char* source) {
     TokenList token_list;
     int pos = 0;
@@ -141,95 +209,23 @@ TokenList lex(const char* source) {
             t.type = TokenType::IDENTIFIER;
             strncpy(t.text, upper_ident, MAX_TOKEN_LEN);
 
-            if (strcmp(upper_ident, "PRINT") == 0) t.type = TokenType::PRINT;
-            else if (strcmp(upper_ident, "LET") == 0) t.type = TokenType::LET;
-            else if (strcmp(upper_ident, "GOTO") == 0) t.type = TokenType::GOTO;
-            else if (strcmp(upper_ident, "GOSUB") == 0) t.type = TokenType::GOSUB;
-            else if (strcmp(upper_ident, "RETURN") == 0) t.type = TokenType::RETURN;
-            else if (strcmp(upper_ident, "IF") == 0) t.type = TokenType::IF;
-            else if (strcmp(upper_ident, "THEN") == 0) t.type = TokenType::THEN;
-            else if (strcmp(upper_ident, "ELSEIF") == 0) t.type = TokenType::ELSEIF;
-            else if (strcmp(upper_ident, "ELSE") == 0) t.type = TokenType::ELSE;
-            else if (strcmp(upper_ident, "FOR") == 0) t.type = TokenType::FOR;
-            else if (strcmp(upper_ident, "TO") == 0) t.type = TokenType::TO;
-            else if (strcmp(upper_ident, "STEP") == 0) t.type = TokenType::STEP;
-            else if (strcmp(upper_ident, "NEXT") == 0) t.type = TokenType::NEXT;
-            else if (strcmp(upper_ident, "NEW") == 0) t.type = TokenType::NEW;
-            else if (strcmp(upper_ident, "LIST") == 0) t.type = TokenType::LIST;
-            else if (strcmp(upper_ident, "RUN") == 0) t.type = TokenType::RUN;
-            else if (strcmp(upper_ident, "READ") == 0) t.type = TokenType::READ;
-            else if (strcmp(upper_ident, "DATA") == 0) t.type = TokenType::DATA;
-            else if (strcmp(upper_ident, "RESTORE") == 0) t.type = TokenType::RESTORE;
-            else if (strcmp(upper_ident, "DIM") == 0) t.type = TokenType::DIM;
-            else if (strcmp(upper_ident, "INPUT") == 0) t.type = TokenType::INPUT;
-            else if (strcmp(upper_ident, "END") == 0) t.type = TokenType::END;
-            else if (strcmp(upper_ident, "STOP") == 0) t.type = TokenType::STOP;
-            else if (strcmp(upper_ident, "INIT") == 0) t.type = TokenType::INIT;
-            else if (strcmp(upper_ident, "CLEAR") == 0) t.type = TokenType::CLEAR;
-            else if (strcmp(upper_ident, "NEWON") == 0) t.type = TokenType::NEWON;
-            else if (strcmp(upper_ident, "WIDTH") == 0) t.type = TokenType::WIDTH;
-            else if (strcmp(upper_ident, "CONSOLE") == 0) t.type = TokenType::CONSOLE;
-            else if (strcmp(upper_ident, "CLS") == 0) t.type = TokenType::CLS;
-            else if (strcmp(upper_ident, "LOCATE") == 0) t.type = TokenType::LOCATE;
-            else if (strcmp(upper_ident, "AUTO") == 0) t.type = TokenType::AUTO;
-            else if (strcmp(upper_ident, "AND") == 0) t.type = TokenType::AND;
-            else if (strcmp(upper_ident, "OR") == 0) t.type = TokenType::OR;
-            else if (strcmp(upper_ident, "NOT") == 0) t.type = TokenType::NOT;
-            else if (strcmp(upper_ident, "DEF") == 0) t.type = TokenType::DEF;
-            else if (strcmp(upper_ident, "POKE") == 0) t.type = TokenType::POKE;
-            else if (strcmp(upper_ident, "REPEAT") == 0) t.type = TokenType::REPEAT;
-            else if (strcmp(upper_ident, "UNTIL") == 0) t.type = TokenType::UNTIL;
-            else if (strcmp(upper_ident, "GET") == 0) t.type = TokenType::GET;
-            else if (strcmp(upper_ident, "FILES") == 0) t.type = TokenType::FILES;
-            else if (strcmp(upper_ident, "SAVE") == 0) t.type = TokenType::SAVE;
-            else if (strcmp(upper_ident, "LOAD") == 0) t.type = TokenType::LOAD;
-            else if (strcmp(upper_ident, "KILL") == 0) t.type = TokenType::KILL;
-            else if (strcmp(upper_ident, "NAME") == 0) t.type = TokenType::NAME;
-            else if (strcmp(upper_ident, "AS") == 0) t.type = TokenType::AS;
-            else if (strcmp(upper_ident, "ON") == 0) t.type = TokenType::ON;
-            else if (strcmp(upper_ident, "GPIO") == 0) t.type = TokenType::GPIO;
-            else if (strcmp(upper_ident, "WINDOW") == 0) t.type = TokenType::WINDOW;
-            else if (strcmp(upper_ident, "PSET") == 0) t.type = TokenType::PSET;
-            else if (strcmp(upper_ident, "LINE") == 0) t.type = TokenType::LINE;
-            else if (strcmp(upper_ident, "CIRCLE") == 0) t.type = TokenType::CIRCLE;
-            else if (strcmp(upper_ident, "POLY") == 0) t.type = TokenType::POLY;
-            else if (strcmp(upper_ident, "PAINT") == 0) t.type = TokenType::PAINT;
-            // マニュアル記載の `GET@` / `PUT@` が本来の書式。
-            // `GET_AT` / `PUT_AT` は既存プログラム互換のために残す
-            else if (strcmp(upper_ident, "GET@") == 0 ||
-                     strcmp(upper_ident, "GET_AT") == 0) t.type = TokenType::GET_AT;
-            else if (strcmp(upper_ident, "PUT@") == 0 ||
-                     strcmp(upper_ident, "PUT_AT") == 0) t.type = TokenType::PUT_AT;
-            else if (strcmp(upper_ident, "COLOR") == 0) t.type = TokenType::COLOR;
-            else if (strcmp(upper_ident, "BRIGHTNESS") == 0) t.type = TokenType::BRIGHTNESS;
-            else if (strcmp(upper_ident, "WAIT") == 0) t.type = TokenType::WAIT;
-            else if (strcmp(upper_ident, "BEEP") == 0) t.type = TokenType::BEEP;
-            else if (strcmp(upper_ident, "PLAY") == 0) t.type = TokenType::PLAY;
-            else if (strcmp(upper_ident, "MUSIC") == 0) t.type = TokenType::MUSIC;
-            else if (strcmp(upper_ident, "SOUND") == 0) t.type = TokenType::SOUND;
-            else if (strcmp(upper_ident, "REM") == 0) {
-                // REM 以降は行末までコメント。本文を text に取り込んで行の字句解析を終える
-                t.type = TokenType::REM;
-                int s = pos;
-                while (s < len && (source[s] == ' ' || source[s] == '\t')) s++;
-                int clen = len - s;
-                if (clen >= MAX_TOKEN_LEN) clen = MAX_TOKEN_LEN - 1;
-                if (clen < 0) clen = 0;
-                memcpy(t.text, source + s, clen);
-                t.text[clen] = '\0';
-                token_list.tokens[token_list.size++] = t;
-                break; // この行はこれ以上読まない
+            TokenType kw;
+            if (lookup_keyword(upper_ident, kw)) {
+                t.type = kw;
+                if (kw == TokenType::REM) {
+                    // REM 以降は行末までコメント。本文を text に取り込んで行の字句解析を終える
+                    int s = pos;
+                    while (s < len && (source[s] == ' ' || source[s] == '\t')) s++;
+                    int clen = len - s;
+                    if (clen >= MAX_TOKEN_LEN) clen = MAX_TOKEN_LEN - 1;
+                    if (clen < 0) clen = 0;
+                    memcpy(t.text, source + s, clen);
+                    t.text[clen] = '\0';
+                    token_list.tokens[token_list.size++] = t;
+                    break; // この行はこれ以上読まない
+                }
             }
-            else if (strcmp(upper_ident, "ABS") == 0 || strcmp(upper_ident, "INT") == 0 || strcmp(upper_ident, "RND") == 0 ||
-                     strcmp(upper_ident, "SGN") == 0 || strcmp(upper_ident, "SQR") == 0 ||
-                     strcmp(upper_ident, "SIN") == 0 || strcmp(upper_ident, "COS") == 0 || strcmp(upper_ident, "TAN") == 0 ||
-                     strcmp(upper_ident, "LOG") == 0 || strcmp(upper_ident, "EXP") == 0 ||
-                     strcmp(upper_ident, "LEN") == 0 || strcmp(upper_ident, "MID$") == 0 || 
-                     strcmp(upper_ident, "LEFT$") == 0 || strcmp(upper_ident, "RIGHT$") == 0 ||
-                     strcmp(upper_ident, "CHR$") == 0 || strcmp(upper_ident, "ASC") == 0 ||
-                     strcmp(upper_ident, "VAL") == 0 || strcmp(upper_ident, "STR$") == 0 ||
-                     strcmp(upper_ident, "TAB") == 0 || strcmp(upper_ident, "PEEK") == 0 ||
-                     strcmp(upper_ident, "TOUCH") == 0) {} // Built-in functions bypass variable checks
+            else if (is_builtin_name(upper_ident)) {} // 組み込み関数名は変数名検査を通さない
             else {
                 // Variable name rules: [A-Z][A-Z0-9]*[%$]? with max 8 characters total
                 // Examples: A, B$, X0%, SCORE, NAME$, COUNT%

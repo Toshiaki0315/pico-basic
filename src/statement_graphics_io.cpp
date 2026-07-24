@@ -176,7 +176,7 @@ void execute_locate(const TokenList& tokens, int& pos) {
 void execute_color(const TokenList& tokens, int& pos) {
     pos++; 
     Value val = parse_relation(tokens, pos);
-    if ((val.type != Value::Type::NUM && val.type != Value::Type::INT) && val.type != Value::Type::INT) 
+    if (!val.is_numeric() && val.type != Value::Type::INT) 
         throw std::runtime_error("Type Mismatch: COLOR expects number");
     int idx = static_cast<int>(val.num_val);
     if (idx < 0 || idx > 15) throw std::runtime_error("Invalid color index (0-15)");
@@ -632,7 +632,7 @@ void execute_save(const TokenList& tokens, int& pos) {
     while (true) {
         if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) break;
 
-        uint16_t line_num = logical_memory[ptr+2] | (logical_memory[ptr+3] << 8);
+        uint16_t line_num = prog_line_no(ptr);
         hal_file_printf(fp, "%d ", line_num);
         
         TokenList t = get_detokenized_line(ptr); // from program_manager.cpp
@@ -643,7 +643,7 @@ void execute_save(const TokenList& tokens, int& pos) {
         }
         hal_file_printf(fp, "\n");
         
-        uint16_t next_ptr = logical_memory[ptr] | (logical_memory[ptr+1] << 8);
+        uint16_t next_ptr = prog_next_ptr(ptr);
         if (next_ptr == 0) break;
         ptr = next_ptr;
     }
