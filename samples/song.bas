@@ -11,7 +11,7 @@
 110 FOR I = 0 TO 39
 120 H = INT(RND(180)) + 20
 130 X = I * 8
-140 C = I - INT(I / 8) * 8 + 8
+140 C = (I AND 7) + 8 : REM cycle colors 8..15 with a bit mask
 150 LINE (X, 239)-(X + 6, 239 - H), C, BF
 160 WAIT 40
 170 NEXT I

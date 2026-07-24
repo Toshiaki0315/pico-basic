@@ -76,6 +76,7 @@ if(BUILD_TESTS)
         tests/test_control_flow_ext.cpp
         tests/test_psg_envelope.cpp
         tests/test_elseif_labels.cpp
+        tests/test_operators_deffn.cpp
         tests/test_file_ops.cpp
         tests/test_builtin_functions_ext.cpp
         tests/test_advanced_features.cpp

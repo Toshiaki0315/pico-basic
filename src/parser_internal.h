@@ -120,6 +120,19 @@ extern int label_table_size;
 // ラベル名（`*NAME`）から行番号を返す。見つからなければ -1。
 int resolve_label(const char* name);
 
+// DEF FN ユーザー定義関数。本体は再 lex するためソース文字列で保持する。
+#define MAX_USER_FUNCS 16
+struct UserFunc {
+    char name[MAX_TOKEN_LEN];   // 例: "FNSQ"（大文字）
+    char param[MAX_TOKEN_LEN];  // 仮引数名（例: "X"）
+    char body[192];             // 本体式のソース（例: "X * X"）
+};
+extern UserFunc user_funcs[MAX_USER_FUNCS];
+extern int user_func_count;
+
+bool  is_user_func(const char* name);
+Value call_user_func(const char* name, const Value& arg);
+
 extern Value data_buffer[MAX_DATA_BUFFER];
 extern int data_buffer_size;
 extern int data_ptr;

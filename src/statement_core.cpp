@@ -46,11 +46,105 @@ void execute_print(const TokenList& tokens, int& pos) {
     basic_print(output);
 }
 
+UserFunc user_funcs[MAX_USER_FUNCS];
+int user_func_count = 0;
+
 void execute_clear() {
     memset(&logical_memory[MEMORY_VAR_BASE], 0, VAR_TABLE_SIZE);
     memset(&logical_memory[ARRAY_TABLE_BASE], 0, ARRAY_TABLE_SIZE);
     string_heap_ptr = STRING_HEAP_BASE;
     array_heap_inner_ptr = DATA_HEAP_BASE;
+    user_func_count = 0; // DEF FN も初期化（プログラムは実行中に再定義する）
+}
+
+static UserFunc* find_user_func(const char* name) {
+    for (int i = 0; i < user_func_count; i++)
+        if (strcmp(user_funcs[i].name, name) == 0) return &user_funcs[i];
+    return nullptr;
+}
+
+bool is_user_func(const char* name) {
+    return find_user_func(name) != nullptr;
+}
+
+// DEF FN<名前>(<引数>) = <式>
+void execute_def(const TokenList& tokens, int& pos) {
+    pos++; // DEF
+    if (pos >= tokens.size || tokens.tokens[pos].type != TokenType::IDENTIFIER)
+        throw std::runtime_error("Syntax Error: Expected FN name after DEF");
+    char fname[MAX_TOKEN_LEN];
+    strncpy(fname, tokens.tokens[pos].text, MAX_TOKEN_LEN - 1);
+    fname[MAX_TOKEN_LEN - 1] = '\0';
+    if (!(fname[0] == 'F' && fname[1] == 'N' && fname[2] != '\0'))
+        throw std::runtime_error("Syntax Error: DEF name must start with FN");
+    pos++;
+
+    require_token(tokens, pos, TokenType::LPAREN, "Syntax Error: Expected '(' after FN name"); pos++;
+    require_token(tokens, pos, TokenType::IDENTIFIER, "Syntax Error: Expected parameter name");
+    char pname[MAX_TOKEN_LEN];
+    strncpy(pname, tokens.tokens[pos].text, MAX_TOKEN_LEN - 1);
+    pname[MAX_TOKEN_LEN - 1] = '\0';
+    pos++;
+    require_token(tokens, pos, TokenType::RPAREN, "Syntax Error: Expected ')' after parameter"); pos++;
+    require_token(tokens, pos, TokenType::ASSIGN, "Syntax Error: Expected '=' in DEF FN"); pos++;
+
+    // 本体式を、行末または `:` までソース文字列として組み立てる（呼び出し時に再 lex）
+    char body[192];
+    int bp = 0;
+    while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE &&
+           tokens.tokens[pos].type != TokenType::COLON) {
+        const char* txt = tokens.tokens[pos].text;
+        char piece[MAX_TOKEN_LEN + 2];
+        if (tokens.tokens[pos].type == TokenType::STRING)
+            snprintf(piece, sizeof(piece), "\"%s\"", txt);
+        else
+            snprintf(piece, sizeof(piece), "%s", txt);
+        int need = (int)strlen(piece) + (bp > 0 ? 1 : 0);
+        if (bp + need >= (int)sizeof(body)) throw std::runtime_error("DEF FN body too long");
+        if (bp > 0) body[bp++] = ' ';
+        strcpy(&body[bp], piece);
+        bp += (int)strlen(piece);
+        pos++;
+    }
+    body[bp] = '\0';
+    if (bp == 0) throw std::runtime_error("Syntax Error: DEF FN has no body");
+
+    // 既存を上書き、無ければ追加
+    UserFunc* f = find_user_func(fname);
+    if (!f) {
+        if (user_func_count >= MAX_USER_FUNCS) throw std::runtime_error("Too many DEF FN definitions");
+        f = &user_funcs[user_func_count++];
+    }
+    strncpy(f->name, fname, MAX_TOKEN_LEN - 1);  f->name[MAX_TOKEN_LEN - 1] = '\0';
+    strncpy(f->param, pname, MAX_TOKEN_LEN - 1); f->param[MAX_TOKEN_LEN - 1] = '\0';
+    strncpy(f->body, body, sizeof(f->body) - 1); f->body[sizeof(f->body) - 1] = '\0';
+}
+
+// FN 呼び出し: 仮引数に実引数を束縛して本体式を評価する
+Value call_user_func(const char* name, const Value& arg) {
+    static int depth = 0;
+    UserFunc* f = find_user_func(name);
+    if (!f) throw std::runtime_error("Undefined user function");
+    if (depth >= 24) throw std::runtime_error("FN recursion too deep");
+
+    // 仮引数の元の値を退避（呼び出し後に復元してスコープを守る）
+    Value saved; bool had = get_variable(f->param, saved);
+    set_variable(f->param, arg);
+
+    TokenList body = lex(f->body);
+    int p = 0;
+    depth++;
+    Value result;
+    try {
+        result = parse_relation(body, p);
+    } catch (...) {
+        depth--;
+        if (had) set_variable(f->param, saved);
+        throw;
+    }
+    depth--;
+    if (had) set_variable(f->param, saved);
+    return result;
 }
 
 void execute_read(const TokenList& tokens, int& pos) {
@@ -727,6 +821,7 @@ void execute_statement(const TokenList& tokens, int& pos) {
                                  execute_noop_statement(tokens, pos); break;
         case TokenType::LABEL:   pos++; break; // 行頭のラベル定義は実行時は素通り
         case TokenType::REM:     pos = tokens.size; break; // コメント。行末まで読み飛ばす
+        case TokenType::DEF:     execute_def(tokens, pos); break;
         case TokenType::AUTO:    execute_noop_statement(tokens, pos); break; // AUTO は repl が処理。プログラム内では無視
         case TokenType::WIDTH:   execute_width(tokens, pos); break;
         case TokenType::CONSOLE: execute_console(tokens, pos); break;

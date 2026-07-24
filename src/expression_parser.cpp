@@ -179,6 +179,14 @@ static Value parse_factor(const TokenList& tokens, int& pos) {
             require_token(tokens, pos, TokenType::RPAREN, "Syntax Error: Expected ')' for function or array");
             pos++; 
             
+            // DEF FN で定義したユーザー関数を優先して判定する。
+            // `FN` で始まる名前は関数用に予約されており、未定義ならその旨を返す。
+            if (var_name[0] == 'F' && var_name[1] == 'N' && var_name[2] != '\0') {
+                if (!is_user_func(var_name)) throw std::runtime_error("Undefined function");
+                if (arg_count != 1) throw std::runtime_error("FN takes exactly one argument");
+                return call_user_func(var_name, args[0]);
+            }
+
             if (is_builtin_function(var_name)) {
                 return evaluate_builtin_function(var_name, args, arg_count);
             }
@@ -284,11 +292,22 @@ Value parse_expression(const TokenList& tokens, int& pos) {
     return val;
 }
 
-Value parse_relation(const TokenList& tokens, int& pos) {
+// 数値（INT/NUM）を int に切り詰める。ビット演算の被演算子に使う
+static int to_int_operand(const Value& v, const char* op) {
+    if (v.type == Value::Type::STR) {
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Type Mismatch: %s on string", op);
+        throw std::runtime_error(msg);
+    }
+    return (v.type == Value::Type::INT) ? v.int_val : (int)v.num_val;
+}
+
+// 比較演算（= < > <= >= <>）。真は 1、偽は 0 を返す
+static Value parse_comparison(const TokenList& tokens, int& pos) {
     Value val = parse_expression(tokens, pos);
     while (pos < tokens.size) {
         TokenType op = tokens.tokens[pos].type;
-        if (op == TokenType::ASSIGN || op == TokenType::GT || op == TokenType::LT || 
+        if (op == TokenType::ASSIGN || op == TokenType::GT || op == TokenType::LT ||
             op == TokenType::GTE || op == TokenType::LTE || op == TokenType::NEQ) {
             pos++;
             Value next_val = parse_expression(tokens, pos);
@@ -316,6 +335,41 @@ Value parse_relation(const TokenList& tokens, int& pos) {
             }
             val = Value(result ? 1.0f : 0.0f);
         } else break;
+    }
+    return val;
+}
+
+// NOT（単項・ビット補数）。比較より緩く、AND より強い
+static Value parse_not_expr(const TokenList& tokens, int& pos) {
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::NOT) {
+        pos++;
+        Value v = parse_not_expr(tokens, pos); // 右結合
+        return Value(~to_int_operand(v, "NOT"));
+    }
+    return parse_comparison(tokens, pos);
+}
+
+// AND（ビット積）。OR より強く、NOT より緩い
+static Value parse_logical_and(const TokenList& tokens, int& pos) {
+    Value val = parse_not_expr(tokens, pos);
+    while (pos < tokens.size && tokens.tokens[pos].type == TokenType::AND) {
+        pos++;
+        Value rhs = parse_not_expr(tokens, pos);
+        val = Value(to_int_operand(val, "AND") & to_int_operand(rhs, "AND"));
+    }
+    return val;
+}
+
+// 式全体の入口。OR（ビット和）が最も優先順位が低い。
+//   優先順位: OR < AND < NOT < 比較 < +/- < */  < ^ < 単項-
+// AND/OR/NOT はビット演算。比較は 1/0 を返すので論理積・論理和としても使える
+// （NOT はビット補数なので、論理否定は `X=0` のように比較で書くこと）。
+Value parse_relation(const TokenList& tokens, int& pos) {
+    Value val = parse_logical_and(tokens, pos);
+    while (pos < tokens.size && tokens.tokens[pos].type == TokenType::OR) {
+        pos++;
+        Value rhs = parse_logical_and(tokens, pos);
+        val = Value(to_int_operand(val, "OR") | to_int_operand(rhs, "OR"));
     }
     return val;
 }

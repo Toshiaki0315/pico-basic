@@ -172,6 +172,10 @@ TokenList lex(const char* source) {
             else if (strcmp(upper_ident, "CLS") == 0) t.type = TokenType::CLS;
             else if (strcmp(upper_ident, "LOCATE") == 0) t.type = TokenType::LOCATE;
             else if (strcmp(upper_ident, "AUTO") == 0) t.type = TokenType::AUTO;
+            else if (strcmp(upper_ident, "AND") == 0) t.type = TokenType::AND;
+            else if (strcmp(upper_ident, "OR") == 0) t.type = TokenType::OR;
+            else if (strcmp(upper_ident, "NOT") == 0) t.type = TokenType::NOT;
+            else if (strcmp(upper_ident, "DEF") == 0) t.type = TokenType::DEF;
             else if (strcmp(upper_ident, "REPEAT") == 0) t.type = TokenType::REPEAT;
             else if (strcmp(upper_ident, "UNTIL") == 0) t.type = TokenType::UNTIL;
             else if (strcmp(upper_ident, "GET") == 0) t.type = TokenType::GET;
