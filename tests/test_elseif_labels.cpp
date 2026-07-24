@@ -110,6 +110,51 @@ TEST_F(ElseIfLabelTest, MultiplyAfterNumberInExpr) {
     EXPECT_EQ(mock_hal::get_raw_print_buffer(), "15\n");
 }
 
+// --- THEN 省略（IF cond GOTO/GOSUB） -------------------------------
+
+TEST_F(ElseIfLabelTest, IfGotoWithoutThen) {
+    store_line(10, lex("A = 3"));
+    store_line(20, lex("IF A = 3 GOTO 100"));
+    store_line(30, lex("PRINT \"NG\""));
+    store_line(100, lex("PRINT \"YES\""));
+    run("RUN");
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "YES\n");
+}
+
+TEST_F(ElseIfLabelTest, IfGotoWithoutThenFallsThrough) {
+    store_line(10, lex("A = 5"));
+    store_line(20, lex("IF A = 3 GOTO 100"));
+    store_line(30, lex("PRINT \"OK\" : END"));
+    store_line(100, lex("PRINT \"NG\""));
+    run("RUN");
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "OK\n");
+}
+
+TEST_F(ElseIfLabelTest, IfGosubWithoutThen) {
+    store_line(10, lex("A = 1"));
+    store_line(20, lex("IF A = 1 GOSUB 200"));
+    store_line(30, lex("PRINT \"BACK\" : END"));
+    store_line(200, lex("PRINT \"SUB\" : RETURN"));
+    run("RUN");
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "SUB\nBACK\n");
+}
+
+TEST_F(ElseIfLabelTest, IfGotoLabelWithoutThen) {
+    store_line(10, lex("A = 3"));
+    store_line(20, lex("IF A = 3 GOTO *DONE"));
+    store_line(30, lex("PRINT \"NG\""));
+    store_line(40, lex("*DONE"));
+    store_line(50, lex("PRINT \"YES\""));
+    run("RUN");
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "YES\n");
+}
+
+TEST_F(ElseIfLabelTest, IfMissingThenStillErrorsForStatement) {
+    // GOTO/GOSUB 以外を THEN 無しで続けるのは従来どおりエラー
+    parse_and_execute(lex("IF 1 PRINT 5"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("Missing THEN"), std::string::npos);
+}
+
 TEST_F(ElseIfLabelTest, MultiplyStillWorks) {
     // `A*B` は乗算のまま（ラベルと誤認しない）
     run("A = 6 : B = 7 : PRINT A*B");

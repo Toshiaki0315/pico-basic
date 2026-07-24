@@ -180,8 +180,16 @@ void execute_if(const TokenList& tokens, int& pos) {
         if (condition_result.type != Value::Type::NUM && condition_result.type != Value::Type::INT)
             throw std::runtime_error("Type Mismatch: IF condition must be numeric");
 
-        require_token(tokens, pos, TokenType::THEN, "Syntax Error: Missing THEN in IF statement");
-        pos++;
+        // 通常は THEN が必要だが、`IF 条件 GOTO 行` / `IF 条件 GOSUB 行` のように
+        // THEN を省いて分岐命令を直接続ける書き方（S-BASIC 等）も認める。
+        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::THEN) {
+            pos++;
+        } else if (pos < tokens.size && (tokens.tokens[pos].type == TokenType::GOTO ||
+                                         tokens.tokens[pos].type == TokenType::GOSUB)) {
+            // THEN 省略。GOTO/GOSUB をそのまま THEN 節として実行する
+        } else {
+            throw std::runtime_error("Syntax Error: Missing THEN in IF statement");
+        }
 
         if (condition_result.num_val != 0.0f) {
             // 条件成立: THEN 節を実行し、後続の ELSE / ELSEIF 節は読み飛ばす
