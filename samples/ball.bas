@@ -10,6 +10,7 @@
 100 CIRCLE (8, 8), 6, 14
 110 PAINT (8, 8), 14, 14
 120 GET@ (0, 0)-(16, 16), S
+125 CLS : REM erase the ball we drew to capture it
 130 REM --- start position and velocity ---
 140 X = 40 : Y = 40 : DX = 4 : DY = 3
 150 REM --- animate for a while ---
