@@ -328,6 +328,7 @@ Pico-HuBASICを扱う上での重要な仕様と、当時のHu-BASICとの共通
 | `draw.bas` | タッチでお絵かき（`TOUCH()` / `PSET`） |
 | `song.bas` | 演奏＋ビジュアライザ（非同期 `PLAY` ＋描画） |
 | `sfx.bas` | PSG 効果音（`SOUND` のノイズ・エンベロープ） |
+| `qix.bas` | 陣取りゲーム（クイックス風。配列＋フラッドフィル） |
 
 ---
 
