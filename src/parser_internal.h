@@ -67,6 +67,7 @@ struct ForLoopContext {
 #define MAX_CALL_STACK 64
 #define MAX_DATA_BUFFER 256
 #define MAX_PROGRAM_LINES 256
+#define MAX_LABELS 64
 
 #define MEMORY_TEXT_BASE 0x0000
 #define MEMORY_VAR_BASE 0x8000
@@ -101,6 +102,18 @@ extern int repeat_stack_ptr;
 
 extern int call_stack[MAX_CALL_STACK];
 extern int call_stack_ptr;
+
+// 行ラベル表。RUN のたびに run_program の先読みで作り直す。
+// name は `*NAME` 形式（トークンのテキストと同じ）を大文字で保持する。
+struct LabelEntry {
+    char name[MAX_TOKEN_LEN];
+    int  line;
+};
+extern LabelEntry label_table[MAX_LABELS];
+extern int label_table_size;
+
+// ラベル名（`*NAME`）から行番号を返す。見つからなければ -1。
+int resolve_label(const char* name);
 
 extern Value data_buffer[MAX_DATA_BUFFER];
 extern int data_buffer_size;

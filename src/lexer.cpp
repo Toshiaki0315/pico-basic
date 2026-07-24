@@ -44,7 +44,37 @@ TokenList lex(const char* source) {
         if (c == '=') { token_list.tokens[token_list.size] = {TokenType::ASSIGN, "="}; token_list.size++; pos++; continue; }
         if (c == '+') { token_list.tokens[token_list.size] = {TokenType::PLUS, "+"}; token_list.size++; pos++; continue; }
         if (c == '-') { token_list.tokens[token_list.size] = {TokenType::MINUS, "-"}; token_list.size++; pos++; continue; }
-        if (c == '*') { token_list.tokens[token_list.size] = {TokenType::MUL, "*"}; token_list.size++; pos++; continue; }
+        if (c == '*') {
+            // `*NAME` は行ラベル、それ以外は乗算。直前トークンが値（識別子・数値・
+            // 文字列・")"）なら乗算、そうでなければ（行頭・GOTO/THEN の直後など）ラベル。
+            bool prev_is_operand = false;
+            if (token_list.size > 0) {
+                TokenType pt = token_list.tokens[token_list.size - 1].type;
+                // 先頭の NUMBER は行番号（`40 *LOOP` の 40）なので値とはみなさない。
+                // それ以外の NUMBER/識別子/文字列/")" が直前なら乗算。
+                bool number_is_line_no = (pt == TokenType::NUMBER && token_list.size == 1);
+                prev_is_operand = (pt == TokenType::IDENTIFIER || pt == TokenType::STRING ||
+                                   pt == TokenType::RPAREN ||
+                                   (pt == TokenType::NUMBER && !number_is_line_no));
+            }
+            if (!prev_is_operand && pos + 1 < len &&
+                (std::isalpha((unsigned char)source[pos+1]) || source[pos+1] == '_')) {
+                int start = pos;      // '*' を含めて取り込む
+                pos++;                // '*' を飛ばす
+                while (pos < len && (std::isalnum((unsigned char)source[pos]) || source[pos] == '_')) pos++;
+                int name_len = pos - start;
+                if (name_len >= MAX_TOKEN_LEN) name_len = MAX_TOKEN_LEN - 1;
+                Token t;
+                t.type = TokenType::LABEL;
+                memcpy(t.text, source + start, name_len);
+                t.text[name_len] = '\0';
+                // ラベル名は大文字化して比較を大小無視にする（他のキーワードと同様）
+                for (int i = 1; i < name_len; i++) t.text[i] = std::toupper((unsigned char)t.text[i]);
+                token_list.tokens[token_list.size++] = t;
+                continue;
+            }
+            token_list.tokens[token_list.size] = {TokenType::MUL, "*"}; token_list.size++; pos++; continue;
+        }
         if (c == '/') { token_list.tokens[token_list.size] = {TokenType::DIV, "/"}; token_list.size++; pos++; continue; }
         if (c == '^') { token_list.tokens[token_list.size] = {TokenType::POWER, "^"}; token_list.size++; pos++; continue; }
         if (c == '(') { token_list.tokens[token_list.size] = {TokenType::LPAREN, "("}; token_list.size++; pos++; continue; }
@@ -118,6 +148,7 @@ TokenList lex(const char* source) {
             else if (strcmp(upper_ident, "RETURN") == 0) t.type = TokenType::RETURN;
             else if (strcmp(upper_ident, "IF") == 0) t.type = TokenType::IF;
             else if (strcmp(upper_ident, "THEN") == 0) t.type = TokenType::THEN;
+            else if (strcmp(upper_ident, "ELSEIF") == 0) t.type = TokenType::ELSEIF;
             else if (strcmp(upper_ident, "ELSE") == 0) t.type = TokenType::ELSE;
             else if (strcmp(upper_ident, "FOR") == 0) t.type = TokenType::FOR;
             else if (strcmp(upper_ident, "TO") == 0) t.type = TokenType::TO;

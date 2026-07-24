@@ -46,6 +46,16 @@ Value data_buffer[MAX_DATA_BUFFER];
 int data_buffer_size = 0;
 int data_ptr = 0;
 
+LabelEntry label_table[MAX_LABELS];
+int label_table_size = 0;
+
+int resolve_label(const char* name) {
+    for (int i = 0; i < label_table_size; i++) {
+        if (strcmp(label_table[i].name, name) == 0) return label_table[i].line;
+    }
+    return -1;
+}
+
 // ---------------------------------------------------------
 // Error reporting
 // ---------------------------------------------------------
@@ -145,15 +155,29 @@ void run_program(int max_steps) {
     repeat_stack_ptr = 0;
     call_stack_ptr = 0;
 
-    // Pre-scan DATA statements
+    // Pre-scan DATA statements and line labels
     data_buffer_size = 0;
     data_ptr = 0;
-    
+    label_table_size = 0;
+
     uint16_t ptr = MEMORY_TEXT_BASE;
     while (true) {
         if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) break;
+        int line_no = logical_memory[ptr+2] | (logical_memory[ptr+3] << 8);
         TokenList tokens = get_detokenized_line(ptr);
-        
+
+        // 行頭のラベル定義（`100 *LOOP ...`）を表に登録する
+        if (tokens.size > 0 && tokens.tokens[0].type == TokenType::LABEL &&
+            label_table_size < MAX_LABELS) {
+            // 同名ラベルは最初の定義を優先（重複は無視）
+            if (resolve_label(tokens.tokens[0].text) < 0) {
+                strncpy(label_table[label_table_size].name, tokens.tokens[0].text, MAX_TOKEN_LEN - 1);
+                label_table[label_table_size].name[MAX_TOKEN_LEN - 1] = '\0';
+                label_table[label_table_size].line = line_no;
+                label_table_size++;
+            }
+        }
+
         if (tokens.size > 0 && tokens.tokens[0].type == TokenType::DATA) {
             int pos = 1;
             while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE) {

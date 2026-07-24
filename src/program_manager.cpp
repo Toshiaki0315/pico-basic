@@ -26,6 +26,7 @@ const char* token_type_to_string(TokenType type) {
         case TokenType::IF: return "IF";
         case TokenType::THEN: return "THEN";
         case TokenType::ELSE: return "ELSE";
+        case TokenType::ELSEIF: return "ELSEIF";
         case TokenType::FOR: return "FOR";
         case TokenType::TO: return "TO";
         case TokenType::STEP: return "STEP";
@@ -84,9 +85,10 @@ static int tokenize(const TokenList& tokens, uint8_t* buffer) {
     int ptr = 0;
     for (int i=0; i<tokens.size; i++) {
         buffer[ptr++] = (uint8_t)tokens.tokens[i].type;
-        if (tokens.tokens[i].type == TokenType::NUMBER || 
-            tokens.tokens[i].type == TokenType::IDENTIFIER || 
-            tokens.tokens[i].type == TokenType::STRING) {
+        if (tokens.tokens[i].type == TokenType::NUMBER ||
+            tokens.tokens[i].type == TokenType::IDENTIFIER ||
+            tokens.tokens[i].type == TokenType::STRING ||
+            tokens.tokens[i].type == TokenType::LABEL) {
             int len = strlen(tokens.tokens[i].text);
             buffer[ptr++] = (uint8_t)len;
             memcpy(&buffer[ptr], tokens.tokens[i].text, len);
@@ -103,9 +105,10 @@ static TokenList detokenize(const uint8_t* buffer) {
     while (t.size < MAX_TOKENS_PER_LINE && buffer[ptr] != 0xFF) {
         if (ptr > 512) break; 
         t.tokens[t.size].type = (TokenType)buffer[ptr++];
-        if (t.tokens[t.size].type == TokenType::NUMBER || 
-            t.tokens[t.size].type == TokenType::IDENTIFIER || 
-            t.tokens[t.size].type == TokenType::STRING) {
+        if (t.tokens[t.size].type == TokenType::NUMBER ||
+            t.tokens[t.size].type == TokenType::IDENTIFIER ||
+            t.tokens[t.size].type == TokenType::STRING ||
+            t.tokens[t.size].type == TokenType::LABEL) {
             int len = buffer[ptr++];
             if (len > 64) len = 64; 
             memcpy(t.tokens[t.size].text, &buffer[ptr], len);
@@ -130,7 +133,8 @@ static void update_program_links() {
         uint16_t code_ptr = ptr + 4;
         while (code_ptr < MEMORY_VAR_BASE && logical_memory[code_ptr] != 0xFF) {
             TokenType type = (TokenType)logical_memory[code_ptr++];
-            if (type == TokenType::NUMBER || type == TokenType::IDENTIFIER || type == TokenType::STRING) {
+            if (type == TokenType::NUMBER || type == TokenType::IDENTIFIER ||
+                type == TokenType::STRING || type == TokenType::LABEL) {
                 if (code_ptr < MEMORY_VAR_BASE) {
                     int len = logical_memory[code_ptr++];
                     code_ptr += len;

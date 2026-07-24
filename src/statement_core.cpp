@@ -15,8 +15,9 @@ void execute_print(const TokenList& tokens, int& pos) {
     pos++; 
     char output[512] = "";
     bool newline = true;
-    while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE && 
-           tokens.tokens[pos].type != TokenType::ELSE && tokens.tokens[pos].type != TokenType::COLON) {
+    while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE &&
+           tokens.tokens[pos].type != TokenType::ELSE && tokens.tokens[pos].type != TokenType::ELSEIF &&
+           tokens.tokens[pos].type != TokenType::COLON) {
         if (tokens.tokens[pos].type == TokenType::COMMA) {
             strncat(output, "\t", sizeof(output) - strlen(output) - 1);
             pos++;
@@ -100,20 +101,30 @@ void execute_read(const TokenList& tokens, int& pos) {
     }
 }
 
+// 分岐先の行番号を得る。`*LABEL` ならラベル表から、そうでなければ数式として評価する。
+static int parse_branch_target(const TokenList& tokens, int& pos) {
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::LABEL) {
+        int line = resolve_label(tokens.tokens[pos].text);
+        if (line < 0) throw std::runtime_error("Undefined label");
+        pos++;
+        return line;
+    }
+    Value v = parse_relation(tokens, pos);
+    if (v.type != Value::Type::NUM && v.type != Value::Type::INT)
+        throw std::runtime_error("Type Mismatch: branch requires number");
+    return static_cast<int>(v.num_val);
+}
+
 void execute_goto(const TokenList& tokens, int& pos) {
-    pos++; 
-    Value line_to_go = parse_relation(tokens, pos);
-    if ((line_to_go.type != Value::Type::NUM && line_to_go.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: GOTO requires number");
-    current_line = static_cast<int>(line_to_go.num_val);
+    pos++;
+    current_line = parse_branch_target(tokens, pos);
     if (find_program_line(current_line) == 0xFFFF) throw std::runtime_error("GOTO target line not found");
     branch_taken = true;
 }
 
 void execute_gosub(const TokenList& tokens, int& pos) {
-    pos++; 
-    Value line_to_go = parse_relation(tokens, pos);
-    if ((line_to_go.type != Value::Type::NUM && line_to_go.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: GOSUB requires number");
-    int target = static_cast<int>(line_to_go.num_val);
+    pos++;
+    int target = parse_branch_target(tokens, pos);
     if (find_program_line(target) == 0xFFFF) throw std::runtime_error("GOSUB target line not found");
     if (call_stack_ptr >= MAX_CALL_STACK) throw std::runtime_error("Out of Memory: Call Stack Limit Reached");
     call_stack[call_stack_ptr++] = current_line;
@@ -140,29 +151,66 @@ void execute_return(const TokenList& tokens, int& pos) {
     }
 }
 
+// THEN / ELSE の直後を実行する。`*LABEL` や行番号だけなら GOTO 扱いにする
+// （Hu-BASIC の `IF ... THEN *LOOP` 記法）。それ以外は通常の文として実行する。
+static void execute_then_branch(const TokenList& tokens, int& pos) {
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::LABEL) {
+        int line = resolve_label(tokens.tokens[pos].text);
+        if (line < 0) throw std::runtime_error("Undefined label");
+        current_line = line;
+        branch_taken = true;
+        pos = tokens.size;
+        return;
+    }
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::NUMBER) {
+        // `THEN 100` は `THEN GOTO 100`
+        current_line = atoi(tokens.tokens[pos].text);
+        if (find_program_line(current_line) == 0xFFFF) throw std::runtime_error("GOTO target line not found");
+        branch_taken = true;
+        pos = tokens.size;
+        return;
+    }
+    execute_statement(tokens, pos);
+}
+
 void execute_if(const TokenList& tokens, int& pos) {
-    pos++; 
-    Value condition_result = parse_relation(tokens, pos);
-    if ((condition_result.type != Value::Type::NUM && condition_result.type != Value::Type::INT)) throw std::runtime_error("Type Mismatch: IF condition must be numeric");
-    
-    require_token(tokens, pos, TokenType::THEN, "Syntax Error: Missing THEN in IF statement");
-    pos++; 
-    
-    if (condition_result.num_val != 0.0f) {
-        execute_statement(tokens, pos);
-        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::ELSE) {
-            pos = tokens.size;
+    pos++; // IF を飛ばす（以降 ELSEIF ごとにこのループを回す）
+    while (true) {
+        Value condition_result = parse_relation(tokens, pos);
+        if (condition_result.type != Value::Type::NUM && condition_result.type != Value::Type::INT)
+            throw std::runtime_error("Type Mismatch: IF condition must be numeric");
+
+        require_token(tokens, pos, TokenType::THEN, "Syntax Error: Missing THEN in IF statement");
+        pos++;
+
+        if (condition_result.num_val != 0.0f) {
+            // 条件成立: THEN 節を実行し、後続の ELSE / ELSEIF 節は読み飛ばす
+            // （`:` で続く複数文は run ループが処理し、ELSE/ELSEIF で止まる）
+            execute_then_branch(tokens, pos);
+            if (pos < tokens.size && (tokens.tokens[pos].type == TokenType::ELSE ||
+                                      tokens.tokens[pos].type == TokenType::ELSEIF)) {
+                pos = tokens.size;
+            }
+            return;
         }
-    } else {
-        while (pos < tokens.size && tokens.tokens[pos].type != TokenType::ELSE && tokens.tokens[pos].type != TokenType::END_OF_FILE) {
+
+        // 条件不成立: 同じ行の ELSE / ELSEIF まで読み飛ばす
+        while (pos < tokens.size && tokens.tokens[pos].type != TokenType::ELSE &&
+               tokens.tokens[pos].type != TokenType::ELSEIF &&
+               tokens.tokens[pos].type != TokenType::END_OF_FILE) {
             pos++;
         }
-        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::ELSE) {
-            pos++; 
-            execute_statement(tokens, pos);
-        } else {
-            pos = tokens.size;
+        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::ELSEIF) {
+            pos++;       // ELSEIF を新たな IF 条件として続行
+            continue;
         }
+        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::ELSE) {
+            pos++;
+            execute_then_branch(tokens, pos);
+            return;
+        }
+        pos = tokens.size; // ELSE も ELSEIF も無い
+        return;
     }
 }
 
@@ -525,9 +573,16 @@ void execute_on(const TokenList& tokens, int& pos) {
     int current_idx = 1;
     bool found = false;
     while (pos < tokens.size) {
-        require_token(tokens, pos, TokenType::NUMBER, "Expected line number");
-        int target = atoi(tokens.tokens[pos].text);
-        pos++;
+        int target;
+        if (tokens.tokens[pos].type == TokenType::LABEL) {
+            target = resolve_label(tokens.tokens[pos].text);
+            if (target < 0) throw std::runtime_error("Undefined label");
+            pos++;
+        } else {
+            require_token(tokens, pos, TokenType::NUMBER, "Expected line number");
+            target = atoi(tokens.tokens[pos].text);
+            pos++;
+        }
         
         if (current_idx == idx) {
             if (type == TokenType::GOTO) {
@@ -554,7 +609,8 @@ void execute_on(const TokenList& tokens, int& pos) {
     if (!found) {
         while (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
             pos++;
-            if (pos < tokens.size && tokens.tokens[pos].type == TokenType::NUMBER) pos++;
+            if (pos < tokens.size && (tokens.tokens[pos].type == TokenType::NUMBER ||
+                                      tokens.tokens[pos].type == TokenType::LABEL)) pos++;
             else break;
         }
     }
@@ -609,6 +665,17 @@ void execute_not_implemented(const TokenList& tokens, int& pos) {
     pos = tokens.size;
 }
 
+// 互換のための空実行。命令と（あれば）引数を次の `:` まで読み飛ばし、何もしない。
+// INIT / NEWON は元の X1 Hu-BASIC ではメモリ領域予約の命令だが、この実装には
+// 対応する概念がないため受理して無視する（古いプログラムがエラーで止まらないように）。
+void execute_noop_statement(const TokenList& tokens, int& pos) {
+    pos++; // 命令トークン
+    while (pos < tokens.size && tokens.tokens[pos].type != TokenType::COLON &&
+           tokens.tokens[pos].type != TokenType::END_OF_FILE) {
+        pos++;
+    }
+}
+
 void execute_statement(const TokenList& tokens, int& pos) {
     if (pos >= tokens.size || tokens.tokens[pos].type == TokenType::END_OF_FILE) return;
 
@@ -656,7 +723,8 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::LOAD:    execute_load(tokens, pos); break;
 
         case TokenType::INIT: case TokenType::NEWON:
-                                 execute_not_implemented(tokens, pos); break;
+                                 execute_noop_statement(tokens, pos); break;
+        case TokenType::LABEL:   pos++; break; // 行頭のラベル定義は実行時は素通り
         case TokenType::WIDTH:   execute_width(tokens, pos); break;
         case TokenType::CONSOLE: execute_console(tokens, pos); break;
         case TokenType::REPEAT:  execute_repeat(tokens, pos); break;

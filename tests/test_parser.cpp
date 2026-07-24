@@ -392,13 +392,17 @@ protected:
     }
 };
 
-TEST_F(Phase2ExtensionTest, KeywordStubRouting) {
-    // まだ未実装のままの命令が、構文エラーではなく通知で流れること
+TEST_F(Phase2ExtensionTest, InitNewonAreNoOps) {
+    // INIT / NEWON は互換のための空実装。引数があってもエラーや出力を出さず、
+    // 同じ行の後続文（`:` 以降）は通常どおり実行される。
     parse_and_execute(lex("INIT"));
-    EXPECT_TRUE(mock_hal::get_raw_print_buffer().find("Notice: Command 'INIT' is registered but not yet implemented.") != std::string::npos);
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "");
     mock_hal::reset();
-    parse_and_execute(lex("NEWON"));
-    EXPECT_TRUE(mock_hal::get_raw_print_buffer().find("Notice: Command 'NEWON' is registered but not yet implemented.") != std::string::npos);
+    parse_and_execute(lex("NEWON &H8000"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "");
+    mock_hal::reset();
+    parse_and_execute(lex("INIT : PRINT 42"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "42\n");
     mock_hal::reset();
 }
 

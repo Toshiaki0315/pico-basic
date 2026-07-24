@@ -23,6 +23,8 @@ enum class TokenType {
     IF,
     THEN,
     ELSE,
+    ELSEIF,
+    LABEL,   // *NAME 形式の行ラベル（定義・参照とも）
     FOR,
     TO,
     STEP,
