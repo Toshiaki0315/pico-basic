@@ -725,6 +725,7 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::INIT: case TokenType::NEWON:
                                  execute_noop_statement(tokens, pos); break;
         case TokenType::LABEL:   pos++; break; // 行頭のラベル定義は実行時は素通り
+        case TokenType::AUTO:    execute_noop_statement(tokens, pos); break; // AUTO は repl が処理。プログラム内では無視
         case TokenType::WIDTH:   execute_width(tokens, pos); break;
         case TokenType::CONSOLE: execute_console(tokens, pos); break;
         case TokenType::REPEAT:  execute_repeat(tokens, pos); break;

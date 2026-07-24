@@ -172,3 +172,49 @@ TEST_F(ControlFlowExtTest, UncodedErrorKeepsPlainMessage) {
     EXPECT_NE(out.find("Error in line 10: RETURN WITHOUT GOSUB"), std::string::npos) << out;
     EXPECT_EQ(out.find("Error 0"), std::string::npos) << "コード 0 を表示してしまっている";
 }
+
+// ---------------------------------------------------------
+// AUTO（行番号自動生成）— コマンド解析と保留状態
+// 実際のプロンプト表示は repl（Pico 対話ループ）側なのでここでは
+// 開始番号・刻みが正しく解釈され、保留フラグが立つことだけを検証する
+// ---------------------------------------------------------
+TEST_F(ControlFlowExtTest, AutoDefaults) {
+    parse_and_execute(lex("AUTO"));
+    int start = -1, step = -1;
+    EXPECT_TRUE(auto_mode_requested(&start, &step));
+    EXPECT_EQ(start, 10);
+    EXPECT_EQ(step, 10);
+    // 消費後はフラグが下りる
+    EXPECT_FALSE(auto_mode_requested(&start, &step));
+}
+
+TEST_F(ControlFlowExtTest, AutoStartOnly) {
+    parse_and_execute(lex("AUTO 100"));
+    int start = -1, step = -1;
+    EXPECT_TRUE(auto_mode_requested(&start, &step));
+    EXPECT_EQ(start, 100);
+    EXPECT_EQ(step, 10);
+}
+
+TEST_F(ControlFlowExtTest, AutoStartAndStep) {
+    parse_and_execute(lex("AUTO 100, 5"));
+    int start = -1, step = -1;
+    EXPECT_TRUE(auto_mode_requested(&start, &step));
+    EXPECT_EQ(start, 100);
+    EXPECT_EQ(step, 5);
+}
+
+TEST_F(ControlFlowExtTest, AutoStepZeroFallsBack) {
+    // 刻み 0 は無限ループになるので既定 10 に戻す
+    parse_and_execute(lex("AUTO 0, 0"));
+    int start = -1, step = -1;
+    EXPECT_TRUE(auto_mode_requested(&start, &step));
+    EXPECT_EQ(start, 0);
+    EXPECT_EQ(step, 10);
+}
+
+TEST_F(ControlFlowExtTest, AutoNotRequestedWithoutCommand) {
+    parse_and_execute(lex("PRINT 1"));
+    int start = -1, step = -1;
+    EXPECT_FALSE(auto_mode_requested(&start, &step));
+}

@@ -49,6 +49,19 @@ int data_ptr = 0;
 LabelEntry label_table[MAX_LABELS];
 int label_table_size = 0;
 
+// AUTO 行番号生成モードの保留状態。parse_and_execute が立て、repl が消費する。
+static bool g_auto_pending = false;
+static int  g_auto_start = 10;
+static int  g_auto_step  = 10;
+
+bool auto_mode_requested(int* start, int* step) {
+    if (!g_auto_pending) return false;
+    g_auto_pending = false;
+    if (start) *start = g_auto_start;
+    if (step)  *step  = g_auto_step;
+    return true;
+}
+
 int resolve_label(const char* name) {
     for (int i = 0; i < label_table_size; i++) {
         if (strcmp(label_table[i].name, name) == 0) return label_table[i].line;
@@ -128,6 +141,26 @@ bool parse_and_execute(const TokenList& tokens) {
             return false;
         } else if (tokens.tokens[0].type == TokenType::FILES) {
             int p = 0; execute_files(tokens, p);
+            return false;
+        } else if (tokens.tokens[0].type == TokenType::AUTO) {
+            // AUTO [開始番号 [, 刻み]] — 行番号自動生成モードを要求する。
+            // 実際に行番号を出すのは対話入力を持つ repl 側（auto_mode_requested）。
+            int start = 10, step = 10;
+            int p = 1;
+            if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
+                start = atoi(tokens.tokens[p].text); p++;
+            }
+            if (p < tokens.size && tokens.tokens[p].type == TokenType::COMMA) {
+                p++;
+                if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
+                    step = atoi(tokens.tokens[p].text); p++;
+                }
+            }
+            if (start < 0) start = 0;
+            if (step <= 0) step = 10; // 刻み 0 や負値は既定に戻す（無限ループ回避）
+            g_auto_pending = true;
+            g_auto_start = start;
+            g_auto_step = step;
             return false;
         }
         int pos = 0;

@@ -47,6 +47,7 @@ const char* token_type_to_string(TokenType type) {
         case TokenType::WIDTH: return "WIDTH";
         case TokenType::CONSOLE: return "CONSOLE";
         case TokenType::CLS: return "CLS";
+        case TokenType::AUTO: return "AUTO";
         case TokenType::REPEAT: return "REPEAT";
         case TokenType::UNTIL: return "UNTIL";
         case TokenType::GET: return "GET";

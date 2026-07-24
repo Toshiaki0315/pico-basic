@@ -5,6 +5,7 @@
 #include "parser.h"
 #include <stdio.h>
 #include <cstring>
+#include <cctype>
 #include <stdexcept>
 
 #define MAX_LINE_LEN 256
@@ -12,7 +13,7 @@
 void repl_start() {
     static char input_buffer[MAX_LINE_LEN];
     int input_ptr = 0;
-    
+
     // Output initial startup banner.
     // ビルド日時を出すのは、実機に焼かれているファームが
     // どのビルドなのかを不具合調査時に判別できるようにするため
@@ -26,24 +27,45 @@ void repl_start() {
     // 相方の改行を「空行の入力」として扱わないために覚えておく
     int last_terminator = 0;
 
+    // AUTO（行番号自動生成）モードの状態。auto_active の間は各行入力の前に
+    // 「番号 」を自動で流し込み、確定するたびに auto_num を auto_step だけ進める。
+    bool auto_active = false;
+    int  auto_num  = 10;
+    int  auto_step = 10;
+
     while (true) {
-        if (show_ready) {
+        if (show_ready && !auto_active) {
             const char* ready = "Ready\n";
             printf("%s", ready);
             hal_display_print(ready);
         }
-        
+
         // Wait for a full line of input
         input_ptr = 0;
         memset(input_buffer, 0, MAX_LINE_LEN);
-        
+
+        // AUTO モードなら行番号をプロンプトとして先頭に流し込む
+        if (auto_active) {
+            if (auto_num > 65535) { // 行番号の上限を超えたら AUTO を終える
+                auto_active = false;
+                show_ready = true;
+                continue;
+            }
+            input_ptr = snprintf(input_buffer, MAX_LINE_LEN, "%d ", auto_num);
+            printf("%s", input_buffer);
+            hal_display_print(input_buffer);
+        }
+        // 行頭の位置（AUTO のときは番号ぶんだけ後ろ）。改行対処と BS の下限に使う
+        int base = input_ptr;
+        bool aborted = false;
+
         while (true) {
             int c = getchar(); // USB CDC Blocking Input
-            
+
             if (c == EOF) {
                 continue; // Prevent infinite loop on EOF
             }
-            
+
             // Simple Line Editor implementation
             if (c == 0x03) { // Ctrl-C
                 // 非同期で鳴っている演奏を止める。
@@ -51,17 +73,21 @@ void repl_start() {
                 // ダイレクトモードで PLAY した音はここでしか止められない
                 hal_sound_stop();
 
+                // AUTO 中の Ctrl-C は自動行番号モードを終える（BREAK 相当）
+                auto_active = false;
+
                 // 入力途中の行は破棄して Ready に戻る
                 input_ptr = 0;
                 input_buffer[0] = '\0';
                 last_terminator = 0;
                 printf("\n");
                 hal_display_print("\n");
+                aborted = true;
                 break;
             } else if (c == '\r' || c == '\n') {
                 // CRLF / LFCR の 2 文字目は、直前の確定と対になる改行なので読み飛ばす。
                 // これをしないと空行を入力したものとして扱われ、Ready が余分に出る
-                if (input_ptr == 0 && last_terminator != 0 && c != last_terminator) {
+                if (input_ptr == base && last_terminator != 0 && c != last_terminator) {
                     last_terminator = 0;
                     continue;
                 }
@@ -70,7 +96,8 @@ void repl_start() {
                 hal_display_print("\n");
                 break;
             } else if (c == '\b' || c == 127) { // Backspace
-                if (input_ptr > 0) {
+                // AUTO の行番号プロンプト（base より前）は消させない
+                if (input_ptr > base) {
                     input_ptr--;
                     input_buffer[input_ptr] = '\0';
                     printf("\b \b");
@@ -82,12 +109,41 @@ void repl_start() {
                     input_buffer[input_ptr++] = static_cast<char>(c);
                     input_buffer[input_ptr] = '\0';
                     putchar(c); // Echo back
-                    
+
                     // Echo to LCD
                     char s[2] = {static_cast<char>(c), '\0'};
                     hal_display_print(s);
                 }
             }
+        }
+
+        if (aborted) {
+            show_ready = true;
+            continue;
+        }
+
+        // AUTO モード中の行確定
+        if (auto_active) {
+            // 番号のあとに中身が無ければ（空行）AUTO を終える
+            bool empty = true;
+            for (int i = base; i < input_ptr; i++) {
+                if (!isspace(static_cast<unsigned char>(input_buffer[i]))) { empty = false; break; }
+            }
+            if (empty) {
+                auto_active = false;
+                show_ready = true;
+                continue;
+            }
+            try {
+                parse_and_execute(lex(input_buffer)); // 行を格納する
+            } catch (const std::exception& e) {
+                char buf[160];
+                snprintf(buf, sizeof(buf), "%s\n", e.what());
+                basic_print(buf);
+            }
+            auto_num += auto_step;
+            show_ready = false;
+            continue;
         }
 
         if (input_ptr > 0) {
@@ -100,6 +156,15 @@ void repl_start() {
                 // Returns true if a line was stored (line-number mode) -> suppress Ready
                 bool line_stored = parse_and_execute(tokens);
                 show_ready = !line_stored;
+
+                // AUTO コマンドが実行されたら行番号自動生成モードに入る
+                int start, step;
+                if (auto_mode_requested(&start, &step)) {
+                    auto_active = true;
+                    auto_num = start;
+                    auto_step = step;
+                    show_ready = false;
+                }
             } catch (const std::exception& e) {
                 char buf[160];
                 snprintf(buf, sizeof(buf), "%s\n", e.what());
