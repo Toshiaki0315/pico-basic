@@ -128,6 +128,7 @@ bool parse_and_execute(const TokenList& tokens) {
             return true;
         } else if (tokens.tokens[0].type == TokenType::NEW) {
             hal_sound_stop(); // 再生中の演奏も止める
+            basic_files_close_all();
             clear_program();
             return false;
         } else if (tokens.tokens[0].type == TokenType::LIST) {

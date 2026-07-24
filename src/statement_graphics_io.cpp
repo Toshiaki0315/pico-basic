@@ -619,6 +619,204 @@ void execute_put_at(const TokenList& tokens, int& pos) {
     hal_display_sync_rect(ox, oy, dst_w, dst_h);
 }
 
+// ---------------------------------------------------------
+// シーケンシャルファイル I/O（OPEN / PRINT# / INPUT# / EOF / CLOSE）
+//
+// PRINT # は値を "," 区切りの 1 行として書き、INPUT # はカンマまたは
+// 行末で区切られたフィールドを読む。この対で往復できる。
+// ---------------------------------------------------------
+struct BasicFile {
+    void* fp;
+    int   mode;          // 0=未使用 1=INPUT 2=OUTPUT/APPEND
+    char  linebuf[160];  // INPUT# 用の行バッファ
+    int   linepos;
+    bool  line_valid;
+};
+static BasicFile basic_files[MAX_BASIC_FILES + 1]; // 添字 1〜4 を使う
+
+static BasicFile& file_slot(int n) {
+    if (n < 1 || n > MAX_BASIC_FILES)
+        throw std::runtime_error("Illegal function call: file number must be 1-4");
+    return basic_files[n];
+}
+
+// `#n` を読む（# は省略可）
+static int parse_file_number(const TokenList& tokens, int& pos) {
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::HASH) pos++;
+    Value v = parse_relation(tokens, pos);
+    if (!v.is_numeric()) throw std::runtime_error("Type Mismatch: file number");
+    return (int)v.num_val;
+}
+
+void basic_files_close_all() {
+    for (int i = 1; i <= MAX_BASIC_FILES; i++) {
+        if (basic_files[i].mode != 0 && basic_files[i].fp) hal_file_close(basic_files[i].fp);
+        basic_files[i].mode = 0;
+        basic_files[i].fp = nullptr;
+        basic_files[i].line_valid = false;
+    }
+}
+
+// OPEN "ファイル名" FOR INPUT|OUTPUT|APPEND AS #n
+void execute_open(const TokenList& tokens, int& pos) {
+    pos++; // OPEN
+    Value fname = parse_relation(tokens, pos);
+    if (fname.type != Value::Type::STR) throw std::runtime_error("Type Mismatch: OPEN expects filename string");
+
+    require_token(tokens, pos, TokenType::FOR, "Syntax Error: Expected FOR in OPEN"); pos++;
+    const char* fmode;
+    int mode;
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::INPUT) {
+        fmode = "r"; mode = 1; pos++;
+    } else if (pos < tokens.size && tokens.tokens[pos].type == TokenType::IDENTIFIER &&
+               strcmp(tokens.tokens[pos].text, "OUTPUT") == 0) {
+        fmode = "w"; mode = 2; pos++;
+    } else if (pos < tokens.size && tokens.tokens[pos].type == TokenType::IDENTIFIER &&
+               strcmp(tokens.tokens[pos].text, "APPEND") == 0) {
+        fmode = "a"; mode = 2; pos++;
+    } else {
+        throw std::runtime_error("Syntax Error: Expected INPUT, OUTPUT or APPEND");
+    }
+    require_token(tokens, pos, TokenType::AS, "Syntax Error: Expected AS in OPEN"); pos++;
+
+    int n = parse_file_number(tokens, pos);
+    BasicFile& f = file_slot(n);
+    if (f.mode != 0) throw std::runtime_error("File already open");
+
+    f.fp = hal_file_open(fname.str_val, fmode);
+    if (!f.fp) throw std::runtime_error("File not found");
+    f.mode = mode;
+    f.line_valid = false;
+    f.linepos = 0;
+}
+
+// CLOSE [#n [, #m ...]] — 引数なしは開いている全ファイルを閉じる
+void execute_close(const TokenList& tokens, int& pos) {
+    pos++; // CLOSE
+    if (pos >= tokens.size || tokens.tokens[pos].type == TokenType::END_OF_FILE ||
+        tokens.tokens[pos].type == TokenType::COLON || tokens.tokens[pos].type == TokenType::REM) {
+        basic_files_close_all();
+        return;
+    }
+    while (true) {
+        int n = parse_file_number(tokens, pos);
+        BasicFile& f = file_slot(n);
+        if (f.mode != 0 && f.fp) hal_file_close(f.fp);
+        f.mode = 0;
+        f.fp = nullptr;
+        f.line_valid = false;
+        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) { pos++; continue; }
+        break;
+    }
+}
+
+// PRINT #n, 式 [{,|;} 式 ...] — 値を "," 区切りで 1 行に書く
+void execute_print_file(const TokenList& tokens, int& pos) {
+    int n = parse_file_number(tokens, pos); // pos は HASH を指して呼ばれる
+    BasicFile& f = file_slot(n);
+    if (f.mode == 0) throw std::runtime_error("File not open");
+    if (f.mode != 2) throw std::runtime_error("Bad file mode");
+
+    char line[256] = "";
+    bool first = true;
+    while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE &&
+           tokens.tokens[pos].type != TokenType::COLON &&
+           tokens.tokens[pos].type != TokenType::REM) {
+        if (tokens.tokens[pos].type == TokenType::COMMA ||
+            tokens.tokens[pos].type == TokenType::SEMICOLON) { pos++; continue; }
+        Value v = parse_relation(tokens, pos);
+        if (!first) strncat(line, ",", sizeof(line) - strlen(line) - 1);
+        strncat(line, v.c_str(), sizeof(line) - strlen(line) - 1);
+        first = false;
+    }
+    if (hal_file_printf(f.fp, "%s\n", line) < 0)
+        throw std::runtime_error("File Error: write failed");
+}
+
+// 1 フィールド読む（カンマまたは行末区切り）。EOF なら false
+static bool file_read_field(BasicFile& f, char* out, int maxlen) {
+    if (!f.line_valid) {
+        if (!hal_file_gets(f.linebuf, sizeof(f.linebuf), f.fp)) return false;
+        f.linepos = 0;
+        f.line_valid = true;
+    }
+    while (f.linebuf[f.linepos] == ' ') f.linepos++;
+    int o = 0;
+    while (true) {
+        char c = f.linebuf[f.linepos];
+        if (c == '\0' || c == '\n' || c == '\r') { f.line_valid = false; break; }
+        f.linepos++;
+        if (c == ',') break;
+        if (o < maxlen - 1) out[o++] = c;
+    }
+    out[o] = '\0';
+    while (o > 0 && out[o - 1] == ' ') out[--o] = '\0'; // 末尾の空白を除去
+    return true;
+}
+
+// INPUT #n, 変数 [, 変数 ...]
+void execute_input_file(const TokenList& tokens, int& pos) {
+    int n = parse_file_number(tokens, pos); // pos は HASH を指して呼ばれる
+    BasicFile& f = file_slot(n);
+    if (f.mode == 0) throw std::runtime_error("File not open");
+    if (f.mode != 1) throw std::runtime_error("Bad file mode");
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
+
+    while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE) {
+        require_token(tokens, pos, TokenType::IDENTIFIER, "Syntax Error: INPUT# expects identifier");
+        char var_name[64];
+        strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name) - 1);
+        var_name[sizeof(var_name) - 1] = '\0';
+        pos++;
+
+        int arr_idx, arr_idx2;
+        parse_optional_indices(tokens, pos, arr_idx, arr_idx2);
+
+        char field[128];
+        if (!file_read_field(f, field, sizeof(field)))
+            throw std::runtime_error("Input past end of file");
+
+        int nlen = strlen(var_name);
+        bool is_str_var = (nlen > 0 && var_name[nlen - 1] == '$');
+        bool is_int_var = (nlen > 0 && var_name[nlen - 1] == '%');
+        Value val;
+        if (is_str_var)      val = Value(field);
+        else if (is_int_var) val = Value((int)atof(field));
+        else                 val = Value((float)atof(field));
+
+        if (arr_idx >= 0) {
+            ArrayRef* arr = get_array(var_name);
+            if (!arr) throw std::runtime_error("Array not dimensioned");
+            int flat_idx = flatten_array_index(arr, arr_idx, arr_idx2);
+            write_heap_value(arr->start_addr + (flat_idx * 8), val);
+        } else {
+            set_variable(var_name, val);
+        }
+
+        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
+        else break;
+    }
+}
+
+// EOF(n): これ以上読むものが無ければ 1。次の行を先読みしてバッファに保持する
+int basic_file_eof(int fileno) {
+    BasicFile& f = file_slot(fileno);
+    if (f.mode == 0) throw std::runtime_error("File not open");
+    if (f.mode != 1) return 1; // 書き込み用は常に終端扱い
+
+    if (f.line_valid) {
+        // 現在行に空白以外の未読があれば「まだある」
+        int p = f.linepos;
+        while (f.linebuf[p] == ' ') p++;
+        if (f.linebuf[p] != '\0' && f.linebuf[p] != '\n' && f.linebuf[p] != '\r') return 0;
+        f.line_valid = false; // 空白だけなら行を使い切ったとみなす
+    }
+    if (!hal_file_gets(f.linebuf, sizeof(f.linebuf), f.fp)) return 1;
+    f.linepos = 0;
+    f.line_valid = true;
+    return 0;
+}
+
 void execute_save(const TokenList& tokens, int& pos) {
     pos++; 
     require_token(tokens, pos, TokenType::STRING, "Syntax Error: SAVE expects filename string");

@@ -19,7 +19,7 @@ static bool is_builtin_function(const char* name) {
         "ABS", "INT", "RND", "SGN", "SQR", "SIN", "COS", "TAN", "LOG", "EXP",
         "LEN", "MID$", "LEFT$", "RIGHT$", "CHR$", "ASC", "VAL", "STR$",
         "PEEK", "TOUCH",
-        "INSTR", "STRING$", "SPACE$", "HEX$", "POINT",
+        "INSTR", "STRING$", "SPACE$", "HEX$", "POINT", "EOF",
     };
     for (const char* n : NAMES) {
         if (strcmp(name, n) == 0) return true;
@@ -193,6 +193,9 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
             if (PALETTE[i] == c565) return Value(i);
         }
         return Value(-1); // パレット外の色（通常は起こらない）
+    } else if (strcmp(var_name, "EOF") == 0) {
+        need_args(arg_count == 1 && args[0].is_numeric(), "EOF");
+        return Value(basic_file_eof((int)args[0].num_val));
     } else if (strcmp(var_name, "TOUCH") == 0) {
         need_args(arg_count == 1 && args[0].is_numeric(), "TOUCH");
         int n = static_cast<int>(args[0].num_val);

@@ -24,7 +24,7 @@ RUN
 | [draw.bas](draw.bas) | タッチでお絵かき | `TOUCH()` / `PSET` / 行ラベル / `IF`〜`GOTO` |
 | [song.bas](song.bas) | 演奏＋ビジュアライザ | `PLAY`（非同期・3声） / `LINE ... BF` / `RND` |
 | [sfx.bas](sfx.bas) | PSG 効果音（レーザー・爆発） | `SOUND`（PSG レジスタ・ノイズ・エンベロープ） |
-| [qix.bas](qix.bas) | 陣取りゲーム（クイックス風） | 2次元配列 / `REPEAT`〜`UNTIL`（フラッドフィル） / `AND`/`OR` / 行ラベル / `GET`・`TOUCH()` / `PLAY` |
+| [qix.bas](qix.bas) | 陣取りゲーム（クイックス風・ハイスコア保存付き） | 2次元配列 / フラッドフィル / `OPEN`/`PRINT #`/`INPUT #`/`EOF` / `GET`・`TOUCH()` / `PLAY` |
 
 ## メモ
 

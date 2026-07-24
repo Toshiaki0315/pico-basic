@@ -36,6 +36,7 @@ static const Keyword KEYWORDS[] = {
     {"REPEAT", TokenType::REPEAT}, {"UNTIL", TokenType::UNTIL},
     {"GET", TokenType::GET},       {"FILES", TokenType::FILES},
     {"SAVE", TokenType::SAVE},     {"LOAD", TokenType::LOAD},
+    {"OPEN", TokenType::OPEN},     {"CLOSE", TokenType::CLOSE},
     {"KILL", TokenType::KILL},     {"NAME", TokenType::NAME},
     {"AS", TokenType::AS},         {"ON", TokenType::ON},
     {"GPIO", TokenType::GPIO},     {"WINDOW", TokenType::WINDOW},
@@ -57,7 +58,7 @@ static const char* const BUILTIN_NAMES[] = {
     "ABS", "INT", "RND", "SGN", "SQR", "SIN", "COS", "TAN", "LOG", "EXP",
     "LEN", "MID$", "LEFT$", "RIGHT$", "CHR$", "ASC", "VAL", "STR$",
     "TAB", "PEEK", "TOUCH",
-    "INSTR", "STRING$", "SPACE$", "HEX$", "POINT",
+    "INSTR", "STRING$", "SPACE$", "HEX$", "POINT", "EOF",
 };
 
 static bool lookup_keyword(const char* name, TokenType& out) {
@@ -155,6 +156,7 @@ TokenList lex(const char* source) {
         if (c == ',') { token_list.tokens[token_list.size] = {TokenType::COMMA, ","}; token_list.size++; pos++; continue; }
         if (c == ';') { token_list.tokens[token_list.size] = {TokenType::SEMICOLON, ";"}; token_list.size++; pos++; continue; }
         if (c == ':') { token_list.tokens[token_list.size] = {TokenType::COLON, ":"}; token_list.size++; pos++; continue; }
+        if (c == '#') { token_list.tokens[token_list.size] = {TokenType::HASH, "#"}; token_list.size++; pos++; continue; }
 
         if (c == '"') {
             pos++;
@@ -195,7 +197,7 @@ TokenList lex(const char* source) {
 
         if (std::isalpha(c)) {
             int start = pos;
-            while (pos < len && (std::isalnum(source[pos]) || source[pos] == '$' || source[pos] == '%' || source[pos] == '@' || source[pos] == '_')) {
+            while (pos < len && (std::isalnum(source[pos]) || source[pos] == '$' || source[pos] == '%' || source[pos] == '#' || source[pos] == '@' || source[pos] == '_')) {
                 pos++;
             }
             char ident[MAX_TOKEN_LEN];
@@ -238,7 +240,7 @@ TokenList lex(const char* source) {
                     // Determine where the base name ends (before optional sigil)
                     int base_end = (int)text_len;
                     if (valid && text_len > 0 &&
-                        (upper_ident[text_len - 1] == '$' || upper_ident[text_len - 1] == '%')) {
+                        (upper_ident[text_len - 1] == '$' || upper_ident[text_len - 1] == '%' || upper_ident[text_len - 1] == '#')) {
                         base_end = (int)text_len - 1;
                         if (base_end == 0) valid = false; // bare sigil alone is invalid
                     }

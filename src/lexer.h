@@ -30,6 +30,8 @@ enum class TokenType {
     MOD_OP,  // 剰余（キーワード MOD。識別子 MOD との衝突を避けた名前）
     INTDIV,  // 整数除算 `\`
     DEF,     // DEF FN ユーザー定義関数
+    OPEN, CLOSE,  // シーケンシャルファイル I/O
+    HASH,    // ファイル番号の `#`（単独の # のみ。変数末尾の # は識別子の一部）
     POKE,    // 論理メモリへの 1 バイト書き込み（PEEK は組み込み関数）
     FOR,
     TO,

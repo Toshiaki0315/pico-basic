@@ -176,6 +176,18 @@ uint16_t get_next_program_line(int line_number);
 // WINDOW 未設定時は切り捨てて int 化するだけ
 void user_to_screen(float ux, float uy, int& out_x, int& out_y);
 
+// 変数名の直後の `(添字[, 添字2])` を読む（READ / INPUT / INPUT# / 代入で共用）
+void parse_optional_indices(const TokenList& tokens, int& pos, int& arr_idx, int& arr_idx2);
+
+// シーケンシャルファイル I/O（statement_graphics_io.cpp）。番号は #1〜#4
+#define MAX_BASIC_FILES 4
+void execute_open(const TokenList& tokens, int& pos);
+void execute_close(const TokenList& tokens, int& pos);
+void execute_print_file(const TokenList& tokens, int& pos);  // PRINT #n, ...
+void execute_input_file(const TokenList& tokens, int& pos);  // INPUT #n, ...
+int  basic_file_eof(int fileno);   // EOF(n): 1=終端 / 0=まだある
+void basic_files_close_all();      // NEW / RUN 開始 / END で全ファイルを閉じる
+
 // Parsers & Executors
 Value parse_expression(const TokenList& tokens, int& pos);
 Value parse_relation(const TokenList& tokens, int& pos);

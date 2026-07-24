@@ -12,7 +12,11 @@ void basic_print(const char* s) {
 }
 
 void execute_print(const TokenList& tokens, int& pos) {
-    pos++; 
+    pos++;
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::HASH) {
+        execute_print_file(tokens, pos); // PRINT #n, ...
+        return;
+    }
     char output[512] = "";
     bool newline = true;
     while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE &&
@@ -55,6 +59,7 @@ void execute_clear() {
     string_heap_ptr = STRING_HEAP_BASE;
     array_heap_inner_ptr = DATA_HEAP_BASE;
     user_func_count = 0; // DEF FN も初期化（プログラムは実行中に再定義する）
+    basic_files_close_all(); // RUN / CLEAR のたびにファイルも初期状態へ
 }
 
 static UserFunc* find_user_func(const char* name) {
@@ -167,7 +172,7 @@ Value call_user_func(const char* name, const Value& arg) {
 
 // 変数名の直後に `(添字[, 添字2])` があれば読み取る（READ / INPUT / 代入の共通処理）。
 // 添字が無ければ arr_idx = -1 のまま返す。
-static void parse_optional_indices(const TokenList& tokens, int& pos, int& arr_idx, int& arr_idx2) {
+void parse_optional_indices(const TokenList& tokens, int& pos, int& arr_idx, int& arr_idx2) {
     arr_idx = -1;
     arr_idx2 = -1;
     if (pos < tokens.size && tokens.tokens[pos].type == TokenType::LPAREN) {
@@ -541,7 +546,11 @@ void execute_assignment(const TokenList& tokens, int& pos, bool explicit_let) {
 }
 
 void execute_input(const TokenList& tokens, int& pos) {
-    pos++; 
+    pos++;
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::HASH) {
+        execute_input_file(tokens, pos); // INPUT #n, ...
+        return;
+    }
     if (pos < tokens.size && tokens.tokens[pos].type == TokenType::STRING) {
         basic_print(tokens.tokens[pos].text);
         pos++;
@@ -590,6 +599,8 @@ void execute_input(const TokenList& tokens, int& pos) {
 }
 
 void execute_end(const TokenList& tokens, int& pos) {
+    basic_files_close_all(); // 書きかけのファイルを確定させる
+
     pos = tokens.size;
     current_line = -1;
     branch_taken = true;
@@ -818,6 +829,8 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::PUT_AT:  execute_put_at(tokens, pos); break;
         
         case TokenType::SAVE:    execute_save(tokens, pos); break;
+        case TokenType::OPEN:    execute_open(tokens, pos); break;
+        case TokenType::CLOSE:   execute_close(tokens, pos); break;
         case TokenType::LOAD:    execute_load(tokens, pos); break;
 
         case TokenType::INIT: case TokenType::NEWON:

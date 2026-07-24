@@ -62,6 +62,9 @@ const char* token_type_to_string(TokenType type) {
         case TokenType::GET: return "GET";
         case TokenType::FILES: return "FILES";
         case TokenType::SAVE: return "SAVE";
+        case TokenType::OPEN: return "OPEN";
+        case TokenType::CLOSE: return "CLOSE";
+        case TokenType::HASH: return "#";
         case TokenType::LOAD: return "LOAD";
         case TokenType::ON: return "ON";
         case TokenType::COLON: return ":";

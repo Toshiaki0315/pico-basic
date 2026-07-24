@@ -177,3 +177,97 @@ TEST_F(FilesListingTest, LongNameDoesNotRunIntoNextName) {
     EXPECT_EQ(out[p + strlen("VERYLONGFILENAME.BAS")], '\n')
         << "長いファイル名の後で改行されていない: " << out;
 }
+
+// ---------------------------------------------------------
+// シーケンシャルファイル I/O（OPEN / PRINT# / INPUT# / EOF / CLOSE）
+// ---------------------------------------------------------
+class SeqFileTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        clear_program();
+        mock_hal::reset();
+        std::remove("T_SEQ.DAT");
+    }
+    void TearDown() override {
+        parse_and_execute(lex("CLOSE"));
+        std::remove("T_SEQ.DAT");
+    }
+    void run(const char* line) { parse_and_execute(lex(line)); }
+};
+
+TEST_F(SeqFileTest, WriteAndReadBack) {
+    store_line(10, lex("OPEN \"T_SEQ.DAT\" FOR OUTPUT AS #1"));
+    store_line(20, lex("PRINT #1, 100"));
+    store_line(30, lex("PRINT #1, \"ALICE\", 250"));
+    store_line(40, lex("CLOSE #1"));
+    store_line(50, lex("OPEN \"T_SEQ.DAT\" FOR INPUT AS #1"));
+    store_line(60, lex("INPUT #1, A"));
+    store_line(70, lex("INPUT #1, N$, B"));
+    store_line(80, lex("CLOSE #1"));
+    store_line(90, lex("PRINT A; N$; B"));
+    run("RUN");
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "100ALICE250\n");
+}
+
+TEST_F(SeqFileTest, AppendAndEofLoop) {
+    store_line(10, lex("OPEN \"T_SEQ.DAT\" FOR OUTPUT AS #1"));
+    store_line(20, lex("PRINT #1, 1"));
+    store_line(30, lex("CLOSE #1"));
+    store_line(40, lex("OPEN \"T_SEQ.DAT\" FOR APPEND AS #1"));
+    store_line(50, lex("PRINT #1, 2"));
+    store_line(60, lex("CLOSE #1"));
+    store_line(70, lex("OPEN \"T_SEQ.DAT\" FOR INPUT AS #1"));
+    store_line(80, lex("REPEAT"));
+    store_line(90, lex("INPUT #1, X"));
+    store_line(100, lex("PRINT X"));
+    store_line(110, lex("UNTIL EOF(1) = 1"));
+    store_line(120, lex("CLOSE #1"));
+    run("RUN");
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "1\n2\n");
+}
+
+TEST_F(SeqFileTest, HiscoreFirstRunIdiom) {
+    // APPEND で存在を保証してから EOF ガード付きで読む定石
+    store_line(10, lex("OPEN \"T_SEQ.DAT\" FOR APPEND AS #1 : CLOSE #1"));
+    store_line(20, lex("OPEN \"T_SEQ.DAT\" FOR INPUT AS #1"));
+    store_line(30, lex("HS = 0 : IF EOF(1) = 0 THEN INPUT #1, HS"));
+    store_line(40, lex("CLOSE #1"));
+    store_line(50, lex("PRINT HS"));
+    run("RUN");
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "0\n"); // 初回はファイルが空
+}
+
+TEST_F(SeqFileTest, InputPastEndErrors) {
+    store_line(10, lex("OPEN \"T_SEQ.DAT\" FOR OUTPUT AS #1 : CLOSE #1"));
+    store_line(20, lex("OPEN \"T_SEQ.DAT\" FOR INPUT AS #1"));
+    store_line(30, lex("INPUT #1, A"));
+    run("RUN");
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("Input past end"), std::string::npos);
+}
+
+TEST_F(SeqFileTest, FileNotOpenErrors) {
+    mock_hal::reset();
+    parse_and_execute(lex("INPUT #3, A"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("File not open"), std::string::npos);
+}
+
+TEST_F(SeqFileTest, BadModeErrors) {
+    store_line(10, lex("OPEN \"T_SEQ.DAT\" FOR OUTPUT AS #1"));
+    store_line(20, lex("INPUT #1, A"));
+    run("RUN");
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("Bad file mode"), std::string::npos);
+}
+
+TEST_F(SeqFileTest, MissingFileErrors) {
+    mock_hal::reset();
+    parse_and_execute(lex("OPEN \"NO_SUCH.XYZ\" FOR INPUT AS #1"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("File not found"), std::string::npos);
+}
+
+TEST_F(SeqFileTest, DoubleSigilVariableStillWorks) {
+    // '#' を識別子に許した副作用の確認: 倍精度シジル付き変数が使える
+    run("PI# = 3.5");
+    mock_hal::reset();
+    run("PRINT PI#");
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "3.5\n");
+}
