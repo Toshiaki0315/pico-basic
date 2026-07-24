@@ -20,6 +20,7 @@ static bool is_builtin_function(const char* name) {
            strcmp(name, "LEFT$") == 0 || strcmp(name, "RIGHT$") == 0 ||
            strcmp(name, "CHR$") == 0 || strcmp(name, "ASC") == 0 ||
            strcmp(name, "VAL") == 0 || strcmp(name, "STR$") == 0 ||
+           strcmp(name, "PEEK") == 0 ||
            strcmp(name, "TOUCH") == 0;
 }
 
@@ -53,6 +54,12 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
     } else if (strcmp(var_name, "EXP") == 0) {
         if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in EXP");
         return Value(std::exp(args[0].num_val));
+    } else if (strcmp(var_name, "PEEK") == 0) {
+        if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT))
+            throw std::runtime_error("Type Mismatch/Arg Count in PEEK");
+        int addr = static_cast<int>(args[0].num_val);
+        if (addr < 0 || addr > 65535) throw std::runtime_error("Illegal function call: PEEK address out of range");
+        return Value((int)logical_memory[addr]); // 論理メモリの 1 バイト（0-255）
     } else if (strcmp(var_name, "RND") == 0) {
         if (arg_count != 1 || (args[0].type != Value::Type::NUM && args[0].type != Value::Type::INT)) throw std::runtime_error("Type Mismatch/Arg Count in RND");
         float n = args[0].num_val;

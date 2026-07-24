@@ -28,6 +28,7 @@ enum class TokenType {
     REM,     // コメント（REM / ' 以降、行末まで）。本文を text に持つ
     AND, OR, NOT,  // ビット・論理演算子
     DEF,     // DEF FN ユーザー定義関数
+    POKE,    // 論理メモリへの 1 バイト書き込み（PEEK は組み込み関数）
     FOR,
     TO,
     STEP,

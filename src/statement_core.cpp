@@ -120,6 +120,24 @@ void execute_def(const TokenList& tokens, int& pos) {
     strncpy(f->body, body, sizeof(f->body) - 1); f->body[sizeof(f->body) - 1] = '\0';
 }
 
+// POKE アドレス, 値 — 論理メモリ（logical_memory）に 1 バイト書き込む。
+// このアドレスは X1 の物理メモリマップではなく、本実装の 64KB 論理メモリ。
+// プログラム・変数領域を上書きすると壊れる点は実機同様なので注意。
+void execute_poke(const TokenList& tokens, int& pos) {
+    pos++; // POKE
+    Value addr_v = parse_relation(tokens, pos);
+    if (addr_v.type != Value::Type::NUM && addr_v.type != Value::Type::INT)
+        throw std::runtime_error("Type Mismatch: POKE address must be numeric");
+    require_token(tokens, pos, TokenType::COMMA, "Syntax Error: Expected ',' in POKE"); pos++;
+    Value val_v = parse_relation(tokens, pos);
+    if (val_v.type != Value::Type::NUM && val_v.type != Value::Type::INT)
+        throw std::runtime_error("Type Mismatch: POKE value must be numeric");
+
+    int addr = static_cast<int>(addr_v.num_val);
+    if (addr < 0 || addr > 65535) throw std::runtime_error("Illegal function call: POKE address out of range");
+    logical_memory[addr] = static_cast<uint8_t>(static_cast<int>(val_v.num_val) & 0xFF);
+}
+
 // FN 呼び出し: 仮引数に実引数を束縛して本体式を評価する
 Value call_user_func(const char* name, const Value& arg) {
     static int depth = 0;
@@ -822,6 +840,7 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::LABEL:   pos++; break; // 行頭のラベル定義は実行時は素通り
         case TokenType::REM:     pos = tokens.size; break; // コメント。行末まで読み飛ばす
         case TokenType::DEF:     execute_def(tokens, pos); break;
+        case TokenType::POKE:    execute_poke(tokens, pos); break;
         case TokenType::AUTO:    execute_noop_statement(tokens, pos); break; // AUTO は repl が処理。プログラム内では無視
         case TokenType::WIDTH:   execute_width(tokens, pos); break;
         case TokenType::CONSOLE: execute_console(tokens, pos); break;

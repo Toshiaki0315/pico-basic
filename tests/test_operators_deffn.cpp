@@ -145,3 +145,37 @@ TEST_F(OpDefFnTest, StringArrayReassign) {
     run("RUN");
     EXPECT_EQ(mock_hal::get_raw_print_buffer(), "BYE\n");
 }
+
+// --- POKE / PEEK（論理メモリの読み書き） ------------------------------
+TEST_F(OpDefFnTest, PokePeekRoundTrip) {
+    store_line(10, lex("POKE 40000, 65"));
+    store_line(20, lex("PRINT PEEK(40000)"));
+    run("RUN");
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "65\n");
+}
+
+TEST_F(OpDefFnTest, PokeMasksToByte) {
+    store_line(10, lex("POKE 40000, 300"));   // 300 & 0xFF = 44
+    store_line(20, lex("PRINT PEEK(40000)"));
+    run("RUN");
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "44\n");
+}
+
+TEST_F(OpDefFnTest, PokePeekLoop) {
+    store_line(10, lex("FOR A=50000 TO 50003 : POKE A, A-50000 : NEXT A"));
+    store_line(20, lex("FOR A=50000 TO 50003 : PRINT PEEK(A); : NEXT A"));
+    run("RUN");
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "0123"); // 末尾 ; で改行なし
+}
+
+TEST_F(OpDefFnTest, PeekOutOfRangeErrors) {
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT PEEK(70000)"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("out of range"), std::string::npos);
+}
+
+TEST_F(OpDefFnTest, PokeOutOfRangeErrors) {
+    mock_hal::reset();
+    parse_and_execute(lex("POKE -1, 5"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("out of range"), std::string::npos);
+}

@@ -176,6 +176,7 @@ TokenList lex(const char* source) {
             else if (strcmp(upper_ident, "OR") == 0) t.type = TokenType::OR;
             else if (strcmp(upper_ident, "NOT") == 0) t.type = TokenType::NOT;
             else if (strcmp(upper_ident, "DEF") == 0) t.type = TokenType::DEF;
+            else if (strcmp(upper_ident, "POKE") == 0) t.type = TokenType::POKE;
             else if (strcmp(upper_ident, "REPEAT") == 0) t.type = TokenType::REPEAT;
             else if (strcmp(upper_ident, "UNTIL") == 0) t.type = TokenType::UNTIL;
             else if (strcmp(upper_ident, "GET") == 0) t.type = TokenType::GET;
@@ -227,7 +228,7 @@ TokenList lex(const char* source) {
                      strcmp(upper_ident, "LEFT$") == 0 || strcmp(upper_ident, "RIGHT$") == 0 ||
                      strcmp(upper_ident, "CHR$") == 0 || strcmp(upper_ident, "ASC") == 0 ||
                      strcmp(upper_ident, "VAL") == 0 || strcmp(upper_ident, "STR$") == 0 ||
-                     strcmp(upper_ident, "TAB") == 0 ||
+                     strcmp(upper_ident, "TAB") == 0 || strcmp(upper_ident, "PEEK") == 0 ||
                      strcmp(upper_ident, "TOUCH") == 0) {} // Built-in functions bypass variable checks
             else {
                 // Variable name rules: [A-Z][A-Z0-9]*[%$]? with max 8 characters total
