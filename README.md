@@ -19,7 +19,7 @@ SHARP X1 turbo (CZ-8FB02) の **Hu-BASIC を土台に、独自に拡張した仕
 | **言語** | `IF`/`ELSEIF`、`FOR`/`NEXT`、`WHILE`/`WEND`、`REPEAT`/`UNTIL`、`GOSUB`（文単位復帰）、行ラベル `*NAME`、`DEF FN`、`ON ERROR GOTO`/`RESUME`、2次元・文字列配列、`MOD`/`\`/`AND`/`OR`/`XOR`/`NOT`、`&H`/`&B` リテラル |
 | **グラフィック** | 320×240・16色。`PSET`/`LINE`(B/BF)/`CIRCLE`/`POLY`/`PAINT`、スプライト（`GET@`/`PUT@` XOR・拡大縮小・論理合成）、ユーザー座標系 `WINDOW`、画素読み取り `POINT` |
 | **サウンド** | PSG（AY-3-8910 相当）: 3声矩形波＋ノイズ＋エンベロープ。MML の `PLAY`（3声・**非同期再生**）、レジスタ直接制御の `SOUND` |
-| **入力** | タッチパネル `TOUCH()`、ノンウェイトキー入力 `GET` |
+| **入力** | タッチパネル `TOUCH()`、ノンウェイトキー入力 `GET`、電池残量 `BATTERY()` |
 | **日本語** | JIS X 0201 **半角カタカナ**（`&HA1`〜`&HDF`）を 8×8 字形で表示。X1 turbo と同じ方式 |
 | **ストレージ** | MicroSD に `SAVE`/`LOAD`（プログラム）、`OPEN`/`PRINT #`/`INPUT #`/`EOF`（データファイル。ハイスコア保存など）。カードの抜き差しにも追従 |
 | **開発体験** | **Ctrl-P で画面を BMP 保存**、`AUTO`（行番号自動生成）、`RENUM`（飛び先も書き換え）、範囲 `LIST`、`DELETE`、`CONT`（Ctrl-C の続きから再開）、`TRON`/`TROFF`、`PRINT USING`、エラーコード表示 |

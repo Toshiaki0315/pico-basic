@@ -1,6 +1,7 @@
 #include "parser_internal.h"
 #include "hal_touch.h"
 #include "hal_display.h"
+#include "hal_battery.h"
 #include <stdexcept>
 #include <cstring>
 #include <cstdlib>
@@ -19,7 +20,7 @@ static bool is_builtin_function(const char* name) {
         "ABS", "INT", "RND", "SGN", "SQR", "SIN", "COS", "TAN", "LOG", "EXP",
         "LEN", "MID$", "LEFT$", "RIGHT$", "CHR$", "ASC", "VAL", "STR$",
         "PEEK", "TOUCH",
-        "INSTR", "STRING$", "SPACE$", "HEX$", "POINT", "EOF",
+        "INSTR", "STRING$", "SPACE$", "HEX$", "POINT", "EOF", "BATTERY",
     };
     for (const char* n : NAMES) {
         if (strcmp(name, n) == 0) return true;
@@ -193,6 +194,28 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
             if (PALETTE[i] == c565) return Value(i);
         }
         return Value(-1); // パレット外の色（通常は起こらない）
+    } else if (strcmp(var_name, "BATTERY") == 0) {
+        // BATTERY(0)=電圧 mV / (1)=残量の目安 % / (2)=電池が繋がっていそうか
+        need_args(arg_count == 1 && args[0].is_numeric(), "BATTERY");
+        int mv = hal_battery_millivolts();
+        switch ((int)args[0].num_val) {
+            case 0: return Value(mv);
+            case 1: {
+                // リチウムポリマーの目安: 3.30V を 0%、4.20V を 100% とした直線近似。
+                // 実際の放電曲線は平坦なので、あくまで残量の「目安」
+                int pct = (mv - 3300) * 100 / (4200 - 3300);
+                if (pct < 0) pct = 0;
+                if (pct > 100) pct = 100;
+                return Value(pct);
+            }
+            case 2:
+                // 電圧が電池としてありうる範囲かどうか。
+                // USB 給電で電池が無い場合も充電 IC が VBAT を持ち上げるため
+                // 1 を返しうる（電圧だけでは確実に判別できない）
+                return Value(mv >= 2500 ? 1 : 0);
+            default:
+                throw std::runtime_error("BATTERY argument must be 0, 1, or 2");
+        }
     } else if (strcmp(var_name, "EOF") == 0) {
         need_args(arg_count == 1 && args[0].is_numeric(), "EOF");
         return Value(basic_file_eof((int)args[0].num_val));

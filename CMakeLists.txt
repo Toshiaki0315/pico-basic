@@ -61,6 +61,7 @@ if(BUILD_TESTS)
         src/statement_core.cpp
         src/statement_graphics_io.cpp
         src/screenshot.cpp
+        src/hal_battery.cpp
         src/hal_touch.cpp
         src/hal_sdcard.cpp
     )
@@ -127,6 +128,7 @@ else()
         src/hal_gpio.cpp
         src/hal_sound.cpp
         src/hal_touch.cpp
+        src/hal_battery.cpp
         src/hal_sdcard.cpp
         src/repl.cpp
         src/lexer.cpp
@@ -147,6 +149,7 @@ else()
             pico_stdlib
             hardware_spi
             hardware_i2c
+            hardware_adc     # バッテリ電圧の読み取り（BAT_ADC / GPIO27）
             hardware_pwm     # LCD バックライト調光（サウンドではない）
             hardware_pio     # I2S サウンド出力
             hardware_dma

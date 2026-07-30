@@ -280,3 +280,40 @@ TEST_F(OpDefFnTest, KatakanaMidExtracts) {
     parse_and_execute(lex("PRINT ASC(MID$(\"\xB1\xB2\xB3\", 2, 1))"));
     EXPECT_EQ(mock_hal::get_raw_print_buffer(), "178\n"); // 0xB2 = 178
 }
+
+// --- BATTERY()（バッテリ電圧・残量）----------------------------------
+#include "hal_battery.h"
+
+TEST_F(OpDefFnTest, BatteryVoltageIsReported) {
+    hal_battery_set_mock_millivolts(3850);
+    EXPECT_EQ(eval("BATTERY(0)"), "3850\n");
+}
+
+TEST_F(OpDefFnTest, BatteryPercentMapsVoltage) {
+    hal_battery_set_mock_millivolts(4200); // 満充電
+    EXPECT_EQ(eval("BATTERY(1)"), "100\n");
+    hal_battery_set_mock_millivolts(3300); // 空とみなす電圧
+    EXPECT_EQ(eval("BATTERY(1)"), "0\n");
+    hal_battery_set_mock_millivolts(3750); // ちょうど中間
+    EXPECT_EQ(eval("BATTERY(1)"), "50\n");
+}
+
+TEST_F(OpDefFnTest, BatteryPercentIsClamped) {
+    hal_battery_set_mock_millivolts(4500); // 満充電を超えても 100 まで
+    EXPECT_EQ(eval("BATTERY(1)"), "100\n");
+    hal_battery_set_mock_millivolts(2000); // 下限を割っても 0 止まり
+    EXPECT_EQ(eval("BATTERY(1)"), "0\n");
+}
+
+TEST_F(OpDefFnTest, BatteryPresenceFlag) {
+    hal_battery_set_mock_millivolts(3700);
+    EXPECT_EQ(eval("BATTERY(2)"), "1\n");
+    hal_battery_set_mock_millivolts(100); // 電池電圧として低すぎる
+    EXPECT_EQ(eval("BATTERY(2)"), "0\n");
+}
+
+TEST_F(OpDefFnTest, BatteryRejectsBadArgument) {
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT BATTERY(9)"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("must be 0, 1, or 2"), std::string::npos);
+}

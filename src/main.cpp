@@ -4,6 +4,7 @@
 #include "hal_sdcard.h"
 #include "hal_sound.h"
 #include "hal_touch.h"
+#include "hal_battery.h"
 #include "repl.h"
 
 int main() {
@@ -19,6 +20,7 @@ int main() {
     // Phase 5: I2S sound output (PIO + DMA) and I2C touch panel
     hal_sound_init();
     hal_touch_init();
+    hal_battery_init();
 
     // 起動したことが音でも分かるように（非同期なので待たされない）
     hal_sound_startup_chime();

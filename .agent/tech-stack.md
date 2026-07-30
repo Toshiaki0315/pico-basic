@@ -55,8 +55,13 @@
     - [Schematic (PDF)](https://files.waveshare.com/wiki/RP2350-Touch-LCD-2.8/RP2350-Touch-LCD-2.8-Schematic.pdf)
     - [Product Page (Switch Science)](https://www.switch-science.com/products/10331)
 
-- **Key Pin Assignment (from Schematic)**:
-    - **LCD**: LCD_CS (GP9), LCD_DC (GP8), LCD_RST (GP12), LCD_BL (GP13)
-    - **LCD SPI**: LCD_SCLK (GP10), LCD_MOSI (GP11)
-    - **Touch**: TP_SDA (GP6), TP_SCL (GP7), TP_INT (GP5), TP_RST (GP15)
-    - **MicroSD**: SD_CS (GP23), SD_CLK (GP18), SD_DIN/MOSI (GP19), SD_DOUT/MISO (GP20)
+- **Key Pin Assignment（回路図 RP2350-Touch-LCD-2.8-Schematic.pdf の対応表より）**:
+    - **LCD**: SCK=GP10, MOSI=GP11, MISO=GP12, CS=GP13, D/C=GP14, RST=GP15, BL=GP16
+    - **Touch (CST328)**: TP_SDA=GP6, TP_SCL=GP7, TP_RST=GP17, TP_INT=GP18
+    - **MicroSD (SDIO)**: SD_SCK=GP19, SD_CMD=GP20, SD_D0=GP21, D1=GP22, D2=GP23, D3=GP24
+    - **I2S (PCM5101A)**: BCK=GP2, LRCK=GP3, DIN=GP4
+    - **UART**: TXD=GP0, RXD=GP1
+    - **Battery**: KEY_BAT=GP25, BAT_EN=GP26, **BAT_ADC=GP27 (ADC1)**
+      - 分圧は VBAT --200K-- BAT_ADC --100K-- GND なので **VBAT = ADC 電圧 x 3**
+      - **BAT_EN (GP26) は電源ラッチの制御線**。誤って駆動すると電源が落ちうるので触れないこと
+    - 空き: GP5, GP8, GP9, GP28, GP29
