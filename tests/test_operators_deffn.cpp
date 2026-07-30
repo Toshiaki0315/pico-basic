@@ -312,8 +312,15 @@ TEST_F(OpDefFnTest, BatteryPresenceFlag) {
     EXPECT_EQ(eval("BATTERY(2)"), "0\n");
 }
 
+TEST_F(OpDefFnTest, BatteryUsbPowerFlag) {
+    hal_battery_set_mock_usb(1);
+    EXPECT_EQ(eval("BATTERY(3)"), "1\n");
+    hal_battery_set_mock_usb(0);
+    EXPECT_EQ(eval("BATTERY(3)"), "0\n");
+}
+
 TEST_F(OpDefFnTest, BatteryRejectsBadArgument) {
     mock_hal::reset();
     parse_and_execute(lex("PRINT BATTERY(9)"));
-    EXPECT_NE(mock_hal::get_raw_print_buffer().find("must be 0, 1, or 2"), std::string::npos);
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("must be 0 to 3"), std::string::npos);
 }

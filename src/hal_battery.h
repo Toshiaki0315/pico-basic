@@ -15,6 +15,14 @@ void hal_battery_init();
 // 電池電圧をミリボルトで返す。読めない場合は 0。
 int hal_battery_millivolts();
 
+// USB から給電されているか（1=USB、0=電池のみ）。
+//
+// 基板には VBUS を MCU に戻す配線が無いため、USB の CDC が
+// ホストと接続されているか（pico の stdio_usb_connected）で代用している。
+// そのため「データ通信をしない充電器だけに挿した場合」は 0 を返す。
+int hal_battery_usb_connected();
+
 // ホストテスト用: 次に hal_battery_millivolts() が返す値を差し替える。
 // 実機ビルドでは何もしない。
 void hal_battery_set_mock_millivolts(int mv);
+void hal_battery_set_mock_usb(int connected);

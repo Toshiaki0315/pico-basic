@@ -3,6 +3,7 @@
 #if __has_include("pico/stdlib.h")
 #include "hardware/adc.h"
 #include "pico/stdlib.h"
+#include "pico/stdio_usb.h"
 
 // BAT_ADC は GPIO27。RP2350 の ADC 入力番号は GPIO26=0, 27=1, 28=2, 29=3
 #define BAT_ADC_GPIO 27
@@ -36,20 +37,29 @@ int hal_battery_millivolts() {
   return (int)(volts * 1000.0f + 0.5f);
 }
 
+int hal_battery_usb_connected() {
+  // VBUS を読む配線が無いので、USB シリアルの接続状態で代用する
+  return stdio_usb_connected() ? 1 : 0;
+}
+
 void hal_battery_set_mock_millivolts(int) {
   // 実機では何もしない（テスト専用の入口）
 }
+void hal_battery_set_mock_usb(int) {}
 
 #else
 // ---------------------------------------------------------
 // ホストビルド用。テストから値を差し込めるようにしておく
 // ---------------------------------------------------------
 static int mock_mv = 0;
+static int mock_usb = 0;
 
-void hal_battery_init() { mock_mv = 0; }
+void hal_battery_init() { mock_mv = 0; mock_usb = 0; }
 
 int hal_battery_millivolts() { return mock_mv; }
+int hal_battery_usb_connected() { return mock_usb; }
 
 void hal_battery_set_mock_millivolts(int mv) { mock_mv = mv; }
+void hal_battery_set_mock_usb(int connected) { mock_usb = connected ? 1 : 0; }
 
 #endif

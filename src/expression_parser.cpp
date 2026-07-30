@@ -195,7 +195,7 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
         }
         return Value(-1); // パレット外の色（通常は起こらない）
     } else if (strcmp(var_name, "BATTERY") == 0) {
-        // BATTERY(0)=電圧 mV / (1)=残量の目安 % / (2)=電池が繋がっていそうか
+        // BATTERY(0)=電圧 mV / (1)=残量の目安 % / (2)=電池の接続推定 / (3)=USB 給電中か
         need_args(arg_count == 1 && args[0].is_numeric(), "BATTERY");
         int mv = hal_battery_millivolts();
         switch ((int)args[0].num_val) {
@@ -213,8 +213,12 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
                 // USB 給電で電池が無い場合も充電 IC が VBAT を持ち上げるため
                 // 1 を返しうる（電圧だけでは確実に判別できない）
                 return Value(mv >= 2500 ? 1 : 0);
+            case 3:
+                // USB から給電されているか。VBUS を読む線が無いので
+                // USB シリアルの接続で代用している（充電器だけの接続は 0）
+                return Value(hal_battery_usb_connected());
             default:
-                throw std::runtime_error("BATTERY argument must be 0, 1, or 2");
+                throw std::runtime_error("BATTERY argument must be 0 to 3");
         }
     } else if (strcmp(var_name, "EOF") == 0) {
         need_args(arg_count == 1 && args[0].is_numeric(), "EOF");
