@@ -200,26 +200,8 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
         int mv = hal_battery_millivolts();
         switch ((int)args[0].num_val) {
             case 0: return Value(mv);
-            case 1: {
-                // リチウムポリマーの目安: 3.30V を 0%、4.20V を 100% とした直線近似。
-                // 実際の放電曲線は平坦なので、あくまで残量の「目安」
-                int pct = (mv - 3300) * 100 / (4200 - 3300);
-                if (pct < 0) pct = 0;
-                if (pct > 100) pct = 100;
-                return Value(pct);
-            }
-            case 2: {
-                // 電池の有無。0=無し / 1=有り / 2=判別不能。
-                //
-                // USB 非接続で動いているなら、電源は電池しかないので確実に「有り」。
-                // USB 給電中は充電 IC が VBAT を満充電電圧(約4.2V)まで持ち上げるため、
-                // 電池が無くても満充電と同じ電圧に見える。ただし満充電に達していない
-                // 電圧なら、それは充電中の電池がぶら下がっている証拠になる。
-                if (!hal_battery_usb_connected()) return Value(1);
-                if (mv < 2500) return Value(0);   // 低すぎる = 無し/異常
-                if (mv < 4100) return Value(1);   // 満充電未満 = 充電中の電池がある
-                return Value(2);                  // 満充電相当 = 満充電か未接続か不明
-            }
+            case 1: return Value(battery_percent_from_mv(mv));
+            case 2: return Value(battery_presence(mv, hal_battery_usb_connected()));
             case 3:
                 // USB から給電されているか。VBUS を読む線が無いので
                 // USB シリアルの接続で代用している（充電器だけの接続は 0）

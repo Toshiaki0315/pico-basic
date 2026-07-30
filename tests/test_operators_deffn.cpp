@@ -344,3 +344,46 @@ TEST_F(OpDefFnTest, BatteryRejectsBadArgument) {
     parse_and_execute(lex("PRINT BATTERY(9)"));
     EXPECT_NE(mock_hal::get_raw_print_buffer().find("must be 0 to 3"), std::string::npos);
 }
+
+// --- BATTERY 文（引数なしの状態表示）---------------------------------
+TEST_F(OpDefFnTest, BatteryStatementShowsSummary) {
+    // 実機で電池なし・USB 給電のときの値
+    hal_battery_set_mock_millivolts(4196);
+    hal_battery_set_mock_usb(1);
+    mock_hal::reset();
+    parse_and_execute(lex("BATTERY"));
+    std::string out = mock_hal::get_raw_print_buffer();
+    EXPECT_NE(out.find("4.20V"), std::string::npos) << "切り捨てて 4.19V になっている: " << out;
+    EXPECT_NE(out.find("99%"), std::string::npos) << out;
+    EXPECT_NE(out.find("USB"), std::string::npos) << out;
+    EXPECT_NE(out.find("UNKNOWN"), std::string::npos) << out;
+}
+
+TEST_F(OpDefFnTest, BatteryStatementOnBattery) {
+    hal_battery_set_mock_millivolts(3650);
+    hal_battery_set_mock_usb(0);
+    mock_hal::reset();
+    parse_and_execute(lex("BATTERY"));
+    std::string out = mock_hal::get_raw_print_buffer();
+    EXPECT_NE(out.find("3.65V"), std::string::npos) << out;
+    EXPECT_NE(out.find("BATT"), std::string::npos) << out;
+    EXPECT_NE(out.find("CELL OK"), std::string::npos) << out;
+}
+
+TEST_F(OpDefFnTest, BatteryStatementWorksInProgram) {
+    hal_battery_set_mock_millivolts(3700);
+    hal_battery_set_mock_usb(0);
+    store_line(10, lex("BATTERY"));
+    store_line(20, lex("PRINT \"AFTER\""));
+    run("RUN");
+    // 状態表示のあとで次の行も実行される（文として正しく終わっている）
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("AFTER"), std::string::npos);
+}
+
+TEST_F(OpDefFnTest, BatteryFunctionStillWorksAfterStatement) {
+    // 引数つきは従来どおり関数として評価される
+    hal_battery_set_mock_millivolts(3750);
+    hal_battery_set_mock_usb(0);
+    EXPECT_EQ(eval("BATTERY(0)"), "3750\n");
+    EXPECT_EQ(eval("BATTERY(1)"), "50\n");
+}

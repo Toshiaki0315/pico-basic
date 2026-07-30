@@ -250,6 +250,7 @@ void execute_until(const TokenList& tokens, int& pos);
 void execute_get(const TokenList& tokens, int& pos);
 void execute_on(const TokenList& tokens, int& pos);
 void execute_mid_statement(const TokenList& tokens, int& pos);
+void execute_battery_status(const TokenList& tokens, int& pos);
 void execute_not_implemented(const TokenList& tokens, int& pos);
 
 void execute_color(const TokenList& tokens, int& pos);

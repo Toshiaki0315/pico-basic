@@ -1,5 +1,6 @@
 #include "parser_internal.h"
 #include "hal_display.h"
+#include "hal_battery.h"
 #include "hal_sdcard.h" // Needed for files if not decoupled, wait, IO is in the other file.
 #include <stdexcept>
 #include <cstring>
@@ -960,6 +961,32 @@ void execute_on(const TokenList& tokens, int& pos) {
     // idx が範囲外なら何もせず次の文／行へ進む
 }
 
+// 引数なしの `BATTERY` — 電池の状態をまとめて表示する。
+// 40 桁に収めるため 2 行に分ける。
+void execute_battery_status(const TokenList& tokens, int& pos) {
+    pos++; // BATTERY
+    int mv  = hal_battery_millivolts();
+    int usb = hal_battery_usb_connected();
+
+    const char* cell = "UNKNOWN";
+    switch (battery_presence(mv, usb)) {
+        case 0: cell = "NONE"; break;
+        case 1: cell = "OK";   break;
+        default: break; // 2 = UNKNOWN
+    }
+
+    // 10mV 単位に四捨五入してから小数 2 桁にする（切り捨てると 4196 が 4.19 になる）
+    int cv = (mv + 5) / 10;
+
+    char buf[96];
+    snprintf(buf, sizeof(buf), "BATTERY %d.%02dV (%d%%)\n",
+             cv / 100, cv % 100, battery_percent_from_mv(mv));
+    basic_print(buf);
+    snprintf(buf, sizeof(buf), "SOURCE  %-4s  CELL %s\n",
+             usb ? "USB" : "BATT", cell);
+    basic_print(buf);
+}
+
 void execute_mid_statement(const TokenList& tokens, int& pos) {
     pos++; 
     require_token(tokens, pos, TokenType::LPAREN, "Expected '('"); pos++;
@@ -1043,9 +1070,13 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::END:     execute_end(tokens, pos); break;
         case TokenType::STOP:    execute_stop(tokens, pos); break;
         case TokenType::LET:     execute_assignment(tokens, pos, true); break;
-        case TokenType::IDENTIFIER: 
+        case TokenType::IDENTIFIER:
             if (strcmp(tokens.tokens[pos].text, "MID$") == 0) execute_mid_statement(tokens, pos);
-            else execute_assignment(tokens, pos, false); 
+            // 引数なしの BATTERY は状態表示の文。`BATTERY(n)` は関数なので式側に任せる
+            else if (strcmp(tokens.tokens[pos].text, "BATTERY") == 0 &&
+                     (pos + 1 >= tokens.size || tokens.tokens[pos + 1].type != TokenType::LPAREN))
+                execute_battery_status(tokens, pos);
+            else execute_assignment(tokens, pos, false);
             break;
         
         case TokenType::COLOR:   execute_color(tokens, pos); break;

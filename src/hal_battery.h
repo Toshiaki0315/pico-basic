@@ -26,3 +26,29 @@ int hal_battery_usb_connected();
 // 実機ビルドでは何もしない。
 void hal_battery_set_mock_millivolts(int mv);
 void hal_battery_set_mock_usb(int connected);
+
+// ---------------------------------------------------------
+// 電圧の解釈（ハードウェアに依存しない純粋な計算）。
+// BATTERY() 関数と BATTERY 文の両方から使うのでここに置く。
+// ---------------------------------------------------------
+
+// 残量の目安 0-100%。3.30V を 0%、4.20V を 100% とした直線近似。
+// リチウムポリマーの放電曲線は中間が平坦なので、あくまで目安。
+inline int battery_percent_from_mv(int mv) {
+    int pct = (mv - 3300) * 100 / (4200 - 3300);
+    if (pct < 0) pct = 0;
+    if (pct > 100) pct = 100;
+    return pct;
+}
+
+// 電池の有無。0=無し / 1=有り / 2=判別不能。
+//
+// USB 非接続で動いているなら電源は電池しかないので確実に「有り」。
+// USB 給電中は充電 IC が満充電電圧(約4.2V)まで持ち上げるため、電池が無くても
+// 満充電と同じ電圧に見える。ただし満充電未満なら充電中の電池がある証拠。
+inline int battery_presence(int mv, int usb_connected) {
+    if (!usb_connected) return 1;
+    if (mv < 2500) return 0;
+    if (mv < 4100) return 1;
+    return 2;
+}
