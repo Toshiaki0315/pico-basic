@@ -208,11 +208,18 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
                 if (pct > 100) pct = 100;
                 return Value(pct);
             }
-            case 2:
-                // 電圧が電池としてありうる範囲かどうか。
-                // USB 給電で電池が無い場合も充電 IC が VBAT を持ち上げるため
-                // 1 を返しうる（電圧だけでは確実に判別できない）
-                return Value(mv >= 2500 ? 1 : 0);
+            case 2: {
+                // 電池の有無。0=無し / 1=有り / 2=判別不能。
+                //
+                // USB 非接続で動いているなら、電源は電池しかないので確実に「有り」。
+                // USB 給電中は充電 IC が VBAT を満充電電圧(約4.2V)まで持ち上げるため、
+                // 電池が無くても満充電と同じ電圧に見える。ただし満充電に達していない
+                // 電圧なら、それは充電中の電池がぶら下がっている証拠になる。
+                if (!hal_battery_usb_connected()) return Value(1);
+                if (mv < 2500) return Value(0);   // 低すぎる = 無し/異常
+                if (mv < 4100) return Value(1);   // 満充電未満 = 充電中の電池がある
+                return Value(2);                  // 満充電相当 = 満充電か未接続か不明
+            }
             case 3:
                 // USB から給電されているか。VBUS を読む線が無いので
                 // USB シリアルの接続で代用している（充電器だけの接続は 0）

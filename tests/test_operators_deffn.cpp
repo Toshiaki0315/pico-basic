@@ -305,10 +305,30 @@ TEST_F(OpDefFnTest, BatteryPercentIsClamped) {
     EXPECT_EQ(eval("BATTERY(1)"), "0\n");
 }
 
-TEST_F(OpDefFnTest, BatteryPresenceFlag) {
+TEST_F(OpDefFnTest, BatteryPresenceWithoutUsbIsCertain) {
+    // USB が無いのに動いている = 電源は電池しかない
+    hal_battery_set_mock_usb(0);
     hal_battery_set_mock_millivolts(3700);
     EXPECT_EQ(eval("BATTERY(2)"), "1\n");
-    hal_battery_set_mock_millivolts(100); // 電池電圧として低すぎる
+}
+
+TEST_F(OpDefFnTest, BatteryPresenceOnUsbBelowFloatIsCertain) {
+    // USB 給電でも満充電未満なら、充電中の電池がぶら下がっている
+    hal_battery_set_mock_usb(1);
+    hal_battery_set_mock_millivolts(3700);
+    EXPECT_EQ(eval("BATTERY(2)"), "1\n");
+}
+
+TEST_F(OpDefFnTest, BatteryPresenceOnUsbAtFloatIsUnknown) {
+    // 実機で電池なし・USB 給電のとき 4196mV になった。満充電の電池と区別できない
+    hal_battery_set_mock_usb(1);
+    hal_battery_set_mock_millivolts(4196);
+    EXPECT_EQ(eval("BATTERY(2)"), "2\n") << "判別できないのに 1 を返している";
+}
+
+TEST_F(OpDefFnTest, BatteryPresenceLowVoltageIsAbsent) {
+    hal_battery_set_mock_usb(1);
+    hal_battery_set_mock_millivolts(100);
     EXPECT_EQ(eval("BATTERY(2)"), "0\n");
 }
 
