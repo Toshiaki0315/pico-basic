@@ -369,6 +369,10 @@ void hal_display_input(char *buffer, int max_len) {
         printf("\b \b");
         hal_display_print("\b \b");
       }
+    } else if ((c >= 0x81 && c <= 0x9F) || (c >= 0xE0 && c <= 0xEF)) {
+      // Shift-JIS 2 バイト文字の 1 バイト目。表示できないので対の 2 バイト目ごと捨てる
+      // （捨てないと 2 バイト目が単独の半角カナ／英字として紛れ込む）
+      getchar();
     } else if ((c >= 32 && c <= 126) || (c >= 0xA1 && c <= 0xDF)) {
       // 印字可能 ASCII と半角カタカナ（0xA1-0xDF）
       if (input_ptr < max_len - 1) {

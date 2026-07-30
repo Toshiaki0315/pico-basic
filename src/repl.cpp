@@ -114,6 +114,12 @@ void repl_start() {
                     printf("\n[screen save failed]\n");
                 // 入力途中の行を打ち直さずに済むよう、そのまま再表示する
                 if (input_ptr > 0) printf("%s", input_buffer);
+            } else if ((c >= 0x81 && c <= 0x9F) || (c >= 0xE0 && c <= 0xEF)) {
+                // Shift-JIS の 2 バイト文字（漢字・ひらがな・全角カナ）の 1 バイト目。
+                // 表示できるフォントが無いので受け付けないが、2 バイト目を放置すると
+                // それが単独の文字（例: 漢=8A BF の BF が「ソ」）として紛れ込む。
+                // 対になるバイトもここで読み捨てる。
+                getchar();
             } else if ((c >= 32 && c <= 126) || (c >= 0xA1 && c <= 0xDF)) {
                 // 印字可能 ASCII と JIS X 0201 半角カタカナ（0xA1-0xDF）を受け付ける
                 last_terminator = 0; // 改行の対を待つ状態を解除する
