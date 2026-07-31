@@ -482,3 +482,55 @@ TEST_F(OpDefFnTest, PinAndAdinWorkInsideProgram) {
     EXPECT_NE(mock_hal::get_raw_print_buffer().find("1100"), std::string::npos)
         << mock_hal::get_raw_print_buffer();
 }
+
+// --- 半角カタカナのシリアル出力（UTF-8 変換）---------------------------
+#include "kana_utf8.h"
+
+TEST_F(OpDefFnTest, KanaToUtf8MapsAiu) {
+    char u[3];
+    // 0xB1 = ｱ → U+FF71 → EF BD B1
+    EXPECT_EQ(jis_kana_to_utf8(0xB1, u), 3);
+    EXPECT_EQ((unsigned char)u[0], 0xEF);
+    EXPECT_EQ((unsigned char)u[1], 0xBD);
+    EXPECT_EQ((unsigned char)u[2], 0xB1);
+}
+
+TEST_F(OpDefFnTest, KanaToUtf8CoversBothEnds) {
+    char u[3];
+    // 0xA1 = ｡ → U+FF61 → EF BD A1
+    EXPECT_EQ(jis_kana_to_utf8(0xA1, u), 3);
+    EXPECT_EQ((unsigned char)u[0], 0xEF);
+    EXPECT_EQ((unsigned char)u[1], 0xBD);
+    EXPECT_EQ((unsigned char)u[2], 0xA1);
+    // 0xDF = ﾟ → U+FF9F → EF BE 9F（2 バイト目が繰り上がる境界）
+    EXPECT_EQ(jis_kana_to_utf8(0xDF, u), 3);
+    EXPECT_EQ((unsigned char)u[0], 0xEF);
+    EXPECT_EQ((unsigned char)u[1], 0xBE);
+    EXPECT_EQ((unsigned char)u[2], 0x9F);
+}
+
+TEST_F(OpDefFnTest, KanaToUtf8LeavesOtherBytesAlone) {
+    char u[3];
+    EXPECT_EQ(jis_kana_to_utf8('A', u), 0);
+    EXPECT_EQ(jis_kana_to_utf8(0x20, u), 0);
+    EXPECT_EQ(jis_kana_to_utf8(0xA0, u), 0); // カタカナ範囲の 1 つ手前
+    EXPECT_EQ(jis_kana_to_utf8(0xE0, u), 0); // 1 つ後ろ
+}
+
+TEST_F(OpDefFnTest, KanaToUtf8IsContiguous) {
+    // 0xA1-0xDF が U+FF61-U+FF9F へ順番どおり並ぶこと（抜けや重複がない）
+    char u[3];
+    for (int c = 0xA1; c <= 0xDF; c++) {
+        ASSERT_EQ(jis_kana_to_utf8((unsigned char)c, u), 3) << c;
+        unsigned int cp = 0xF000u | ((unsigned char)u[1] & 0x3F) << 6 | ((unsigned char)u[2] & 0x3F);
+        EXPECT_EQ(cp, 0xFF61u + (unsigned int)(c - 0xA1)) << c;
+    }
+}
+
+TEST_F(OpDefFnTest, LcdOutputKeepsRawKanaBytes) {
+    // シリアルだけ変換し、LCD 側は 1 バイトのまま（フォントを引くため）
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT \"\xB1\xB2\xB3\""));
+    std::string out = mock_hal::get_raw_print_buffer();
+    EXPECT_EQ(out, "\xB1\xB2\xB3\n");
+}

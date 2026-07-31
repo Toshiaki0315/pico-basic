@@ -1,4 +1,5 @@
 #include "hal_display.h"
+#include "kana_utf8.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -378,7 +379,7 @@ void hal_display_input(char *buffer, int max_len) {
       if (input_ptr < max_len - 1) {
         buffer[input_ptr++] = static_cast<char>(c);
         buffer[input_ptr] = '\0';
-        putchar(c);
+        serial_putc_kana(static_cast<unsigned char>(c));
 
         char s[2] = {static_cast<char>(c), '\0'};
         hal_display_print(s);

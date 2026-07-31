@@ -1,6 +1,7 @@
 #include "parser_internal.h"
 #include "hal_display.h"
 #include "hal_battery.h"
+#include "kana_utf8.h"
 #include "hal_sdcard.h" // Needed for files if not decoupled, wait, IO is in the other file.
 #include <stdexcept>
 #include <cstring>
@@ -9,7 +10,8 @@
 
 void basic_print(const char* s) {
     hal_display_print(s);
-    printf("%s", s);
+    // LCD は生のバイトのまま。シリアルだけ半角カタカナを UTF-8 に直して送る
+    serial_print_kana(s);
 }
 
 static void execute_print_using(const TokenList& tokens, int& pos);
