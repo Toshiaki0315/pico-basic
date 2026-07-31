@@ -11,6 +11,11 @@
 // 1 サンプルだと LCD の SPI 転送などのノイズが乗るので平均を取る（hal_battery と同じ方針）
 #define ADC_SAMPLES 16
 
+// 温度はサンプルを増やしてオーバーサンプリングする。
+// ADC の 1 LSB は約 0.47℃ もあり、そのままでは値が飛び飛びになるため。
+// ノイズが LSB をまたいで揺れることを利用して、平均の小数部から分解能を稼ぐ。
+#define ADC_TEMP_SAMPLES 256
+
 static bool adc_ready = false;
 
 // hal_battery も adc_init() を呼ぶが、ADC ブロックの初期化は冪等で、
@@ -26,22 +31,25 @@ void hal_adc_init() {
   adc_ready = true;
 }
 
-static uint32_t read_averaged(int input) {
+// 平均は小数のまま返すこと。整数で割ってしまうと平均した意味が無くなり、
+// 分解能が 1 サンプルのときと変わらなくなる（温度が 0.47℃ 刻みで飛ぶ）。
+static float read_averaged(int input, int samples) {
   adc_select_input(input);
   uint32_t sum = 0;
-  for (int i = 0; i < ADC_SAMPLES; i++) sum += adc_read();
-  return sum / ADC_SAMPLES;
+  for (int i = 0; i < samples; i++) sum += adc_read();
+  return (float)sum / (float)samples;
 }
 
 int hal_adc_read_raw(int gpio) {
   if (!adc_pin_allowed(gpio)) return -1;
   if (!adc_ready) hal_adc_init();
-  return (int)read_averaged(gpio - 26);
+  // ADIN の戻り値は 0-4095 の整数と決めているので、ここで四捨五入する
+  return (int)(read_averaged(gpio - 26, ADC_SAMPLES) + 0.5f);
 }
 
 float hal_adc_read_temp_c() {
   if (!adc_ready) hal_adc_init();
-  float volts = (float)read_averaged(4) * (ADC_VREF / ADC_MAX);
+  float volts = read_averaged(4, ADC_TEMP_SAMPLES) * (ADC_VREF / ADC_MAX);
   // RP2350 データシートの近似式。校正していないので数℃の個体差がある
   return 27.0f - (volts - 0.706f) / 0.001721f;
 }
