@@ -387,3 +387,98 @@ TEST_F(OpDefFnTest, BatteryFunctionStillWorksAfterStatement) {
     EXPECT_EQ(eval("BATTERY(0)"), "3750\n");
     EXPECT_EQ(eval("BATTERY(1)"), "50\n");
 }
+
+// --- PIN() / ADIN() / CPUTEMP（GPIO・アナログ入力・内蔵温度）-----------
+#include "hal_adc.h"
+#include "hal_gpio.h"
+
+// eval() は先に mock_hal::reset() を呼んで GPIO の状態も消すため、
+// ピンの値を仕込む系のテストは parse_and_execute を直接使う。
+static std::string print_expr(const char* expr) {
+    std::string cmd = std::string("PRINT ") + expr;
+    parse_and_execute(lex(cmd.c_str()));
+    return mock_hal::get_raw_print_buffer();
+}
+
+TEST_F(OpDefFnTest, PinReadsGpioLevel) {
+    hal_gpio_write(5, true);
+    EXPECT_EQ(print_expr("PIN(5)"), "1\n");
+    mock_hal::reset();
+    hal_gpio_write(5, false);
+    EXPECT_EQ(print_expr("PIN(5)"), "0\n");
+}
+
+TEST_F(OpDefFnTest, PinRejectsOutOfRange) {
+    // エラーは例外ではなく画面に出る（他の組み込み関数と同じ扱い）
+    parse_and_execute(lex("PRINT PIN(30)"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("PIN argument must be"), std::string::npos);
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT PIN(-1)"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("PIN argument must be"), std::string::npos);
+}
+
+TEST_F(OpDefFnTest, PinIsUsableAfterGpioInputMode) {
+    // 入力に設定してから読む、という本来の使い方
+    // mock_hal::reset() は GPIO の状態も消すので、仕込んだ後は呼ばない
+    parse_and_execute(lex("GPIO 8, 0, 0, 1"));
+    hal_gpio_write(8, true);
+    EXPECT_NE(print_expr("PIN(8)").find("1"), std::string::npos);
+}
+
+TEST_F(OpDefFnTest, AdinReadsRawValue) {
+    hal_adc_set_mock_raw(28, 2048);
+    EXPECT_EQ(print_expr("ADIN(28)"), "2048\n");
+    mock_hal::reset();
+    hal_adc_set_mock_raw(29, 4095);
+    EXPECT_EQ(print_expr("ADIN(29)"), "4095\n");
+}
+
+TEST_F(OpDefFnTest, AdinAllowsBatteryPin) {
+    // GPIO27 は電池の分圧。読むだけなら無害なので許可している
+    hal_adc_set_mock_raw(27, 1234);
+    EXPECT_EQ(print_expr("ADIN(27)"), "1234\n");
+}
+
+TEST_F(OpDefFnTest, AdinRejectsBatEnPin) {
+    // GPIO26 = BAT_EN。アナログ入力にすると電源が落ちうるので拒否する
+    EXPECT_FALSE(adc_pin_allowed(26));
+    parse_and_execute(lex("PRINT ADIN(26)"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("BAT_EN"), std::string::npos);
+}
+
+TEST_F(OpDefFnTest, AdinRejectsNonAdcPins) {
+    parse_and_execute(lex("PRINT ADIN(5)"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("ADIN argument must be"), std::string::npos);
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT ADIN(30)"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("ADIN argument must be"), std::string::npos);
+}
+
+TEST_F(OpDefFnTest, AdcPinAllowedCoversOnlyFreePins) {
+    EXPECT_FALSE(adc_pin_allowed(25));
+    EXPECT_TRUE(adc_pin_allowed(27));
+    EXPECT_TRUE(adc_pin_allowed(28));
+    EXPECT_TRUE(adc_pin_allowed(29));
+    EXPECT_FALSE(adc_pin_allowed(30));
+}
+
+TEST_F(OpDefFnTest, CpuTempIsReadWithoutParens) {
+    hal_adc_set_mock_temp_c(25.0f);
+    EXPECT_EQ(print_expr("CPUTEMP"), "25\n");
+}
+
+TEST_F(OpDefFnTest, CpuTempIsUsableInExpression) {
+    hal_adc_set_mock_temp_c(30.0f);
+    EXPECT_EQ(print_expr("CPUTEMP > 20"), "1\n");
+}
+
+TEST_F(OpDefFnTest, PinAndAdinWorkInsideProgram) {
+    hal_gpio_write(9, true);
+    hal_adc_set_mock_raw(28, 100);
+    store_line(10, lex("A = PIN(9)"));
+    store_line(20, lex("B = ADIN(28)"));
+    store_line(30, lex("PRINT A; B"));
+    parse_and_execute(lex("RUN"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("1100"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}

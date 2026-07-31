@@ -1,6 +1,6 @@
 # pico-basic ユーザーマニュアル
 
-pico-basic は、Raspberry Pi Pico 2 (RP2350) 上で動作するネイティブ BASIC インタプリタです。1980年代のマイコンの操作感そのままに、現代のハードウェア機能（カラー液晶、タッチパネル、SDカード、PSG 音源、GPIO 制御）を扱うことができます。
+pico-basic は、Raspberry Pi Pico 2 (RP2350) 上で動作するネイティブ BASIC インタプリタです。1980年代のマイコンの操作感そのままに、現代のハードウェア機能（カラー液晶、タッチパネル、SDカード、PSG 音源、GPIO・アナログ入力）を扱うことができます。
 
 SHARP X1 turbo (CZ-8FB02) の **Hu-BASIC を土台に、独自に拡張した仕様**です。Hu-BASIC の互換実装ではないので、当時のプログラムをそのまま動かすことは想定していません。命令ごとの出自は下の「この BASIC の成り立ち」を参照してください。
 
@@ -11,7 +11,7 @@ SHARP X1 turbo (CZ-8FB02) の **Hu-BASIC を土台に、独自に拡張した仕
 | **Hu-BASIC（X1 turbo）** | 基本文法、`SOUND`（AY-3-8910 相当の PSG レジスタ）、`GET@`/`PUT@`、`CONSOLE`、`REPEAT`〜`UNTIL`、`INIT`/`NEWON`（空実装） |
 | **S-BASIC（シャープ）** | `AUTO`（行番号自動生成） |
 | **N88-BASIC（NEC）** | `OPEN`/`PRINT #`/`INPUT #`/`EOF`、`ON ERROR GOTO`/`RESUME`/`ERR`/`ERL`、`PRINT USING`、`WHILE`/`WEND`、`RENUM`、`DELETE`、範囲 `LIST`、`CONT`、`TRON`/`TROFF`、`MOD`、`\`、`&H`/`&B`、`INSTR`/`STRING$`/`SPACE$`/`HEX$` |
-| **本実装の独自拡張** | 行ラベル `*NAME`、`GOSUB`/`FOR`/`WHILE` の**文単位の復帰**、`TOUCH()`、`POINT`、`TIMER`、`POLY`、`WINDOW`、`BRIGHTNESS`、`GPIO`、`POKE`/`PEEK`（論理メモリ）、**Ctrl-P による画面の BMP 保存**、半角カタカナ表示 |
+| **本実装の独自拡張** | 行ラベル `*NAME`、`GOSUB`/`FOR`/`WHILE` の**文単位の復帰**、`TOUCH()`、`POINT`、`TIMER`、`POLY`、`WINDOW`、`BRIGHTNESS`、`GPIO`/`PIN`/`ADIN`/`CPUTEMP`、`POKE`/`PEEK`（論理メモリ）、**Ctrl-P による画面の BMP 保存**、半角カタカナ表示 |
 
 ## 1. 基本的な使い方
 
@@ -116,7 +116,7 @@ IF X < 0 OR X > 99 THEN PRINT "OUT OF RANGE"
 | :--- | :--- |
 | 数値 | `ABS` `INT` `SGN` `SQR` `SIN` `COS` `TAN` `LOG` `EXP` `RND(n)` |
 | 文字列 | `LEN` `MID$` `LEFT$` `RIGHT$` `CHR$` `ASC` `VAL` `STR$` `INSTR([開始,]文字列,検索語)` `STRING$(n,文字)` `SPACE$(n)` `HEX$(n)` |
-| ハードウェア | `PEEK(addr)` `POINT(x,y)`（画面の色番号。画面外は -1） `TOUCH(n)` `BATTERY(n)`（電池の状態） `TIMER`（起動からのミリ秒。括弧なし） |
+| ハードウェア | `PEEK(addr)` `POINT(x,y)`（画面の色番号。画面外は -1） `TOUCH(n)` `BATTERY(n)`（電池の状態） `PIN(n)`（GPIO 入力 0/1） `ADIN(n)`（アナログ入力 0-4095） `TIMER`（起動からのミリ秒。括弧なし） `CPUTEMP`（内蔵温度センサー℃。括弧なし） |
 
 ```basic
 PRINT INSTR("HELLO", "LL")   ' → 3（見つからなければ 0）
@@ -365,7 +365,28 @@ Raspberry Pi Pico 2の機能を活かした拡張コマンドです。
   ```basic
   IF BATTERY(3) = 1 THEN PRINT "USB POWER" ELSE PRINT "ON BATTERY"
   ```
-* **`GPIO PIN, MODE, VALUE`**: Pico 2のハードウェアピン（GPIO）を直接制御します。
+* **`GPIO PIN, MODE, VALUE [, PULL]`**: Pico 2 のハードウェアピン（GPIO）を直接制御します。`MODE` は `0`=入力 / `1`=出力、`PULL` は `0`=なし / `1`=プルアップ / `2`=プルダウンです。
+* **`PIN(n)`**: GPIO `n` の入力レベルを `0` / `1` で読みます。先に `GPIO n, 0` で入力に設定しておいてください。スイッチを読むときはプルアップを付けて、押されたら `0` になる形が定番です。
+  ```basic
+  10 GPIO 28, 0, 0, 1              ' 入力・プルアップ
+  20 IF PIN(28) = 0 THEN PRINT "PUSHED"
+  30 GOTO 20
+  ```
+* **`ADIN(n)`**: GPIO `n` のアナログ入力を `0`〜`4095` で読みます。可変抵抗や光センサー（CdS）などをつなぐ用途です。
+  ```basic
+  10 V = ADIN(28)
+  20 PRINT V; "="; V * 3300 / 4095; "MV"   ' ミリボルトに直す
+  30 LINE (0, 100)-(V / 13, 100), 5        ' 値を棒グラフにする
+  ```
+  * 使えるのは **`27` / `28` / `29`** です。**`28` と `29` が拡張コネクタに出ている未使用ピン**で、本来の使いどころです。`27` は電池電圧の分圧なので `BATTERY(0)` と同じものを見ています。
+  * **`26` は指定できません。** GPIO26 は `BAT_EN`（電源ラッチの制御線）で、アナログ入力に切り替えると**電源が落ちる恐れがある**ためです。指定するとエラーになります。
+* **`CPUTEMP`**: RP2350 内蔵の温度センサーの値を摂氏で返します。括弧は不要です（`TIMER` と同じ形）。
+  ```basic
+  PRINT CPUTEMP
+  10 IF CPUTEMP > 50 THEN PRINT "HOT!"
+  ```
+  > 校正されていないため**数℃の個体差**があります。絶対値より「上がった／下がった」の変化を見る用途に向いています。また、これは**チップの温度**で室温ではありません。動かし続けると室温より高くなります。
+  > 変数名としてよく使う `TEMP` を予約語にしないため、あえて `CPUTEMP` という名前にしています。
 * **`GET 変数名`**: キーボードからの入力を**待たずに**1文字取得します（押されていなければ空文字列／0）。ゲームのリアルタイム入力に使います。文字変数（`K$`）には文字そのもの、数値変数（`K`）には文字コードが入ります。
 * **`FILES`**: SDカードに保存されているファイルの一覧を表示します。
 * **データファイル（`OPEN` / `PRINT #` / `INPUT #` / `EOF` / `CLOSE`）**: プログラムとは別に、SD カードへ**データを読み書き**できます。ハイスコアや面データの保存に使います。ファイル番号は `#1`〜`#4` です。

@@ -5,6 +5,7 @@
 #include "hal_sound.h"
 #include "hal_touch.h"
 #include "hal_battery.h"
+#include "hal_adc.h"
 #include "repl.h"
 
 int main() {
@@ -21,6 +22,9 @@ int main() {
     hal_sound_init();
     hal_touch_init();
     hal_battery_init();
+    // ADIN / CPUTEMP 用。adc_init() は ADC ブロックをリセットするので、
+    // 温度センサーを有効にするこちらを必ず hal_battery_init() の後に呼ぶこと
+    hal_adc_init();
 
     // 起動したことが音でも分かるように（非同期なので待たされない）
     hal_sound_startup_chime();

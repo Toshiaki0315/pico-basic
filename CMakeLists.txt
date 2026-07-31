@@ -62,6 +62,7 @@ if(BUILD_TESTS)
         src/statement_graphics_io.cpp
         src/screenshot.cpp
         src/hal_battery.cpp
+        src/hal_adc.cpp
         src/hal_touch.cpp
         src/hal_sdcard.cpp
     )
@@ -129,6 +130,7 @@ else()
         src/hal_sound.cpp
         src/hal_touch.cpp
         src/hal_battery.cpp
+        src/hal_adc.cpp
         src/hal_sdcard.cpp
         src/repl.cpp
         src/lexer.cpp

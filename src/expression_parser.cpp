@@ -2,6 +2,8 @@
 #include "hal_touch.h"
 #include "hal_display.h"
 #include "hal_battery.h"
+#include "hal_adc.h"
+#include "hal_gpio.h"
 #include <stdexcept>
 #include <cstring>
 #include <cstdlib>
@@ -21,6 +23,7 @@ static bool is_builtin_function(const char* name) {
         "LEN", "MID$", "LEFT$", "RIGHT$", "CHR$", "ASC", "VAL", "STR$",
         "PEEK", "TOUCH",
         "INSTR", "STRING$", "SPACE$", "HEX$", "POINT", "EOF", "BATTERY",
+        "PIN", "ADIN",
     };
     for (const char* n : NAMES) {
         if (strcmp(name, n) == 0) return true;
@@ -209,6 +212,24 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
             default:
                 throw std::runtime_error("BATTERY argument must be 0 to 3");
         }
+    } else if (strcmp(var_name, "PIN") == 0) {
+        // PIN(n): GPIO n の入力レベルを 0/1 で返す。
+        // 事前に GPIO n, 0 [, , プル] で入力に設定しておくこと。
+        need_args(arg_count == 1 && args[0].is_numeric(), "PIN");
+        int pin = (int)args[0].num_val;
+        if (pin < 0 || pin > 29) throw std::runtime_error("PIN argument must be 0 to 29");
+        return Value(hal_gpio_read(pin) ? 1.0f : 0.0f);
+    } else if (strcmp(var_name, "ADIN") == 0) {
+        // ADIN(n): GPIO n のアナログ入力 0-4095。ミリボルトは ADIN(n)*3300/4095。
+        need_args(arg_count == 1 && args[0].is_numeric(), "ADIN");
+        int pin = (int)args[0].num_val;
+        if (pin == 26) {
+            // BAT_EN。アナログ入力にすると電源ラッチが外れる恐れがあるので触らせない
+            throw std::runtime_error("GPIO26 is BAT_EN and cannot be used for ADIN");
+        }
+        int raw = hal_adc_read_raw(pin);
+        if (raw < 0) throw std::runtime_error("ADIN argument must be 27, 28, or 29");
+        return Value((float)raw);
     } else if (strcmp(var_name, "EOF") == 0) {
         need_args(arg_count == 1 && args[0].is_numeric(), "EOF");
         return Value(basic_file_eof((int)args[0].num_val));
@@ -309,8 +330,10 @@ static Value parse_factor(const TokenList& tokens, int& pos) {
             return read_heap_value(arr->start_addr + (flat_idx * 8));
         }
         
-        // TIMER / ERR / ERL は括弧なしの組み込み値
+        // TIMER / CPUTEMP / ERR / ERL は括弧なしの組み込み値
         if (strcmp(var_name, "TIMER") == 0) return Value((float)hal_system_millis());
+        // TEMP という名前は変数として使われがちなので CPUTEMP にしてある
+        if (strcmp(var_name, "CPUTEMP") == 0) return Value(hal_adc_read_temp_c());
         if (strcmp(var_name, "ERR") == 0) return Value(err_code);
         if (strcmp(var_name, "ERL") == 0) return Value(err_line);
 
