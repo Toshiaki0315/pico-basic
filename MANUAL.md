@@ -11,7 +11,7 @@ SHARP X1 turbo (CZ-8FB02) の **Hu-BASIC を土台に、独自に拡張した仕
 | **Hu-BASIC（X1 turbo）** | 基本文法、`SOUND`（AY-3-8910 相当の PSG レジスタ）、`GET@`/`PUT@`、`CONSOLE`、`REPEAT`〜`UNTIL`、`INIT`/`NEWON`（空実装） |
 | **S-BASIC（シャープ）** | `AUTO`（行番号自動生成） |
 | **N88-BASIC（NEC）** | `OPEN`/`PRINT #`/`INPUT #`/`EOF`、`ON ERROR GOTO`/`RESUME`/`ERR`/`ERL`、`PRINT USING`、`WHILE`/`WEND`、`RENUM`、`DELETE`、範囲 `LIST`、`CONT`、`TRON`/`TROFF`、`MOD`、`\`、`&H`/`&B`、`INSTR`/`STRING$`/`SPACE$`/`HEX$` |
-| **本実装の独自拡張** | 行ラベル `*NAME`、`GOSUB`/`FOR`/`WHILE` の**文単位の復帰**、`TOUCH()`、`POINT`、`TIMER`、`POLY`、`WINDOW`、`BRIGHTNESS`、`GPIO`/`PIN`/`ADIN`/`CPUTEMP`、`POKE`/`PEEK`（論理メモリ）、**Ctrl-P による画面の BMP 保存**、半角カタカナ表示 |
+| **本実装の独自拡張** | 行ラベル `*NAME`、`GOSUB`/`FOR`/`WHILE` の**文単位の復帰**、`TOUCH()`、`POINT`、`TIMER`、`POLY`、`WINDOW`、`BRIGHTNESS`、`GPIO`/`PIN`/`ADIN`/`CPUTEMP`、`ACCEL`/`GYRO`/`IMU`、`POKE`/`PEEK`（論理メモリ）、**Ctrl-P による画面の BMP 保存**、半角カタカナ表示 |
 
 ## 1. 基本的な使い方
 
@@ -116,7 +116,7 @@ IF X < 0 OR X > 99 THEN PRINT "OUT OF RANGE"
 | :--- | :--- |
 | 数値 | `ABS` `INT` `SGN` `SQR` `SIN` `COS` `TAN` `LOG` `EXP` `RND(n)` |
 | 文字列 | `LEN` `MID$` `LEFT$` `RIGHT$` `CHR$` `ASC` `VAL` `STR$` `INSTR([開始,]文字列,検索語)` `STRING$(n,文字)` `SPACE$(n)` `HEX$(n)` |
-| ハードウェア | `PEEK(addr)` `POINT(x,y)`（画面の色番号。画面外は -1） `TOUCH(n)` `BATTERY(n)`（電池の状態） `PIN(n)`（GPIO 入力 0/1） `ADIN(n)`（アナログ入力 0-4095） `TIMER`（起動からのミリ秒。括弧なし） `CPUTEMP`（内蔵温度センサー℃。括弧なし） |
+| ハードウェア | `PEEK(addr)` `POINT(x,y)`（画面の色番号。画面外は -1） `TOUCH(n)` `BATTERY(n)`（電池の状態） `PIN(n)`（GPIO 入力 0/1） `ADIN(n)`（アナログ入力 0-4095） `ACCEL(n)`/`GYRO(n)`（6軸 IMU） `TIMER`（起動からのミリ秒。括弧なし） `CPUTEMP`（内蔵温度センサー℃。括弧なし） |
 
 ```basic
 PRINT INSTR("HELLO", "LL")   ' → 3（見つからなければ 0）
@@ -381,6 +381,24 @@ Raspberry Pi Pico 2の機能を活かした拡張コマンドです。
   ```
   * 使えるのは **`27` / `28` / `29`** です。**`28` と `29` が拡張コネクタに出ている未使用ピン**で、本来の使いどころです。`27` は電池電圧の分圧なので `BATTERY(0)` と同じものを見ています。
   * **`26` は指定できません。** GPIO26 は `BAT_EN`（電源ラッチの制御線）で、アナログ入力に切り替えると**電源が落ちる恐れがある**ためです。指定するとエラーになります。
+* **`ACCEL(n)`** / **`GYRO(n)`**: 基板の IMU（QMI8658、6軸）から**傾き**と**回転**を読みます。`n` は `0`=X / `1`=Y / `2`=Z です。
+  * `ACCEL(n)` は加速度を**ミリ G**（1G = `1000`）で返します。水平に置けば重力でどれか 1 軸が ±1000 前後になり、傾けるとその分が他の軸に移ります。
+  * `GYRO(n)` は角速度を**度/秒**で返します。回している間だけ値が出て、止めると 0 に戻ります。
+  ```basic
+  10 IF ACCEL(0) >  200 THEN X = X + 1   ' 右に傾けた
+  20 IF ACCEL(0) < -200 THEN X = X - 1   ' 左に傾けた
+  30 GOTO 10
+  ```
+  > **どの軸が画面の左右・上下に当たるかは、実機で一度確かめてください。** チップの向きと画面の向きは別物です。`IMU` と打って、傾けながら数値の動きを見るのが手っ取り早いです。
+  > 測定範囲は **加速度 ±4G / ジャイロ ±512度/秒**です。傾きの検出には十分ですが、強く振ると 4G で頭打ちになります。
+  > 3 軸は**同じ瞬間のサンプル**が返ります（内部で 6 軸まとめて読んでいます）。`ACCEL(0)` と `ACCEL(1)` を別々の時刻で読んでしまい、傾きの計算が狂うことはありません。
+* **`IMU`**（引数なし）: 6 軸の値をまとめて表示します。`PRINT` は不要です。軸の割り出しやセンサーの動作確認に使います。
+  ```basic
+  IMU
+  ACCEL     12    -30    998 mG
+  GYRO       0      1     -1 dps
+  ```
+  センサーが応答しない場合は `IMU NOT FOUND` と出ます。
 * **`CPUTEMP`**: RP2350 内蔵の温度センサーの値を摂氏で返します。括弧は不要です（`TIMER` と同じ形）。
   ```basic
   PRINT CPUTEMP
@@ -506,6 +524,7 @@ Pico-HuBASICを扱う上での重要な仕様と、当時のHu-BASICとの共通
 | `art.bas` | 幾何アート（`POLY` / `CIRCLE` / `PAINT`） |
 | `ball.bas` | 跳ねるボール（`GET@` / `PUT@` スプライト） |
 | `draw.bas` | タッチでお絵かき（`TOUCH()` / `PSET`） |
+| `tilt.bas` | 傾けてボールを転がす（`ACCEL()`） |
 | `song.bas` | 演奏＋ビジュアライザ（非同期 `PLAY` ＋描画） |
 | `sfx.bas` | PSG 効果音（`SOUND` のノイズ・エンベロープ） |
 | `qix.bas` | 陣取りゲーム（クイックス風。配列＋フラッドフィル） |
