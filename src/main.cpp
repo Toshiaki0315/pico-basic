@@ -6,6 +6,7 @@
 #include "hal_touch.h"
 #include "hal_battery.h"
 #include "hal_adc.h"
+#include "hal_imu.h"
 #include "repl.h"
 
 int main() {
@@ -25,6 +26,8 @@ int main() {
     // ADIN / CPUTEMP 用。adc_init() は ADC ブロックをリセットするので、
     // 温度センサーを有効にするこちらを必ず hal_battery_init() の後に呼ぶこと
     hal_adc_init();
+    // IMU はタッチと同じ i2c1 を使うので、hal_touch_init() の後に呼ぶ
+    hal_imu_init();
 
     // 起動したことが音でも分かるように（非同期なので待たされない）
     hal_sound_startup_chime();

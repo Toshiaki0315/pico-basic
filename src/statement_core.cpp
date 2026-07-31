@@ -2,6 +2,7 @@
 #include "hal_display.h"
 #include "hal_battery.h"
 #include "kana_utf8.h"
+#include "hal_imu.h"
 #include "hal_sdcard.h" // Needed for files if not decoupled, wait, IO is in the other file.
 #include <stdexcept>
 #include <cstring>
@@ -989,6 +990,23 @@ void execute_battery_status(const TokenList& tokens, int& pos) {
     basic_print(buf);
 }
 
+// 引数なしの `IMU` — 6 軸の値をまとめて表示する（BATTERY と同じ形）。
+// 傾け方と数値の対応を実機で確かめるときの入口。
+void execute_imu_status(const TokenList& tokens, int& pos) {
+    pos++; // IMU
+    if (!hal_imu_present()) {
+        basic_print("IMU NOT FOUND\n");
+        return;
+    }
+    char buf[96];
+    snprintf(buf, sizeof(buf), "ACCEL %6d %6d %6d mG\n",
+             hal_imu_accel_mg(0), hal_imu_accel_mg(1), hal_imu_accel_mg(2));
+    basic_print(buf);
+    snprintf(buf, sizeof(buf), "GYRO  %6d %6d %6d dps\n",
+             hal_imu_gyro_dps(0), hal_imu_gyro_dps(1), hal_imu_gyro_dps(2));
+    basic_print(buf);
+}
+
 void execute_mid_statement(const TokenList& tokens, int& pos) {
     pos++; 
     require_token(tokens, pos, TokenType::LPAREN, "Expected '('"); pos++;
@@ -1078,6 +1096,10 @@ void execute_statement(const TokenList& tokens, int& pos) {
             else if (strcmp(tokens.tokens[pos].text, "BATTERY") == 0 &&
                      (pos + 1 >= tokens.size || tokens.tokens[pos + 1].type != TokenType::LPAREN))
                 execute_battery_status(tokens, pos);
+            // IMU も同様に、引数なしなら状態表示の文
+            else if (strcmp(tokens.tokens[pos].text, "IMU") == 0 &&
+                     (pos + 1 >= tokens.size || tokens.tokens[pos + 1].type != TokenType::LPAREN))
+                execute_imu_status(tokens, pos);
             else execute_assignment(tokens, pos, false);
             break;
         

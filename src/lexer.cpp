@@ -64,7 +64,7 @@ static const char* const BUILTIN_NAMES[] = {
     "LEN", "MID$", "LEFT$", "RIGHT$", "CHR$", "ASC", "VAL", "STR$",
     "TAB", "PEEK", "TOUCH",
     "INSTR", "STRING$", "SPACE$", "HEX$", "POINT", "EOF", "BATTERY",
-    "PIN", "ADIN",
+    "PIN", "ADIN", "ACCEL", "GYRO",
 };
 
 static bool lookup_keyword(const char* name, TokenType& out) {

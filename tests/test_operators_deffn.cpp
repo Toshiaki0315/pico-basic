@@ -534,3 +534,87 @@ TEST_F(OpDefFnTest, LcdOutputKeepsRawKanaBytes) {
     std::string out = mock_hal::get_raw_print_buffer();
     EXPECT_EQ(out, "\xB1\xB2\xB3\n");
 }
+
+// --- ACCEL() / GYRO() / IMU 文（QMI8658）-------------------------------
+#include "hal_imu.h"
+
+TEST_F(OpDefFnTest, ImuRawToMgUsesDatasheetSensitivity) {
+    // フルスケール ±4g は 8192 LSB/g（データシートの感度表）
+    EXPECT_EQ(imu_raw_to_mg(8192), 1000);   // +1G
+    EXPECT_EQ(imu_raw_to_mg(-8192), -1000); // -1G
+    EXPECT_EQ(imu_raw_to_mg(0), 0);
+    EXPECT_EQ(imu_raw_to_mg(4096), 500);
+}
+
+TEST_F(OpDefFnTest, ImuRawToMgDoesNotOverflowAtFullScale) {
+    // raw * 1000 が int に収まること（32767 * 1000 = 約 3276 万）
+    EXPECT_EQ(imu_raw_to_mg(32767), 3999);
+    EXPECT_EQ(imu_raw_to_mg(-32768), -4000);
+}
+
+TEST_F(OpDefFnTest, ImuRawToDpsUsesDatasheetSensitivity) {
+    // フルスケール ±512dps は 64 LSB/dps
+    EXPECT_EQ(imu_raw_to_dps(64), 1);
+    EXPECT_EQ(imu_raw_to_dps(-64), -1);
+    EXPECT_EQ(imu_raw_to_dps(32768 / 2), 256);
+}
+
+TEST_F(OpDefFnTest, AccelReturnsPerAxisValues) {
+    hal_imu_set_mock(100, -200, 1000, 0, 0, 0);
+    EXPECT_EQ(eval("ACCEL(0)"), "100\n");
+    EXPECT_EQ(eval("ACCEL(1)"), "-200\n");
+    EXPECT_EQ(eval("ACCEL(2)"), "1000\n");
+}
+
+TEST_F(OpDefFnTest, GyroReturnsPerAxisValues) {
+    hal_imu_set_mock(0, 0, 0, 5, -10, 250);
+    EXPECT_EQ(eval("GYRO(0)"), "5\n");
+    EXPECT_EQ(eval("GYRO(1)"), "-10\n");
+    EXPECT_EQ(eval("GYRO(2)"), "250\n");
+}
+
+TEST_F(OpDefFnTest, AccelAndGyroRejectBadAxis) {
+    parse_and_execute(lex("PRINT ACCEL(3)"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("ACCEL argument must be"), std::string::npos);
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT GYRO(-1)"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("GYRO argument must be"), std::string::npos);
+}
+
+TEST_F(OpDefFnTest, ImuStatementPrintsBothRows) {
+    hal_imu_set_mock_present(true);
+    hal_imu_set_mock(10, 20, 990, 1, 2, 3);
+    mock_hal::reset();
+    parse_and_execute(lex("IMU"));
+    std::string out = mock_hal::get_raw_print_buffer();
+    EXPECT_NE(out.find("ACCEL"), std::string::npos) << out;
+    EXPECT_NE(out.find("990"), std::string::npos) << out;
+    EXPECT_NE(out.find("GYRO"), std::string::npos) << out;
+}
+
+TEST_F(OpDefFnTest, ImuStatementReportsMissingChip) {
+    hal_imu_set_mock_present(false);
+    mock_hal::reset();
+    parse_and_execute(lex("IMU"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("NOT FOUND"), std::string::npos);
+    hal_imu_set_mock_present(true);
+}
+
+TEST_F(OpDefFnTest, ImuStatementWorksInProgram) {
+    hal_imu_set_mock_present(true);
+    hal_imu_set_mock(0, 0, 1000, 0, 0, 0);
+    store_line(10, lex("IMU"));
+    store_line(20, lex("PRINT \"AFTER\""));
+    run("RUN");
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("AFTER"), std::string::npos);
+}
+
+TEST_F(OpDefFnTest, TiltCanDriveAConditional) {
+    // 傾け操作の定番の書き方が動くこと
+    hal_imu_set_mock(-400, 0, 900, 0, 0, 0);
+    store_line(10, lex("X = 10"));
+    store_line(20, lex("IF ACCEL(0) < -200 THEN X = X - 1"));
+    store_line(30, lex("PRINT X"));
+    run("RUN");
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("9"), std::string::npos);
+}

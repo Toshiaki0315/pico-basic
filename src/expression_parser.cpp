@@ -3,6 +3,7 @@
 #include "hal_display.h"
 #include "hal_battery.h"
 #include "hal_adc.h"
+#include "hal_imu.h"
 #include "hal_gpio.h"
 #include <stdexcept>
 #include <cstring>
@@ -23,7 +24,7 @@ static bool is_builtin_function(const char* name) {
         "LEN", "MID$", "LEFT$", "RIGHT$", "CHR$", "ASC", "VAL", "STR$",
         "PEEK", "TOUCH",
         "INSTR", "STRING$", "SPACE$", "HEX$", "POINT", "EOF", "BATTERY",
-        "PIN", "ADIN",
+        "PIN", "ADIN", "ACCEL", "GYRO",
     };
     for (const char* n : NAMES) {
         if (strcmp(name, n) == 0) return true;
@@ -230,6 +231,18 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
         int raw = hal_adc_read_raw(pin);
         if (raw < 0) throw std::runtime_error("ADIN argument must be 27, 28, or 29");
         return Value((float)raw);
+    } else if (strcmp(var_name, "ACCEL") == 0) {
+        // ACCEL(n): 加速度をミリ G で返す（0=X / 1=Y / 2=Z、1G = 1000）
+        need_args(arg_count == 1 && args[0].is_numeric(), "ACCEL");
+        int axis = (int)args[0].num_val;
+        if (axis < 0 || axis > 2) throw std::runtime_error("ACCEL argument must be 0, 1, or 2");
+        return Value((float)hal_imu_accel_mg(axis));
+    } else if (strcmp(var_name, "GYRO") == 0) {
+        // GYRO(n): 角速度を度/秒で返す（0=X / 1=Y / 2=Z）
+        need_args(arg_count == 1 && args[0].is_numeric(), "GYRO");
+        int axis = (int)args[0].num_val;
+        if (axis < 0 || axis > 2) throw std::runtime_error("GYRO argument must be 0, 1, or 2");
+        return Value((float)hal_imu_gyro_dps(axis));
     } else if (strcmp(var_name, "EOF") == 0) {
         need_args(arg_count == 1 && args[0].is_numeric(), "EOF");
         return Value(basic_file_eof((int)args[0].num_val));
