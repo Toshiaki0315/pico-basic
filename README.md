@@ -63,6 +63,7 @@ RUN
 | `sfx.bas` | PSG 効果音（レーザー・爆発） |
 | `art.bas` / `guess.bas` | 幾何アート / 数当てゲーム |
 | `kana.bas` | 半角カタカナ一覧（日本語表示のデモ） |
+| `tilt.bas` | 傾けてボールを転がす（6軸 IMU） |
 
 ## 📚 ドキュメント
 
@@ -96,7 +97,7 @@ RUN
 
 **実機用ファームウェア**のビルドと書き込みは [SETUP.md](./SETUP.md) を参照してください。
 
-**ホストテスト**（実機不要）: BASIC エンジンは PC 上で 270 件超の単体テストで検証しています。
+**ホストテスト**（実機不要）: BASIC エンジンは PC 上で 320 件超の単体テストで検証しています。
 
 ```bash
 cmake -S . -B build_host -DBUILD_TESTS=ON && cmake --build build_host && ./build_host/basic_tests
