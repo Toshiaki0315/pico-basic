@@ -8,7 +8,14 @@
 #define IMU_I2C      i2c1
 #define IMU_SDA_PIN  6
 #define IMU_SCL_PIN  7
-#define QMI8658_ADDR 0x6A
+// I2C アドレスは SDO/SA0 の状態で 0x6A（Low）か 0x6B（High）になる。
+//
+// 回路図の U4 は SDO/SAO(pin1) が GND に見えたので当初 0x6A 決め打ちにしたが、
+// 実機のバス走査では **0x6B** が応答した（1A=タッチ / 51=RTC / 6B=IMU）。
+// 図の読み違いか基板のリビジョン差か判然としないので、両方を試して
+// WHO_AM_I が一致した方を採用する。こうしておけばどちらの基板でも動く。
+#define QMI8658_ADDR_LOW  0x6A
+#define QMI8658_ADDR_HIGH 0x6B
 
 // レジスタ（QMI8658C データシート Rev 0.6 §4.1）
 #define REG_WHO_AM_I 0x00
@@ -35,6 +42,7 @@
 // ODR は 250Hz（4ms ごとに更新）なので 5ms なら鮮度も保てる
 #define POLL_INTERVAL_MS 5
 
+static uint8_t  imu_addr    = QMI8658_ADDR_LOW; // 実際に応答したアドレス
 static bool     imu_ok      = false;
 static int16_t  raw[6]      = {0, 0, 0, 0, 0, 0};
 static bool     polled_once = false;
@@ -42,12 +50,12 @@ static uint32_t last_poll_ms = 0;
 
 static bool imu_write_reg(uint8_t reg, uint8_t value) {
     uint8_t buf[2] = {reg, value};
-    return i2c_write_blocking(IMU_I2C, QMI8658_ADDR, buf, 2, false) == 2;
+    return i2c_write_blocking(IMU_I2C, imu_addr, buf, 2, false) == 2;
 }
 
 static bool imu_read_reg(uint8_t reg, uint8_t* buf, size_t len) {
-    if (i2c_write_blocking(IMU_I2C, QMI8658_ADDR, &reg, 1, true) != 1) return false;
-    return i2c_read_blocking(IMU_I2C, QMI8658_ADDR, buf, len, false) == (int)len;
+    if (i2c_write_blocking(IMU_I2C, imu_addr, &reg, 1, true) != 1) return false;
+    return i2c_read_blocking(IMU_I2C, imu_addr, buf, len, false) == (int)len;
 }
 
 void hal_imu_init() {
@@ -62,11 +70,25 @@ void hal_imu_init() {
     gpio_pull_up(IMU_SDA_PIN);
     gpio_pull_up(IMU_SCL_PIN);
 
+    // SA0 の状態が基板によって違うので、両方のアドレスを試す
+    const uint8_t candidates[2] = {QMI8658_ADDR_LOW, QMI8658_ADDR_HIGH};
     uint8_t who = 0;
-    if (!imu_read_reg(REG_WHO_AM_I, &who, 1) || who != WHO_AM_I_VALUE) {
+    bool found = false;
+    for (int i = 0; i < 2 && !found; i++) {
+        imu_addr = candidates[i];
+        uint8_t v = 0;
+        if (imu_read_reg(REG_WHO_AM_I, &v, 1) && v == WHO_AM_I_VALUE) {
+            who   = v;
+            found = true;
+        } else if (v != 0) {
+            who = v; // 応答はあったが別のチップ。エラー表示用に控える
+        }
+    }
+    if (!found) {
         printf("[IMU] QMI8658 not found (WHO_AM_I=0x%02X)\n", who);
         return;
     }
+    printf("[IMU] QMI8658 at 0x%02X\n", imu_addr);
 
     if (!imu_write_reg(REG_CTRL1, CTRL1_VALUE)) return;
     if (!imu_write_reg(REG_CTRL2, CTRL2_VALUE)) return;
@@ -106,6 +128,8 @@ int hal_imu_gyro_dps(int axis) {
     imu_poll();
     return imu_raw_to_dps(raw[3 + axis]);
 }
+
+unsigned char hal_imu_address() { return imu_ok ? imu_addr : 0; }
 
 int hal_imu_diagnose(unsigned char* found, int max_found, unsigned char* who) {
     // 起動直後に間に合わなかっただけなら、これで拾えることがある
@@ -156,6 +180,8 @@ int hal_imu_gyro_dps(int axis) {
     if (axis < 0 || axis > 2) return 0;
     return mock_gyro[axis];
 }
+
+unsigned char hal_imu_address() { return mock_present ? 0x6B : 0; }
 
 int hal_imu_diagnose(unsigned char*, int, unsigned char* who) {
     if (who) *who = mock_present ? 0x05 : 0x00;

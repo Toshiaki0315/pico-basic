@@ -6,7 +6,9 @@
 // Waveshare RP2350-Touch-LCD-2.8 の U4
 //
 // 回路図より:
-//   SDO/SA0 (pin 1)  -> GND   … I2C アドレスの最下位ビット = 0 なので 0x6A
+//   SDO/SA0 (pin 1)  -> アドレスの最下位ビットを決める。0x6A(Low) か 0x6B(High)。
+//                       図では GND に見えたが実機は 0x6B で応答したため、
+//                       初期化で両方を試して当たった方を使う
 //   CS      (pin 12) -> 3V3   … I2C モード固定（SPI ではない）
 //   SDA/SCL (14/13)  -> GP6/GP7 … タッチ(CST328 0x1A)・RTC(PCF85063 0x51) と
 //                                  共用の i2c1。アドレスが違うので競合しない
@@ -25,6 +27,9 @@ int hal_imu_accel_mg(int axis);
 
 // 角速度を度/秒で返す。axis: 0=X / 1=Y / 2=Z
 int hal_imu_gyro_dps(int axis);
+
+// 実際に応答した I2C アドレス（0x6A か 0x6B）。未検出なら 0。
+unsigned char hal_imu_address();
 
 // 見つからないときの切り分け用。
 //  1. 初期化をやり直す（起動直後に間に合わなかった場合はこれで復帰する）

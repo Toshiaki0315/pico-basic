@@ -1002,7 +1002,7 @@ void execute_imu_status(const TokenList& tokens, int& pos) {
         int n = hal_imu_diagnose(found, 16, &who);
         if (!hal_imu_present()) {
             basic_print("IMU NOT FOUND\n");
-            snprintf(buf, sizeof(buf), "WHO_AM_I %02X (EXPECT 05) ADDR 6A\n", who);
+            snprintf(buf, sizeof(buf), "WHO_AM_I %02X (EXPECT 05) AT 6A/6B\n", who);
             basic_print(buf);
             if (n == 0) {
                 basic_print("I2C1: NO DEVICE RESPONDED\n");
