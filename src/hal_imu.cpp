@@ -107,6 +107,26 @@ int hal_imu_gyro_dps(int axis) {
     return imu_raw_to_dps(raw[3 + axis]);
 }
 
+int hal_imu_diagnose(unsigned char* found, int max_found, unsigned char* who) {
+    // 起動直後に間に合わなかっただけなら、これで拾えることがある
+    hal_imu_init();
+
+    uint8_t w = 0;
+    imu_read_reg(REG_WHO_AM_I, &w, 1);
+    if (who) *who = w;
+
+    // i2c1 に応答するアドレスを列挙する。1 バイト読んで ACK が返るかで判定
+    int n = 0;
+    for (uint8_t addr = 0x08; addr < 0x78; addr++) {
+        uint8_t dummy;
+        if (i2c_read_blocking(IMU_I2C, addr, &dummy, 1, false) >= 0) {
+            if (n < max_found) found[n] = addr;
+            n++;
+        }
+    }
+    return n;
+}
+
 void hal_imu_set_mock(int, int, int, int, int, int) {
     // 実機では何もしない（テスト専用の入口）
 }
@@ -135,6 +155,11 @@ int hal_imu_accel_mg(int axis) {
 int hal_imu_gyro_dps(int axis) {
     if (axis < 0 || axis > 2) return 0;
     return mock_gyro[axis];
+}
+
+int hal_imu_diagnose(unsigned char*, int, unsigned char* who) {
+    if (who) *who = mock_present ? 0x05 : 0x00;
+    return 0; // ホストには I2C バスが無い
 }
 
 void hal_imu_set_mock(int ax, int ay, int az, int gx, int gy, int gz) {

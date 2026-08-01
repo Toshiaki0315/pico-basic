@@ -26,6 +26,13 @@ int hal_imu_accel_mg(int axis);
 // 角速度を度/秒で返す。axis: 0=X / 1=Y / 2=Z
 int hal_imu_gyro_dps(int axis);
 
+// 見つからないときの切り分け用。
+//  1. 初期化をやり直す（起動直後に間に合わなかった場合はこれで復帰する）
+//  2. WHO_AM_I の生の値を who に入れる（期待値 0x05）
+//  3. i2c1 で応答するアドレスを found に列挙する
+// 戻り値は応答したデバイスの数。
+int hal_imu_diagnose(unsigned char* found, int max_found, unsigned char* who);
+
 // ホストテスト用: 実機ビルドでは何もしない
 void hal_imu_set_mock(int ax, int ay, int az, int gx, int gy, int gz);
 void hal_imu_set_mock_present(bool present);

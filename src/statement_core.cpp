@@ -994,11 +994,30 @@ void execute_battery_status(const TokenList& tokens, int& pos) {
 // 傾け方と数値の対応を実機で確かめるときの入口。
 void execute_imu_status(const TokenList& tokens, int& pos) {
     pos++; // IMU
-    if (!hal_imu_present()) {
-        basic_print("IMU NOT FOUND\n");
-        return;
-    }
     char buf[96];
+    if (!hal_imu_present()) {
+        // 初期化をやり直したうえで、バスの状態を出して切り分けられるようにする
+        unsigned char who = 0;
+        unsigned char found[16];
+        int n = hal_imu_diagnose(found, 16, &who);
+        if (!hal_imu_present()) {
+            basic_print("IMU NOT FOUND\n");
+            snprintf(buf, sizeof(buf), "WHO_AM_I %02X (EXPECT 05) ADDR 6A\n", who);
+            basic_print(buf);
+            if (n == 0) {
+                basic_print("I2C1: NO DEVICE RESPONDED\n");
+            } else {
+                basic_print("I2C1:");
+                for (int i = 0; i < n && i < 16; i++) {
+                    snprintf(buf, sizeof(buf), " %02X", found[i]);
+                    basic_print(buf);
+                }
+                basic_print("\n");
+            }
+            return;
+        }
+        // 再初期化で復帰した場合はそのまま値を表示する
+    }
     snprintf(buf, sizeof(buf), "ACCEL %6d %6d %6d mG\n",
              hal_imu_accel_mg(0), hal_imu_accel_mg(1), hal_imu_accel_mg(2));
     basic_print(buf);
