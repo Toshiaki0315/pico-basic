@@ -75,6 +75,7 @@ RUN
 | [docs/COMMAND_STATUS.md](./docs/COMMAND_STATUS.md) | 命令ごとの実装状況 |
 | [docs/DEVICE_CHECKLIST.md](./docs/DEVICE_CHECKLIST.md) | 実機の手動テストチェックリスト |
 | [docs/TESTING.md](./docs/TESTING.md) | ホストテストと CI の運用 |
+| [docs/PORTING.md](./docs/PORTING.md) | 別の RP2350 ボードへの移植手順 |
 | [docs/PHASE_RUNTIME.md](./docs/PHASE_RUNTIME.md) / [docs/RUNTIME_GAPS.md](./docs/RUNTIME_GAPS.md) | 開発フェーズ対応・Hu-BASIC との差分メモ |
 
 ## 📁 ディレクトリ構成
@@ -90,6 +91,8 @@ RUN
 ├── SETUP.md          # 開発環境構築ガイド
 └── README.md         # 本ドキュメント
 ```
+
+ハードウェア依存コードは **`src/hal_*.cpp`** に、ボードの配線（ピン番号・バス・画面サイズ）は **`src/board_config.h`** に集約しています。移植手順は [docs/PORTING.md](./docs/PORTING.md) を参照してください。
 
 ハードウェア依存コードは **`src/hal_*.cpp`** に集約しています。BASIC エンジン本体（lexer / parser / メモリ管理）はハードウェア非依存で、ホスト PC 上でそのままテストできます。
 

@@ -8,22 +8,24 @@
 #include "screenshot.h"
 #include "hardware/pwm.h"
 #include "hardware/spi.h"
+#include "board_config.h"
 #include "pico/stdlib.h"
 #include <string.h>
 
 // Waveshare RP2350-Touch-LCD-2.8 Pinout
-#define LCD_MOSI 11
-#define LCD_MISO 12
-#define LCD_SCK 10
-#define LCD_CS 13
-#define LCD_DC 14
-#define LCD_RST 15
-#define LCD_BL 16
+// 値は board_config.h に集約してある（移植時はそちらを直す）
+#define LCD_MOSI BOARD_LCD_MOSI
+#define LCD_MISO BOARD_LCD_MISO
+#define LCD_SCK BOARD_LCD_SCK
+#define LCD_CS BOARD_LCD_CS
+#define LCD_DC BOARD_LCD_DC
+#define LCD_RST BOARD_LCD_RST
+#define LCD_BL BOARD_LCD_BL
 
-#define SPI_PORT spi1
+#define SPI_PORT BOARD_LCD_SPI
 
-#define LCD_WIDTH 320
-#define LCD_HEIGHT 240
+#define LCD_WIDTH BOARD_LCD_WIDTH
+#define LCD_HEIGHT BOARD_LCD_HEIGHT
 static uint16_t frame_buffer[LCD_WIDTH * LCD_HEIGHT];
 
 #define FONT_WIDTH 8

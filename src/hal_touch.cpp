@@ -15,12 +15,14 @@
 // ---------------------------------------------------------
 #include "pico/stdlib.h"
 #include "hardware/i2c.h"
+#include "board_config.h"
 
-#define TP_I2C        i2c1
-#define TP_SDA_PIN    6
-#define TP_SCL_PIN    7
-#define TP_RST_PIN    17
-#define TP_INT_PIN    18
+// 配線は board_config.h に集約（IMU・RTC と同じバスを共用する）
+#define TP_I2C        BOARD_I2C
+#define TP_SDA_PIN    BOARD_I2C_SDA
+#define TP_SCL_PIN    BOARD_I2C_SCL
+#define TP_RST_PIN    BOARD_TP_RST
+#define TP_INT_PIN    BOARD_TP_INT
 
 #define CST328_ADDR   0x1A
 
@@ -31,8 +33,8 @@
 #define CST328_REG_IC_INFO           0xD1F4
 
 // hal_display のフレームバッファに合わせた画面サイズ（横向き）
-#define SCREEN_WIDTH  320
-#define SCREEN_HEIGHT 240
+#define SCREEN_WIDTH  BOARD_LCD_WIDTH
+#define SCREEN_HEIGHT BOARD_LCD_HEIGHT
 
 // 同じフレーム内で TOUCH(0)/TOUCH(1)/TOUCH(2) を続けて読んでも
 // 値がずれないよう、この間隔でだけ実機を読みに行く
@@ -69,7 +71,7 @@ void hal_touch_init() {
     touch_x     = 0;
     touch_y     = 0;
 
-    i2c_init(TP_I2C, 400 * 1000);
+    i2c_init(TP_I2C, BOARD_I2C_BAUD);
     gpio_set_function(TP_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(TP_SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(TP_SDA_PIN);

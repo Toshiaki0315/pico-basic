@@ -4,10 +4,11 @@
 #if __has_include("pico/stdlib.h")
 #include "pico/stdlib.h"
 #include "hardware/i2c.h"
+#include "board_config.h"
 
-#define IMU_I2C      i2c1
-#define IMU_SDA_PIN  6
-#define IMU_SCL_PIN  7
+#define IMU_I2C      BOARD_I2C
+#define IMU_SDA_PIN  BOARD_I2C_SDA
+#define IMU_SCL_PIN  BOARD_I2C_SCL
 // I2C アドレスは SDO/SA0 の状態で 0x6A（Low）か 0x6B（High）になる。
 //
 // 回路図の U4 は SDO/SAO(pin1) が GND に見えたので当初 0x6A 決め打ちにしたが、
@@ -64,7 +65,7 @@ void hal_imu_init() {
 
     // タッチと同じバス。hal_touch_init() が先に済ませている想定だが、
     // 単体でも動くよう同じ設定で初期化しておく（値が同じなので害はない）
-    i2c_init(IMU_I2C, 400 * 1000);
+    i2c_init(IMU_I2C, BOARD_I2C_BAUD);
     gpio_set_function(IMU_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(IMU_SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(IMU_SDA_PIN);

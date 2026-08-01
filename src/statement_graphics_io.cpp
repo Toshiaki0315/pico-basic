@@ -439,8 +439,11 @@ void execute_paint(const TokenList& tokens, int& pos) {
     
     // 溢れたら黙って塗り残すのではなく、後で利用者に知らせる
     bool stack_overflowed = false;
+    // 画面サイズを直書きすると別解像度のボードで壊れるので HAL から取る
+    int scr_w, scr_h;
+    hal_display_get_info(scr_w, scr_h);
     auto push = [&](int px, int py) {
-        if (px < 0 || px >= 320 || py < 0 || py >= 240) return;
+        if (px < 0 || px >= scr_w || py < 0 || py >= scr_h) return;
         if (hal_graphics_get_pixel(px, py) != target_color) return;
 
         if (sp >= 4096) {
@@ -462,7 +465,7 @@ void execute_paint(const TokenList& tokens, int& pos) {
         int lx = px;
         while (lx > 0 && hal_graphics_get_pixel(lx - 1, py) == target_color) lx--;
         int rx = px;
-        while (rx < 319 && hal_graphics_get_pixel(rx + 1, py) == target_color) rx++;
+        while (rx < scr_w - 1 && hal_graphics_get_pixel(rx + 1, py) == target_color) rx++;
         
         for (int i = lx; i <= rx; i++) {
             hal_graphics_pset(i, py, fill_color);
@@ -474,7 +477,7 @@ void execute_paint(const TokenList& tokens, int& pos) {
                     push(i, py - 1);
                 }
             }
-            if (py < 239 && hal_graphics_get_pixel(i, py + 1) == target_color) {
+            if (py < scr_h - 1 && hal_graphics_get_pixel(i, py + 1) == target_color) {
                 if (i == lx || hal_graphics_get_pixel(i - 1, py + 1) != target_color) {
                     push(i, py + 1);
                 }

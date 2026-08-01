@@ -193,7 +193,9 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
         need_args(arg_count == 2 && args[0].is_numeric() && args[1].is_numeric(), "POINT");
         int sx, sy;
         user_to_screen(args[0].num_val, args[1].num_val, sx, sy);
-        if (sx < 0 || sx > 319 || sy < 0 || sy > 239) return Value(-1);
+        int scr_w, scr_h;
+        hal_display_get_info(scr_w, scr_h); // 画面サイズは HAL に問い合わせる
+        if (sx < 0 || sx >= scr_w || sy < 0 || sy >= scr_h) return Value(-1);
         uint16_t c565 = hal_graphics_get_pixel(sx, sy);
         for (int i = 0; i < 16; i++) {
             if (PALETTE[i] == c565) return Value(i);

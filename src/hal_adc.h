@@ -1,4 +1,5 @@
 #pragma once
+#include "board_config.h"
 
 // 汎用アナログ入力と内蔵温度センサー（RP2350）
 //
@@ -25,7 +26,10 @@ void hal_adc_set_mock_temp_c(float celsius);
 // ハードウェアに依存しない判定（ADIN 関数と共有する）
 // ---------------------------------------------------------
 
-// ADIN で読んでよい GPIO か。26 は BAT_EN なので除外している（上のコメント参照）。
+// ADIN で読んでよい GPIO か。BAT_EN は意図的に外してある（上のコメント参照）。
+// 対象ピンは board_config.h の定義から決まるので、別のボードでもここは直さずに済む。
 inline bool adc_pin_allowed(int gpio) {
-    return gpio >= 27 && gpio <= 29;
+    return gpio == BOARD_BAT_ADC_GPIO ||
+           gpio == BOARD_FREE_GPIO_A  ||
+           gpio == BOARD_FREE_GPIO_B;
 }

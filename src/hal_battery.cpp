@@ -3,17 +3,18 @@
 #if __has_include("pico/stdlib.h")
 #include "hardware/adc.h"
 #include "pico/stdlib.h"
+#include "board_config.h"
 #include "pico/stdio_usb.h"
 
 // BAT_ADC は GPIO27。RP2350 の ADC 入力番号は GPIO26=0, 27=1, 28=2, 29=3
-#define BAT_ADC_GPIO 27
-#define BAT_ADC_INPUT 1
+#define BAT_ADC_GPIO BOARD_BAT_ADC_GPIO
+#define BAT_ADC_INPUT BOARD_BAT_ADC_INPUT
 
 // 分圧は 200K:100K なので ADC 電圧の 3 倍が VBAT
-#define BAT_DIVIDER 3.0f
+#define BAT_DIVIDER BOARD_BAT_DIVIDER
 // ADC の基準電圧（3V3 レギュレータ）と 12bit の分解能
-#define ADC_VREF 3.3f
-#define ADC_MAX 4095.0f
+#define ADC_VREF BOARD_ADC_VREF
+#define ADC_MAX BOARD_ADC_MAX
 
 static bool adc_ready = false;
 

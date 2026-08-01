@@ -4,6 +4,7 @@
 
 #if __has_include("pico/stdlib.h")
 #include "pico/stdlib.h"
+#include "board_config.h"
 #include "hardware/pio.h"
 #include "hardware/dma.h"
 #include "hardware/irq.h"
@@ -11,9 +12,9 @@
 #include "i2s_out.pio.h"
 
 // PIN configurations based on test repository
-#define PIN_I2S_BCK     2
-#define PIN_I2S_LRCK    3
-#define PIN_I2S_DIN     4
+#define PIN_I2S_BCK     BOARD_I2S_BCK
+#define PIN_I2S_LRCK    BOARD_I2S_LRCK
+#define PIN_I2S_DIN     BOARD_I2S_DIN
 // GP17 をミュート解除(XSMT)として扱っていたが、公式回路図では GP17 は
 // タッチパネルのリセット線 (TP_RST)。このボードの DAC にミュート端子は
 // 出ていないため、GP17 は hal_touch が使う。

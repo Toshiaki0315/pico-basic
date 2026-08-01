@@ -4,10 +4,11 @@
 #if __has_include("pico/stdlib.h")
 #include "pico/stdlib.h"
 #include "hardware/i2c.h"
+#include "board_config.h"
 
-#define RTC_I2C       i2c1
-#define RTC_SDA_PIN   6
-#define RTC_SCL_PIN   7
+#define RTC_I2C       BOARD_I2C
+#define RTC_SDA_PIN   BOARD_I2C_SDA
+#define RTC_SCL_PIN   BOARD_I2C_SCL
 #define PCF85063_ADDR 0x51
 
 // レジスタ（PCF85063A データシート Rev 7.3 Table 4）
@@ -38,7 +39,7 @@ void hal_rtc_init() {
     rtc_ok = false;
 
     // タッチ・IMU と同じバス。単体でも動くよう同じ設定で初期化しておく
-    i2c_init(RTC_I2C, 400 * 1000);
+    i2c_init(RTC_I2C, BOARD_I2C_BAUD);
     gpio_set_function(RTC_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(RTC_SCL_PIN, GPIO_FUNC_I2C);
     gpio_pull_up(RTC_SDA_PIN);
