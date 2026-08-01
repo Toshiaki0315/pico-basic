@@ -3,6 +3,7 @@
 #include "hal_battery.h"
 #include "kana_utf8.h"
 #include "hal_imu.h"
+#include "hal_rtc.h"
 #include "hal_sdcard.h" // Needed for files if not decoupled, wait, IO is in the other file.
 #include <stdexcept>
 #include <cstring>
@@ -1026,6 +1027,51 @@ void execute_imu_status(const TokenList& tokens, int& pos) {
     basic_print(buf);
 }
 
+// 引数なしの `RTC` — 日付・時刻と状態をまとめて表示する
+void execute_rtc_status(const TokenList& tokens, int& pos) {
+    pos++; // RTC
+    RtcTime t;
+    if (!hal_rtc_present() || !hal_rtc_get(&t)) {
+        basic_print("RTC NOT FOUND\n");
+        return;
+    }
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%04d-%02d-%02d %02d:%02d:%02d\n",
+             t.year, t.month, t.day, t.hour, t.minute, t.second);
+    basic_print(buf);
+    // OS フラグが立っていると、電源断などで時刻が飛んでいる
+    basic_print(t.valid ? "CLOCK OK\n" : "CLOCK NOT SET\n");
+}
+
+// TIME$ = "HH:MM:SS" / DATE$ = "YYYY-MM-DD"
+void execute_rtc_set(const TokenList& tokens, int& pos) {
+    bool is_time = (strcmp(tokens.tokens[pos].text, "TIME$") == 0);
+    pos++;
+    require_token(tokens, pos, TokenType::ASSIGN, "Syntax Error: Expected '=' after TIME$/DATE$");
+    pos++;
+    Value v = parse_relation(tokens, pos);
+    if (v.type != Value::Type::STR)
+        throw std::runtime_error("Type Mismatch: TIME$/DATE$ needs a string");
+
+    RtcTime t;
+    if (!hal_rtc_get(&t)) throw std::runtime_error("RTC not found");
+    if (!t.valid) {
+        // 時刻が飛んでいる状態では、指定しなかった側が不定値のままになる。
+        // 先に既定値へ寄せてから片方だけ上書きする
+        t.year = 2000; t.month = 1; t.day = 1;
+        t.hour = 0; t.minute = 0; t.second = 0;
+    }
+
+    if (is_time) {
+        if (!rtc_parse_time(v.str_val, &t.hour, &t.minute, &t.second))
+            throw std::runtime_error("TIME$ must be \"HH:MM:SS\"");
+    } else {
+        if (!rtc_parse_date(v.str_val, &t.year, &t.month, &t.day))
+            throw std::runtime_error("DATE$ must be \"YYYY-MM-DD\" (2000-2099)");
+    }
+    if (!hal_rtc_set(&t)) throw std::runtime_error("RTC write failed");
+}
+
 void execute_mid_statement(const TokenList& tokens, int& pos) {
     pos++; 
     require_token(tokens, pos, TokenType::LPAREN, "Expected '('"); pos++;
@@ -1119,6 +1165,14 @@ void execute_statement(const TokenList& tokens, int& pos) {
             else if (strcmp(tokens.tokens[pos].text, "IMU") == 0 &&
                      (pos + 1 >= tokens.size || tokens.tokens[pos + 1].type != TokenType::LPAREN))
                 execute_imu_status(tokens, pos);
+            else if (strcmp(tokens.tokens[pos].text, "RTC") == 0 &&
+                     (pos + 1 >= tokens.size || tokens.tokens[pos + 1].type != TokenType::LPAREN))
+                execute_rtc_status(tokens, pos);
+            // TIME$ / DATE$ への代入は時計合わせ（読み出しは式側で処理する）
+            else if ((strcmp(tokens.tokens[pos].text, "TIME$") == 0 ||
+                      strcmp(tokens.tokens[pos].text, "DATE$") == 0) &&
+                     pos + 1 < tokens.size && tokens.tokens[pos + 1].type == TokenType::ASSIGN)
+                execute_rtc_set(tokens, pos);
             else execute_assignment(tokens, pos, false);
             break;
         

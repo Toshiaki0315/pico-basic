@@ -11,7 +11,7 @@ SHARP X1 turbo (CZ-8FB02) の **Hu-BASIC を土台に、独自に拡張した仕
 | **Hu-BASIC（X1 turbo）** | 基本文法、`SOUND`（AY-3-8910 相当の PSG レジスタ）、`GET@`/`PUT@`、`CONSOLE`、`REPEAT`〜`UNTIL`、`INIT`/`NEWON`（空実装） |
 | **S-BASIC（シャープ）** | `AUTO`（行番号自動生成） |
 | **N88-BASIC（NEC）** | `OPEN`/`PRINT #`/`INPUT #`/`EOF`、`ON ERROR GOTO`/`RESUME`/`ERR`/`ERL`、`PRINT USING`、`WHILE`/`WEND`、`RENUM`、`DELETE`、範囲 `LIST`、`CONT`、`TRON`/`TROFF`、`MOD`、`\`、`&H`/`&B`、`INSTR`/`STRING$`/`SPACE$`/`HEX$` |
-| **本実装の独自拡張** | 行ラベル `*NAME`、`GOSUB`/`FOR`/`WHILE` の**文単位の復帰**、`TOUCH()`、`POINT`、`TIMER`、`POLY`、`WINDOW`、`BRIGHTNESS`、`GPIO`/`PIN`/`ADIN`/`CPUTEMP`、`ACCEL`/`GYRO`/`IMU`、`POKE`/`PEEK`（論理メモリ）、**Ctrl-P による画面の BMP 保存**、半角カタカナ表示 |
+| **本実装の独自拡張** | 行ラベル `*NAME`、`GOSUB`/`FOR`/`WHILE` の**文単位の復帰**、`TOUCH()`、`POINT`、`TIMER`、`POLY`、`WINDOW`、`BRIGHTNESS`、`GPIO`/`PIN`/`ADIN`/`CPUTEMP`、`ACCEL`/`GYRO`/`IMU`、`TIME$`/`DATE$`/`RTC`、`POKE`/`PEEK`（論理メモリ）、**Ctrl-P による画面の BMP 保存**、半角カタカナ表示 |
 
 ## 1. 基本的な使い方
 
@@ -116,7 +116,7 @@ IF X < 0 OR X > 99 THEN PRINT "OUT OF RANGE"
 | :--- | :--- |
 | 数値 | `ABS` `INT` `SGN` `SQR` `SIN` `COS` `TAN` `LOG` `EXP` `RND(n)` |
 | 文字列 | `LEN` `MID$` `LEFT$` `RIGHT$` `CHR$` `ASC` `VAL` `STR$` `INSTR([開始,]文字列,検索語)` `STRING$(n,文字)` `SPACE$(n)` `HEX$(n)` |
-| ハードウェア | `PEEK(addr)` `POINT(x,y)`（画面の色番号。画面外は -1） `TOUCH(n)` `BATTERY(n)`（電池の状態） `PIN(n)`（GPIO 入力 0/1） `ADIN(n)`（アナログ入力 0-4095） `ACCEL(n)`/`GYRO(n)`（6軸 IMU） `TIMER`（起動からのミリ秒。括弧なし） `CPUTEMP`（内蔵温度センサー℃。括弧なし） |
+| ハードウェア | `PEEK(addr)` `POINT(x,y)`（画面の色番号。画面外は -1） `TOUCH(n)` `BATTERY(n)`（電池の状態） `PIN(n)`（GPIO 入力 0/1） `ADIN(n)`（アナログ入力 0-4095） `ACCEL(n)`/`GYRO(n)`（6軸 IMU） `TIME$`/`DATE$`（時計。括弧なし） `TIMER`（起動からのミリ秒。括弧なし） `CPUTEMP`（内蔵温度センサー℃。括弧なし） |
 
 ```basic
 PRINT INSTR("HELLO", "LL")   ' → 3（見つからなければ 0）
@@ -401,6 +401,31 @@ Raspberry Pi Pico 2の機能を活かした拡張コマンドです。
   GYRO       0      1     -1 dps
   ```
   センサーが応答しない場合は `IMU NOT FOUND` と出ます。
+* **`TIME$`** / **`DATE$`**: 基板の時計（RTC）を読み書きします。括弧は不要です。
+  ```basic
+  PRINT DATE$      ' → 2026-08-01
+  PRINT TIME$      ' → 14:23:05
+  ```
+  時計合わせは代入で行います。書式は固定で、**`"HH:MM:SS"` と `"YYYY-MM-DD"`** です。
+  ```basic
+  DATE$ = "2026-08-01"
+  TIME$ = "14:30:00"
+  ```
+  * 年は **2000〜2099** の範囲です。チップが年を 2 桁でしか持たないためです。
+  * 書式や日付の妥当性は**書き込む前に検査**します。`"2025-02-29"`（閏年でない 2/29）や `"25:00:00"` はエラーになり、時計は変わりません。
+  * **バックアップ電池を基板の J2 に繋げば、本体の電源を切っても時刻を保持します。** 繋いでいない場合、電源を切ると時計は止まります。
+  ```basic
+  10 OPEN "LOG.DAT" FOR APPEND AS #1    ' 保存日時を残す例
+  20 PRINT #1, DATE$, TIME$, SCORE
+  30 CLOSE #1
+  ```
+* **`RTC`**（引数なし）: 日付・時刻と状態をまとめて表示します。
+  ```basic
+  RTC
+  2026-08-01 14:23:05
+  CLOCK OK
+  ```
+  **`CLOCK NOT SET`** と出た場合は、電源が切れて時刻が失われた状態です（故障ではありません）。`DATE$` と `TIME$` を設定すれば `CLOCK OK` に変わります。
 * **`CPUTEMP`**: RP2350 内蔵の温度センサーの値を摂氏で返します。括弧は不要です（`TIMER` と同じ形）。
   ```basic
   PRINT CPUTEMP

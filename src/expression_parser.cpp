@@ -4,6 +4,7 @@
 #include "hal_battery.h"
 #include "hal_adc.h"
 #include "hal_imu.h"
+#include "hal_rtc.h"
 #include "hal_gpio.h"
 #include <stdexcept>
 #include <cstring>
@@ -347,6 +348,16 @@ static Value parse_factor(const TokenList& tokens, int& pos) {
         if (strcmp(var_name, "TIMER") == 0) return Value((float)hal_system_millis());
         // TEMP という名前は変数として使われがちなので CPUTEMP にしてある
         if (strcmp(var_name, "CPUTEMP") == 0) return Value(hal_adc_read_temp_c());
+        if (strcmp(var_name, "TIME$") == 0 || strcmp(var_name, "DATE$") == 0) {
+            RtcTime t;
+            if (!hal_rtc_get(&t)) throw std::runtime_error("RTC not found");
+            char buf[16];
+            if (var_name[0] == 'T')
+                snprintf(buf, sizeof(buf), "%02d:%02d:%02d", t.hour, t.minute, t.second);
+            else
+                snprintf(buf, sizeof(buf), "%04d-%02d-%02d", t.year, t.month, t.day);
+            return Value(buf);
+        }
         if (strcmp(var_name, "ERR") == 0) return Value(err_code);
         if (strcmp(var_name, "ERL") == 0) return Value(err_line);
 

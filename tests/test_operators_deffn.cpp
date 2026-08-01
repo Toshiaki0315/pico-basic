@@ -648,3 +648,156 @@ TEST_F(OpDefFnTest, Utf8ToJisKanaRejectsOtherCharacters) {
     // 半角カタカナ範囲の 1 つ手前（U+FF60）
     EXPECT_EQ(utf8_to_jis_kana(0xEF, 0xBD, 0xA0), 0);
 }
+
+// --- RTC（PCF85063A: TIME$ / DATE$ / RTC 文）---------------------------
+#include "hal_rtc.h"
+
+class RtcTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        clear_program();
+        mock_hal::reset();
+        hal_rtc_init(); // モックを既定値に戻す
+    }
+    std::string eval(const char* expr) {
+        mock_hal::reset();
+        std::string cmd = std::string("PRINT ") + expr;
+        parse_and_execute(lex(cmd.c_str()));
+        return mock_hal::get_raw_print_buffer();
+    }
+};
+
+TEST_F(RtcTest, BcdRoundTrips) {
+    for (int v = 0; v <= 99; v++) EXPECT_EQ(bcd_to_int(int_to_bcd(v)), v) << v;
+    EXPECT_EQ(int_to_bcd(59), 0x59); // BCD は 10 進の見た目そのまま
+    EXPECT_EQ(bcd_to_int(0x23), 23);
+}
+
+TEST_F(RtcTest, LeapYearRules) {
+    EXPECT_TRUE(rtc_is_leap(2024));
+    EXPECT_FALSE(rtc_is_leap(2025));
+    EXPECT_FALSE(rtc_is_leap(2100)); // 100 で割れる年は閏年でない
+    EXPECT_TRUE(rtc_is_leap(2000));  // ただし 400 で割れる年は閏年
+    EXPECT_EQ(rtc_days_in_month(2024, 2), 29);
+    EXPECT_EQ(rtc_days_in_month(2025, 2), 28);
+    EXPECT_EQ(rtc_days_in_month(2025, 4), 30);
+}
+
+TEST_F(RtcTest, WeekdayMatchesKnownDates) {
+    EXPECT_EQ(rtc_weekday(2026, 8, 1), 6);  // 2026-08-01 は土曜
+    EXPECT_EQ(rtc_weekday(2000, 1, 1), 6);  // 2000-01-01 も土曜
+    EXPECT_EQ(rtc_weekday(2024, 2, 29), 4); // 閏日は木曜
+}
+
+TEST_F(RtcTest, ParseTimeAcceptsValidStrings) {
+    int h = 0, m = 0, s = 0;
+    EXPECT_TRUE(rtc_parse_time("00:00:00", &h, &m, &s));
+    EXPECT_EQ(h, 0); EXPECT_EQ(m, 0); EXPECT_EQ(s, 0);
+    EXPECT_TRUE(rtc_parse_time("23:59:59", &h, &m, &s));
+    EXPECT_EQ(h, 23); EXPECT_EQ(m, 59); EXPECT_EQ(s, 59);
+}
+
+TEST_F(RtcTest, ParseTimeRejectsBadStrings) {
+    int h, m, s;
+    EXPECT_FALSE(rtc_parse_time("24:00:00", &h, &m, &s)); // 時が範囲外
+    EXPECT_FALSE(rtc_parse_time("12:60:00", &h, &m, &s)); // 分が範囲外
+    EXPECT_FALSE(rtc_parse_time("12:00",    &h, &m, &s)); // 桁数不足
+    EXPECT_FALSE(rtc_parse_time("12-00-00", &h, &m, &s)); // 区切りが違う
+    EXPECT_FALSE(rtc_parse_time("1X:00:00", &h, &m, &s)); // 数字でない
+}
+
+TEST_F(RtcTest, ParseDateAcceptsValidStrings) {
+    int y, mo, d;
+    EXPECT_TRUE(rtc_parse_date("2026-08-01", &y, &mo, &d));
+    EXPECT_EQ(y, 2026); EXPECT_EQ(mo, 8); EXPECT_EQ(d, 1);
+    EXPECT_TRUE(rtc_parse_date("2024-02-29", &y, &mo, &d)); // 閏日
+}
+
+TEST_F(RtcTest, ParseDateRejectsBadStrings) {
+    int y, mo, d;
+    EXPECT_FALSE(rtc_parse_date("2025-02-29", &y, &mo, &d)); // 閏年でない 2/29
+    EXPECT_FALSE(rtc_parse_date("2026-13-01", &y, &mo, &d)); // 月が範囲外
+    EXPECT_FALSE(rtc_parse_date("2026-04-31", &y, &mo, &d)); // 4 月は 30 日まで
+    EXPECT_FALSE(rtc_parse_date("1999-01-01", &y, &mo, &d)); // チップは 2000 年から
+    EXPECT_FALSE(rtc_parse_date("2100-01-01", &y, &mo, &d)); // 2099 年まで
+    EXPECT_FALSE(rtc_parse_date("2026/08/01", &y, &mo, &d)); // 区切りが違う
+}
+
+TEST_F(RtcTest, TimeAndDateStringsAreRead) {
+    RtcTime t{2026, 8, 1, 9, 5, 3, true};
+    hal_rtc_set_mock(&t);
+    EXPECT_EQ(eval("TIME$"), "09:05:03\n"); // 0 詰めされる
+    EXPECT_EQ(eval("DATE$"), "2026-08-01\n");
+}
+
+TEST_F(RtcTest, TimeCanBeSet) {
+    parse_and_execute(lex("TIME$ = \"14:30:00\""));
+    EXPECT_EQ(eval("TIME$"), "14:30:00\n");
+}
+
+TEST_F(RtcTest, DateCanBeSet) {
+    parse_and_execute(lex("DATE$ = \"2027-12-25\""));
+    EXPECT_EQ(eval("DATE$"), "2027-12-25\n");
+}
+
+TEST_F(RtcTest, SettingOneKeepsTheOther) {
+    RtcTime t{2026, 8, 1, 9, 5, 3, true};
+    hal_rtc_set_mock(&t);
+    parse_and_execute(lex("TIME$ = \"23:00:00\""));
+    EXPECT_EQ(eval("DATE$"), "2026-08-01\n"); // 日付は変わらない
+}
+
+TEST_F(RtcTest, SettingRejectsBadFormat) {
+    parse_and_execute(lex("TIME$ = \"25:00:00\""));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("HH:MM:SS"), std::string::npos);
+    mock_hal::reset();
+    parse_and_execute(lex("DATE$ = \"2026/08/01\""));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("YYYY-MM-DD"), std::string::npos);
+}
+
+TEST_F(RtcTest, SettingClearsTheNotSetFlag) {
+    // 電源断で時刻が飛んだ状態を作る
+    RtcTime bad{2000, 1, 1, 0, 0, 0, false};
+    hal_rtc_set_mock(&bad);
+    mock_hal::reset();
+    parse_and_execute(lex("RTC"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("NOT SET"), std::string::npos);
+    // 時刻を入れると有効になる
+    parse_and_execute(lex("DATE$ = \"2026-08-01\""));
+    mock_hal::reset();
+    parse_and_execute(lex("RTC"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("CLOCK OK"), std::string::npos);
+}
+
+TEST_F(RtcTest, RtcStatementPrintsDateAndTime) {
+    RtcTime t{2026, 8, 1, 9, 5, 3, true};
+    hal_rtc_set_mock(&t);
+    mock_hal::reset();
+    parse_and_execute(lex("RTC"));
+    std::string out = mock_hal::get_raw_print_buffer();
+    EXPECT_NE(out.find("2026-08-01 09:05:03"), std::string::npos) << out;
+}
+
+TEST_F(RtcTest, RtcStatementReportsMissingChip) {
+    hal_rtc_set_mock_present(false);
+    mock_hal::reset();
+    parse_and_execute(lex("RTC"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("NOT FOUND"), std::string::npos);
+    hal_rtc_set_mock_present(true);
+}
+
+TEST_F(RtcTest, TimeStampCanBeWrittenToAFile) {
+    // 保存日時を残す、という実際の使い方が通ること
+    RtcTime t{2026, 8, 1, 9, 5, 3, true};
+    hal_rtc_set_mock(&t);
+    store_line(10, lex("OPEN \"STAMP.DAT\" FOR OUTPUT AS #1"));
+    store_line(20, lex("PRINT #1, DATE$, TIME$"));
+    store_line(30, lex("CLOSE #1"));
+    store_line(40, lex("OPEN \"STAMP.DAT\" FOR INPUT AS #1"));
+    store_line(50, lex("INPUT #1, D$, T$"));
+    store_line(60, lex("CLOSE #1"));
+    store_line(70, lex("PRINT D$; \" \"; T$"));
+    parse_and_execute(lex("RUN"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("2026-08-01 09:05:03"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}

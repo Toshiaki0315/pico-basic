@@ -20,7 +20,7 @@ SHARP X1 turbo (CZ-8FB02) の **Hu-BASIC を土台に、独自に拡張した仕
 | **グラフィック** | 320×240・16色。`PSET`/`LINE`(B/BF)/`CIRCLE`/`POLY`/`PAINT`、スプライト（`GET@`/`PUT@` XOR・拡大縮小・論理合成）、ユーザー座標系 `WINDOW`、画素読み取り `POINT` |
 | **サウンド** | PSG（AY-3-8910 相当）: 3声矩形波＋ノイズ＋エンベロープ。MML の `PLAY`（3声・**非同期再生**）、レジスタ直接制御の `SOUND` |
 | **入力** | タッチパネル `TOUCH()`、ノンウェイトキー入力 `GET`、電池残量 `BATTERY()` |
-| **センサー** | 6軸 IMU `ACCEL()` / `GYRO()`（傾け操作）、内蔵温度 `CPUTEMP` |
+| **センサー** | 6軸 IMU `ACCEL()` / `GYRO()`（傾け操作）、内蔵温度 `CPUTEMP`、時計 `TIME$` / `DATE$`（バックアップ電池で保持） |
 | **外部接続** | GPIO 出力 `GPIO`、デジタル入力 `PIN()`、アナログ入力 `ADIN()`（GPIO28/29） |
 | **日本語** | JIS X 0201 **半角カタカナ**（`&HA1`〜`&HDF`）を 8×8 字形で表示。X1 turbo と同じ方式 |
 | **ストレージ** | MicroSD に `SAVE`/`LOAD`（プログラム）、`OPEN`/`PRINT #`/`INPUT #`/`EOF`（データファイル。ハイスコア保存など）。カードの抜き差しにも追従 |
@@ -97,7 +97,7 @@ RUN
 
 **実機用ファームウェア**のビルドと書き込みは [SETUP.md](./SETUP.md) を参照してください。
 
-**ホストテスト**（実機不要）: BASIC エンジンは PC 上で 320 件超の単体テストで検証しています。
+**ホストテスト**（実機不要）: BASIC エンジンは PC 上で 340 件超の単体テストで検証しています。
 
 ```bash
 cmake -S . -B build_host -DBUILD_TESTS=ON && cmake --build build_host && ./build_host/basic_tests

@@ -7,6 +7,7 @@
 #include "hal_battery.h"
 #include "hal_adc.h"
 #include "hal_imu.h"
+#include "hal_rtc.h"
 #include "repl.h"
 
 int main() {
@@ -28,6 +29,7 @@ int main() {
     hal_adc_init();
     // IMU はタッチと同じ i2c1 を使うので、hal_touch_init() の後に呼ぶ
     hal_imu_init();
+    hal_rtc_init();
 
     // 起動したことが音でも分かるように（非同期なので待たされない）
     hal_sound_startup_chime();
