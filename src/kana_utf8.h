@@ -34,6 +34,21 @@ inline void serial_putc_kana(unsigned char c) {
     else putchar(c);
 }
 
+// 入力側の逆変換。UTF-8 の 3 バイトが半角カタカナ（U+FF61-U+FF9F）なら
+// JIS X 0201 の 1 バイト（0xA1-0xDF）を返す。該当しなければ 0。
+//
+// 端末は 3 バイトで送ってくるので、2 バイトだけ読み捨てると 1 バイト分ずれて
+// 残りが別の文字に化ける（`ﾀﾁﾂ` が `ｾ` になる、など）。必ず 3 バイトで扱うこと。
+inline unsigned char utf8_to_jis_kana(unsigned char b1, unsigned char b2, unsigned char b3) {
+    if ((b1 & 0xF0) != 0xE0) return 0;                     // 3 バイト文字の 1 バイト目か
+    if ((b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80) return 0; // 継続バイトか
+    unsigned int cp = ((unsigned int)(b1 & 0x0F) << 12) |
+                      ((unsigned int)(b2 & 0x3F) << 6) |
+                      ((unsigned int)(b3 & 0x3F));
+    if (cp < 0xFF61 || cp > 0xFF9F) return 0;              // 半角カタカナ以外
+    return (unsigned char)(0xA1 + (cp - 0xFF61));
+}
+
 inline void serial_print_kana(const char* s) {
     for (const unsigned char* p = (const unsigned char*)s; *p; ++p) {
         serial_putc_kana(*p);

@@ -359,6 +359,15 @@ void hal_display_input(char *buffer, int max_len) {
     if (c == EOF)
       continue;
 
+    // 端末は UTF-8。半角カタカナ（3 バイト）は JIS の 1 バイトに畳む（repl.cpp と同じ）
+    if (c >= 0xE0 && c <= 0xEF) {
+      int b2 = getchar();
+      int b3 = getchar();
+      unsigned char kana = utf8_to_jis_kana((unsigned char)c, (unsigned char)b2, (unsigned char)b3);
+      if (kana == 0) continue;
+      c = kana;
+    }
+
     if (c == '\r' || c == '\n') {
       printf("\n");
       hal_display_print("\n");
@@ -370,8 +379,8 @@ void hal_display_input(char *buffer, int max_len) {
         printf("\b \b");
         hal_display_print("\b \b");
       }
-    } else if ((c >= 0x81 && c <= 0x9F) || (c >= 0xE0 && c <= 0xEF)) {
-      // Shift-JIS 2 バイト文字の 1 バイト目。表示できないので対の 2 バイト目ごと捨てる
+    } else if (c >= 0x81 && c <= 0x9F) {
+      // Shift-JIS を送ってくる端末向けの保険。対の 2 バイト目ごと捨てる
       // （捨てないと 2 バイト目が単独の半角カナ／英字として紛れ込む）
       getchar();
     } else if ((c >= 32 && c <= 126) || (c >= 0xA1 && c <= 0xDF)) {

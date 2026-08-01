@@ -618,3 +618,33 @@ TEST_F(OpDefFnTest, TiltCanDriveAConditional) {
     run("RUN");
     EXPECT_NE(mock_hal::get_raw_print_buffer().find("9"), std::string::npos);
 }
+
+// --- 端末からの半角カタカナ入力（UTF-8 → JIS）--------------------------
+TEST_F(OpDefFnTest, Utf8ToJisKanaRoundTripsAllGlyphs) {
+    // 出力側の変換を通した 3 バイトが、入力側で元の 1 バイトに戻ること
+    for (int c = 0xA1; c <= 0xDF; c++) {
+        char u[3];
+        ASSERT_EQ(jis_kana_to_utf8((unsigned char)c, u), 3) << c;
+        EXPECT_EQ(utf8_to_jis_kana((unsigned char)u[0], (unsigned char)u[1], (unsigned char)u[2]),
+                  (unsigned char)c) << c;
+    }
+}
+
+TEST_F(OpDefFnTest, Utf8ToJisKanaHandlesTheSecondHalf) {
+    // ﾀ = U+FF80 = EF BE 80。ここが 2 バイト読み捨ての実装で壊れていた範囲
+    EXPECT_EQ(utf8_to_jis_kana(0xEF, 0xBE, 0x80), 0xC0); // ﾀ
+    EXPECT_EQ(utf8_to_jis_kana(0xEF, 0xBE, 0x81), 0xC1); // ﾁ
+    EXPECT_EQ(utf8_to_jis_kana(0xEF, 0xBE, 0x82), 0xC2); // ﾂ
+    EXPECT_EQ(utf8_to_jis_kana(0xEF, 0xBE, 0x9F), 0xDF); // ﾟ（範囲の末尾）
+}
+
+TEST_F(OpDefFnTest, Utf8ToJisKanaRejectsOtherCharacters) {
+    // 漢字（漢 = U+6F22 = E6 BC A2）などは 0 を返す＝捨てる
+    EXPECT_EQ(utf8_to_jis_kana(0xE6, 0xBC, 0xA2), 0);
+    // 継続バイトが継続バイトでない
+    EXPECT_EQ(utf8_to_jis_kana(0xEF, 0x41, 0x42), 0);
+    // 3 バイト文字の 1 バイト目ではない
+    EXPECT_EQ(utf8_to_jis_kana(0x41, 0x42, 0x43), 0);
+    // 半角カタカナ範囲の 1 つ手前（U+FF60）
+    EXPECT_EQ(utf8_to_jis_kana(0xEF, 0xBD, 0xA0), 0);
+}
