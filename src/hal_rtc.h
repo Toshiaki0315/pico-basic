@@ -72,8 +72,9 @@ inline int rtc_weekday(int y, int m, int d) {
     return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
 }
 
-// "HH:MM:SS" を解釈する。桁数・区切り・範囲に厳密。
-inline bool rtc_parse_time(const char* s, int* hour, int* minute, int* second) {
+// "HH:MM:SS" の書式だけを見て数値を取り出す（範囲は見ない）。
+// 「書式が違う」のか「値が範囲外」なのかをエラーで区別するために分けてある。
+inline bool rtc_time_fields(const char* s, int* hour, int* minute, int* second) {
     if (!s) return false;
     int n = 0;
     while (s[n]) n++;
@@ -82,16 +83,23 @@ inline bool rtc_parse_time(const char* s, int* hour, int* minute, int* second) {
         if (i == 2 || i == 5) continue;
         if (s[i] < '0' || s[i] > '9') return false;
     }
-    int hh = (s[0] - '0') * 10 + (s[1] - '0');
-    int mm = (s[3] - '0') * 10 + (s[4] - '0');
-    int ss = (s[6] - '0') * 10 + (s[7] - '0');
+    *hour   = (s[0] - '0') * 10 + (s[1] - '0');
+    *minute = (s[3] - '0') * 10 + (s[4] - '0');
+    *second = (s[6] - '0') * 10 + (s[7] - '0');
+    return true;
+}
+
+// "HH:MM:SS" を解釈する。桁数・区切り・範囲に厳密。
+inline bool rtc_parse_time(const char* s, int* hour, int* minute, int* second) {
+    int hh, mm, ss;
+    if (!rtc_time_fields(s, &hh, &mm, &ss)) return false;
     if (hh > 23 || mm > 59 || ss > 59) return false;
     *hour = hh; *minute = mm; *second = ss;
     return true;
 }
 
-// "YYYY-MM-DD" を解釈する。年は 2000-2099（チップが 2 桁しか持てないため）。
-inline bool rtc_parse_date(const char* s, int* year, int* month, int* day) {
+// "YYYY-MM-DD" の書式だけを見て数値を取り出す（暦の妥当性は見ない）。
+inline bool rtc_date_fields(const char* s, int* year, int* month, int* day) {
     if (!s) return false;
     int n = 0;
     while (s[n]) n++;
@@ -100,12 +108,24 @@ inline bool rtc_parse_date(const char* s, int* year, int* month, int* day) {
         if (i == 4 || i == 7) continue;
         if (s[i] < '0' || s[i] > '9') return false;
     }
-    int yy = (s[0] - '0') * 1000 + (s[1] - '0') * 100 + (s[2] - '0') * 10 + (s[3] - '0');
-    int mo = (s[5] - '0') * 10 + (s[6] - '0');
-    int dd = (s[8] - '0') * 10 + (s[9] - '0');
+    *year  = (s[0] - '0') * 1000 + (s[1] - '0') * 100 + (s[2] - '0') * 10 + (s[3] - '0');
+    *month = (s[5] - '0') * 10 + (s[6] - '0');
+    *day   = (s[8] - '0') * 10 + (s[9] - '0');
+    return true;
+}
+
+// 実在する日付か（年の範囲は見ない）
+inline bool rtc_date_exists(int year, int month, int day) {
+    if (month < 1 || month > 12) return false;
+    return day >= 1 && day <= rtc_days_in_month(year, month);
+}
+
+// "YYYY-MM-DD" を解釈する。年は 2000-2099（チップが 2 桁しか持てないため）。
+inline bool rtc_parse_date(const char* s, int* year, int* month, int* day) {
+    int yy, mo, dd;
+    if (!rtc_date_fields(s, &yy, &mo, &dd)) return false;
     if (yy < 2000 || yy > 2099) return false;
-    if (mo < 1 || mo > 12) return false;
-    if (dd < 1 || dd > rtc_days_in_month(yy, mo)) return false;
+    if (!rtc_date_exists(yy, mo, dd)) return false;
     *year = yy; *month = mo; *day = dd;
     return true;
 }

@@ -1062,12 +1062,24 @@ void execute_rtc_set(const TokenList& tokens, int& pos) {
         t.hour = 0; t.minute = 0; t.second = 0;
     }
 
+    // 弾いた理由を書式・範囲・暦で分ける。
+    // 「2025-02-29」は書式も年も正しく、存在しない日付なのが理由なので、
+    // 一律に書式のエラーを出すと原因を取り違えさせる
     if (is_time) {
-        if (!rtc_parse_time(v.str_val, &t.hour, &t.minute, &t.second))
+        int hh, mm, ss;
+        if (!rtc_time_fields(v.str_val, &hh, &mm, &ss))
             throw std::runtime_error("TIME$ must be \"HH:MM:SS\"");
+        if (!rtc_parse_time(v.str_val, &t.hour, &t.minute, &t.second))
+            throw std::runtime_error("Time out of range (00:00:00 to 23:59:59)");
     } else {
-        if (!rtc_parse_date(v.str_val, &t.year, &t.month, &t.day))
-            throw std::runtime_error("DATE$ must be \"YYYY-MM-DD\" (2000-2099)");
+        int yy, mo, dd;
+        if (!rtc_date_fields(v.str_val, &yy, &mo, &dd))
+            throw std::runtime_error("DATE$ must be \"YYYY-MM-DD\"");
+        if (yy < 2000 || yy > 2099)
+            throw std::runtime_error("Year must be 2000 to 2099");
+        if (!rtc_date_exists(yy, mo, dd))
+            throw std::runtime_error("No such date");
+        t.year = yy; t.month = mo; t.day = dd;
     }
     if (!hal_rtc_set(&t)) throw std::runtime_error("RTC write failed");
 }

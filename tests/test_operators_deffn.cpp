@@ -747,12 +747,44 @@ TEST_F(RtcTest, SettingOneKeepsTheOther) {
     EXPECT_EQ(eval("DATE$"), "2026-08-01\n"); // 日付は変わらない
 }
 
-TEST_F(RtcTest, SettingRejectsBadFormat) {
-    parse_and_execute(lex("TIME$ = \"25:00:00\""));
-    EXPECT_NE(mock_hal::get_raw_print_buffer().find("HH:MM:SS"), std::string::npos);
-    mock_hal::reset();
+// 弾く理由（書式 / 範囲 / 実在しない日付）ごとに別のメッセージを出すこと。
+// 一律に書式のエラーを出すと "2025-02-29" の原因を取り違えさせる
+TEST_F(RtcTest, RejectsBadFormatWithFormatMessage) {
     parse_and_execute(lex("DATE$ = \"2026/08/01\""));
     EXPECT_NE(mock_hal::get_raw_print_buffer().find("YYYY-MM-DD"), std::string::npos);
+    mock_hal::reset();
+    parse_and_execute(lex("TIME$ = \"14:30\""));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("HH:MM:SS"), std::string::npos);
+}
+
+TEST_F(RtcTest, RejectsOutOfRangeTimeWithRangeMessage) {
+    // 書式は正しいので「範囲外」と伝える
+    parse_and_execute(lex("TIME$ = \"25:00:00\""));
+    std::string out = mock_hal::get_raw_print_buffer();
+    EXPECT_NE(out.find("out of range"), std::string::npos) << out;
+}
+
+TEST_F(RtcTest, RejectsOutOfRangeYearWithYearMessage) {
+    parse_and_execute(lex("DATE$ = \"1999-01-01\""));
+    std::string out = mock_hal::get_raw_print_buffer();
+    EXPECT_NE(out.find("2000 to 2099"), std::string::npos) << out;
+}
+
+TEST_F(RtcTest, RejectsImpossibleDateWithItsOwnMessage) {
+    // 書式も年も正しく、暦の上で存在しないだけ
+    parse_and_execute(lex("DATE$ = \"2025-02-29\""));
+    std::string out = mock_hal::get_raw_print_buffer();
+    EXPECT_NE(out.find("No such date"), std::string::npos) << out;
+    mock_hal::reset();
+    parse_and_execute(lex("DATE$ = \"2026-04-31\""));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("No such date"), std::string::npos);
+}
+
+TEST_F(RtcTest, RejectedSettingLeavesTheClockAlone) {
+    RtcTime t{2026, 8, 1, 9, 5, 3, true};
+    hal_rtc_set_mock(&t);
+    parse_and_execute(lex("DATE$ = \"2025-02-29\""));
+    EXPECT_EQ(eval("DATE$"), "2026-08-01\n"); // 時計は変わっていない
 }
 
 TEST_F(RtcTest, SettingClearsTheNotSetFlag) {
