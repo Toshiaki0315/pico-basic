@@ -166,7 +166,44 @@ uint16_t hal_graphics_get_pixel(int x, int y) {
   return frame_buffer[y * LCD_WIDTH + x];
 }
 
+// 転送の遅延。詳細は hal_display.h のコメントを参照
+static bool defer_enabled = false;
+static bool defer_dirty   = false;
+static int  defer_x0 = 0, defer_y0 = 0, defer_x1 = 0, defer_y1 = 0;
+
+// 遅延中に更新された範囲を足し込む（座標は切り詰め済みのものを渡すこと）
+static void defer_add(int x0, int y0, int x1, int y1) {
+  if (!defer_dirty) {
+    defer_x0 = x0; defer_y0 = y0; defer_x1 = x1; defer_y1 = y1;
+    defer_dirty = true;
+    return;
+  }
+  if (x0 < defer_x0) defer_x0 = x0;
+  if (y0 < defer_y0) defer_y0 = y0;
+  if (x1 > defer_x1) defer_x1 = x1;
+  if (y1 > defer_y1) defer_y1 = y1;
+}
+
+bool hal_display_is_deferred() { return defer_enabled; }
+
+void hal_display_flush() {
+  if (!defer_dirty) return;
+  int x0 = defer_x0, y0 = defer_y0, w = defer_x1 - defer_x0, h = defer_y1 - defer_y0;
+  defer_dirty = false;
+  bool was = defer_enabled;
+  defer_enabled = false; // 実際に転送させる
+  hal_display_sync_rect(x0, y0, w, h);
+  defer_enabled = was;
+}
+
+void hal_display_set_deferred(bool deferred) {
+  // 通常動作に戻すときは、ためた分を先に画面へ出す
+  if (!deferred) hal_display_flush();
+  defer_enabled = deferred;
+}
+
 void hal_display_sync() {
+  if (defer_enabled) { defer_add(0, 0, LCD_WIDTH, LCD_HEIGHT); return; }
   lcd_set_window(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1);
   gpio_put(LCD_DC, 1);
   gpio_put(LCD_CS, 0);
@@ -188,6 +225,8 @@ void hal_display_sync_rect(int x0, int y0, int w, int h) {
   if (y0 + h > LCD_HEIGHT) h = LCD_HEIGHT - y0;
   if (w <= 0 || h <= 0)
     return;
+
+  if (defer_enabled) { defer_add(x0, y0, x0 + w, y0 + h); return; }
 
   lcd_set_window(x0, y0, x0 + w - 1, y0 + h - 1);
   gpio_put(LCD_DC, 1);

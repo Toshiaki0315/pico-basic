@@ -41,6 +41,22 @@ void hal_display_sync();
 // 更新した範囲だけを渡すこと。画面外にはみ出す指定は内部で切り詰める。
 void hal_display_sync_rect(int x, int y, int w, int h);
 
+// ---------------------------------------------------------
+// 転送の遅延（ちらつき防止）
+//
+// 既定では描画のたびに LCD へ転送するため、「消してから描き直す」書き方だと
+// 消えた状態が一瞬画面に出てちらつく。遅延させると更新範囲を覚えるだけになり、
+// hal_display_flush() でまとめて転送できる。
+//
+// 遅延中は文字の表示も出ないので、プログラム終了時と Ready のたびに
+// 呼び出し側で必ず解除すること（画面が固まったように見えるため）。
+// ---------------------------------------------------------
+void hal_display_set_deferred(bool deferred);
+bool hal_display_is_deferred();
+
+// ためた更新範囲をまとめて転送する（何も溜まっていなければ何もしない）
+void hal_display_flush();
+
 // Text Input related functions
 void hal_display_input(char* buffer, int max_len);
 

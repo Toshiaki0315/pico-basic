@@ -32,6 +32,10 @@ std::vector<DrawCommand> get_draw_commands();
 // Fetch recorded GPIO commands
 std::vector<GpioCommand> get_gpio_commands();
 
+// 転送の遅延（SYNC）の確認用
+int  get_flush_count();
+void reset_flush_count();
+
 // Fetch recorded brightness levels
 std::vector<int> get_brightness_levels();
 

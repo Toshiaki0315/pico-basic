@@ -167,6 +167,8 @@ void repl_start() {
             try {
                 parse_and_execute(lex(input_buffer)); // 行を格納する
             } catch (const std::exception& e) {
+                // 例外で抜けても画面が固まらないよう、転送の遅延は必ず解除する
+                hal_display_set_deferred(false);
                 char buf[160];
                 snprintf(buf, sizeof(buf), "%s\n", e.what());
                 basic_print(buf);
@@ -185,6 +187,9 @@ void repl_start() {
                 // Parse & Execute.
                 // Returns true if a line was stored (line-number mode) -> suppress Ready
                 bool line_stored = parse_and_execute(tokens);
+                // ダイレクトモードで SYNC OFF のままにすると、以降のキー入力の
+                // エコーまで画面に出なくなる。Ready に戻る前に必ず解除する
+                hal_display_set_deferred(false);
                 show_ready = !line_stored;
 
                 // AUTO コマンドが実行されたら行番号自動生成モードに入る
@@ -196,6 +201,8 @@ void repl_start() {
                     show_ready = false;
                 }
             } catch (const std::exception& e) {
+                // 例外で抜けても画面が固まらないよう、転送の遅延は必ず解除する
+                hal_display_set_deferred(false);
                 char buf[160];
                 snprintf(buf, sizeof(buf), "%s\n", e.what());
                 basic_print(buf);

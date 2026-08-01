@@ -902,3 +902,68 @@ TEST_F(OpDefFnTest, RandomizeSurvivesListRoundTrip) {
     EXPECT_NE(mock_hal::get_raw_print_buffer().find("RANDOMIZE"), std::string::npos)
         << mock_hal::get_raw_print_buffer();
 }
+
+// --- SYNC（画面転送の遅延／ちらつき防止）--------------------------------
+#include "hal_display.h"
+TEST_F(OpDefFnTest, SyncOffEnablesDeferredMode) {
+    parse_and_execute(lex("SYNC OFF"));
+    EXPECT_TRUE(hal_display_is_deferred());
+}
+
+TEST_F(OpDefFnTest, SyncOnRestoresImmediateMode) {
+    parse_and_execute(lex("SYNC OFF"));
+    parse_and_execute(lex("SYNC ON"));
+    EXPECT_FALSE(hal_display_is_deferred());
+}
+
+TEST_F(OpDefFnTest, BareSyncFlushesWithoutLeavingDeferredMode) {
+    parse_and_execute(lex("SYNC OFF"));
+    mock_hal::reset_flush_count();
+    parse_and_execute(lex("SYNC"));
+    EXPECT_EQ(mock_hal::get_flush_count(), 1);
+    EXPECT_TRUE(hal_display_is_deferred()); // 引数なしは溜め込みを続ける
+    parse_and_execute(lex("SYNC ON"));
+}
+
+TEST_F(OpDefFnTest, SyncOnFlushesWhatWasPending) {
+    parse_and_execute(lex("SYNC OFF"));
+    mock_hal::reset_flush_count();
+    parse_and_execute(lex("SYNC ON"));
+    EXPECT_EQ(mock_hal::get_flush_count(), 1); // 戻すときに出し切る
+}
+
+TEST_F(OpDefFnTest, ProgramEndAlwaysRestoresImmediateMode) {
+    // SYNC OFF のまま終わると画面が固まって見えるので、必ず解除される
+    store_line(10, lex("SYNC OFF"));
+    store_line(20, lex("PSET (10,10), 15"));
+    run("RUN");
+    EXPECT_FALSE(hal_display_is_deferred());
+}
+
+TEST_F(OpDefFnTest, ErrorInsideProgramAlsoRestoresImmediateMode) {
+    store_line(10, lex("SYNC OFF"));
+    store_line(20, lex("X = 1 / 0")); // ここでエラー
+    run("RUN");
+    EXPECT_FALSE(hal_display_is_deferred());
+}
+
+TEST_F(OpDefFnTest, DrawEraseRedrawPatternWorksUnderSync) {
+    // ちらつき防止の定番の書き方が通ること
+    store_line(10, lex("SYNC OFF"));
+    store_line(20, lex("CIRCLE (100,100), 5, 0"));
+    store_line(30, lex("CIRCLE (110,100), 5, 14"));
+    store_line(40, lex("SYNC"));
+    store_line(50, lex("PRINT \"DONE\""));
+    run("RUN");
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("DONE"), std::string::npos);
+}
+
+TEST_F(OpDefFnTest, SyncSurvivesListRoundTrip) {
+    store_line(10, lex("SYNC OFF"));
+    store_line(20, lex("SYNC ON"));
+    mock_hal::reset();
+    run("LIST");
+    std::string out = mock_hal::get_raw_print_buffer();
+    EXPECT_NE(out.find("SYNC OFF"), std::string::npos) << out;
+    EXPECT_NE(out.find("SYNC ON"), std::string::npos) << out;
+}

@@ -386,4 +386,8 @@ static void run_loop(int start_line, int start_pos, int max_steps) {
         }
         steps++;
     }
+
+    // プログラムが SYNC OFF のまま終わると、以降 LCD に何も出なくなって
+    // 固まったように見える。中断・エラーで抜けた場合も必ずここを通る
+    hal_display_set_deferred(false);
 }

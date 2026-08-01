@@ -108,6 +108,22 @@ void hal_display_sync_rect(int x, int y, int w, int h) {
     (void)x; (void)y; (void)w; (void)h;
 }
 
+// 転送の遅延。ホストには LCD が無いので状態だけ持ち、テストから確認できるようにする
+static bool mock_deferred = false;
+static int  mock_flush_count = 0;
+
+void hal_display_set_deferred(bool deferred) {
+    if (!deferred) hal_display_flush();
+    mock_deferred = deferred;
+}
+bool hal_display_is_deferred() { return mock_deferred; }
+void hal_display_flush() { mock_flush_count++; }
+
+namespace mock_hal {
+int  get_flush_count() { return mock_flush_count; }
+void reset_flush_count() { mock_flush_count = 0; }
+}
+
 void hal_graphics_line(int x1, int y1, int x2, int y2, uint16_t color) {
     // Record high-level command for existing tests
     draw_commands.push_back({DrawCommand::LINE, x1, y1, x2, y2, 0, color});

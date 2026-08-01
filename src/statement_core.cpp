@@ -1027,6 +1027,25 @@ void execute_imu_status(const TokenList& tokens, int& pos) {
     basic_print(buf);
 }
 
+// SYNC / SYNC OFF / SYNC ON — 画面転送の制御。
+//
+// 既定（SYNC ON）は描画のたびに転送するので、「消してから描き直す」書き方だと
+// 消えた状態が一瞬見えてちらつく。SYNC OFF でためておき、1 コマ分を描き終えてから
+// SYNC でまとめて出すとちらつかない。
+void execute_sync(const TokenList& tokens, int& pos) {
+    pos++; // SYNC
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::ON) {
+        pos++;
+        hal_display_set_deferred(false); // ためた分を出してから通常動作へ
+    } else if (pos < tokens.size && tokens.tokens[pos].type == TokenType::IDENTIFIER &&
+               strcmp(tokens.tokens[pos].text, "OFF") == 0) {
+        pos++;
+        hal_display_set_deferred(true);
+    } else {
+        hal_display_flush(); // 引数なし: ためた分を今すぐ転送する
+    }
+}
+
 // 乱数の種を作る。
 //
 // 従来の BASIC は明示的に RANDOMIZE を書かないと毎回同じ乱数列になるが、
@@ -1251,6 +1270,7 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::DELETE_CMD: execute_delete(tokens, pos); break;
         case TokenType::TRON:    pos++; trace_enabled = true; break;
         case TokenType::RANDOMIZE: execute_randomize(tokens, pos); break;
+        case TokenType::SYNC:    execute_sync(tokens, pos); break;
         case TokenType::TROFF:   pos++; trace_enabled = false; break;
         case TokenType::LOAD:    execute_load(tokens, pos); break;
 

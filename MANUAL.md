@@ -11,7 +11,7 @@ SHARP X1 turbo (CZ-8FB02) の **Hu-BASIC を土台に、独自に拡張した仕
 | **Hu-BASIC（X1 turbo）** | 基本文法、`SOUND`（AY-3-8910 相当の PSG レジスタ）、`GET@`/`PUT@`、`CONSOLE`、`REPEAT`〜`UNTIL`、`INIT`/`NEWON`（空実装） |
 | **S-BASIC（シャープ）** | `AUTO`（行番号自動生成） |
 | **N88-BASIC（NEC）** | `RANDOMIZE`、`OPEN`/`PRINT #`/`INPUT #`/`EOF`、`ON ERROR GOTO`/`RESUME`/`ERR`/`ERL`、`PRINT USING`、`WHILE`/`WEND`、`RENUM`、`DELETE`、範囲 `LIST`、`CONT`、`TRON`/`TROFF`、`MOD`、`\`、`&H`/`&B`、`INSTR`/`STRING$`/`SPACE$`/`HEX$` |
-| **本実装の独自拡張** | 行ラベル `*NAME`、`GOSUB`/`FOR`/`WHILE` の**文単位の復帰**、`TOUCH()`、`POINT`、`TIMER`、`POLY`、`WINDOW`、`BRIGHTNESS`、`GPIO`/`PIN`/`ADIN`/`CPUTEMP`、`ACCEL`/`GYRO`/`IMU`、`TIME$`/`DATE$`/`RTC`、`POKE`/`PEEK`（論理メモリ）、**Ctrl-P による画面の BMP 保存**、半角カタカナ表示 |
+| **本実装の独自拡張** | 行ラベル `*NAME`、`GOSUB`/`FOR`/`WHILE` の**文単位の復帰**、`TOUCH()`、`POINT`、`TIMER`、`POLY`、`WINDOW`、`BRIGHTNESS`、`SYNC`、`GPIO`/`PIN`/`ADIN`/`CPUTEMP`、`ACCEL`/`GYRO`/`IMU`、`TIME$`/`DATE$`/`RTC`、`POKE`/`PEEK`（論理メモリ）、**Ctrl-P による画面の BMP 保存**、半角カタカナ表示 |
 
 ## 1. 基本的な使い方
 
@@ -219,6 +219,22 @@ pico-basic は、仮想VRAMを通じてSPIディスプレイに高速な描画�
   PRINT USING "SCORE:#####"; SC     ' → SCORE: 1200
   PRINT USING "[&] [!]"; A$; B$     ' → [ABC] [X]
   ```
+* **`SYNC`** / **`SYNC OFF`** / **`SYNC ON`**: 画面への転送のしかたを切り替えます。**ゲームのちらつきを消すための命令**です。
+  通常（`SYNC ON`）は描画するたびに液晶へ転送します。そのため「消してから描き直す」書き方だと、**消えた状態が一瞬見えてちらつきます**。
+  ```basic
+  100 SYNC OFF                  ' ここから転送をためる
+  110 CIRCLE (X, Y), 4, 0       ' 前の位置を消す（まだ画面には出ない）
+  120 X = X + 1
+  130 CIRCLE (X, Y), 4, 14      ' 新しい位置に描く（まだ出ない）
+  140 SYNC                      ' 1 コマ分をまとめて転送 → ちらつかない
+  150 GOTO 110
+  ```
+  * **`SYNC OFF`**: 以降の描画をためます。画面はまだ変わりません。
+  * **`SYNC`**（引数なし）: ためた分をまとめて転送します。ためる状態は続きます。
+  * **`SYNC ON`**: ためた分を出したうえで、毎回転送する通常動作に戻します。
+  > **`SYNC OFF` の間は `PRINT` の文字も画面に出ません。** 転送そのものを止めているためです。
+  > プログラムが終わったとき・エラーで止まったとき・`Ready` に戻るときは**自動的に解除**されるので、画面が固まったままになることはありません。そのためダイレクトモードで `SYNC OFF` と打っても効果は残りません（プログラムの中で使ってください）。
+  > 点を多用するプログラムでは速度も上がります。`PSET` は 1 画素ごとに転送するため、ためてまとめて出すほうが転送の準備コストを節約できます。
 * **`WIDTH 文字数 [, 行数]`**: 画面の文字数・行数を指定します。本機のフォントは 8×8 固定のため **40×30 のみ**対応し、それ以外はエラーになります。
 
 ### 図形描画

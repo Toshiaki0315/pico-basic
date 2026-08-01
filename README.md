@@ -17,7 +17,7 @@ SHARP X1 turbo (CZ-8FB02) の **Hu-BASIC を土台に、独自に拡張した仕
 | 分野 | 内容 |
 | :--- | :--- |
 | **言語** | `IF`/`ELSEIF`、`FOR`/`NEXT`、`WHILE`/`WEND`、`REPEAT`/`UNTIL`、`GOSUB`（文単位復帰）、行ラベル `*NAME`、`DEF FN`、`ON ERROR GOTO`/`RESUME`、2次元・文字列配列、`MOD`/`\`/`AND`/`OR`/`XOR`/`NOT`、`&H`/`&B` リテラル |
-| **グラフィック** | 320×240・16色。`PSET`/`LINE`(B/BF)/`CIRCLE`/`POLY`/`PAINT`、スプライト（`GET@`/`PUT@` XOR・拡大縮小・論理合成）、ユーザー座標系 `WINDOW`、画素読み取り `POINT` |
+| **グラフィック** | 320×240・16色。`PSET`/`LINE`(B/BF)/`CIRCLE`/`POLY`/`PAINT`、スプライト（`GET@`/`PUT@` XOR・拡大縮小・論理合成）、ユーザー座標系 `WINDOW`、画素読み取り `POINT`、ちらつき防止の `SYNC` |
 | **サウンド** | PSG（AY-3-8910 相当）: 3声矩形波＋ノイズ＋エンベロープ。MML の `PLAY`（3声・**非同期再生**）、レジスタ直接制御の `SOUND` |
 | **入力** | タッチパネル `TOUCH()`、ノンウェイトキー入力 `GET`、電池残量 `BATTERY()` |
 | **センサー** | 6軸 IMU `ACCEL()` / `GYRO()`（傾け操作）、内蔵温度 `CPUTEMP`、時計 `TIME$` / `DATE$`（バックアップ電池で保持） |
@@ -97,7 +97,7 @@ RUN
 
 **実機用ファームウェア**のビルドと書き込みは [SETUP.md](./SETUP.md) を参照してください。
 
-**ホストテスト**（実機不要）: BASIC エンジンは PC 上で 340 件超の単体テストで検証しています。
+**ホストテスト**（実機不要）: BASIC エンジンは PC 上で 360 件超の単体テストで検証しています。
 
 ```bash
 cmake -S . -B build_host -DBUILD_TESTS=ON && cmake --build build_host && ./build_host/basic_tests
