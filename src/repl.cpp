@@ -125,7 +125,7 @@ void repl_start() {
                 else
                     printf("\n[screen save failed]\n");
                 // 入力途中の行を打ち直さずに済むよう、そのまま再表示する
-                if (input_ptr > 0) printf("%s", input_buffer);
+                if (input_ptr > 0) serial_print_kana(input_buffer);
             } else if (c >= 0x81 && c <= 0x9F) {
                 // Shift-JIS を送ってくる端末向けの保険。2 バイト文字の 1 バイト目なので
                 // 対のバイトも読み捨てる（放置すると 2 バイト目が単独の字として紛れ込む）
@@ -136,7 +136,9 @@ void repl_start() {
                 if (input_ptr < MAX_LINE_LEN - 1) {
                     input_buffer[input_ptr++] = static_cast<char>(c);
                     input_buffer[input_ptr] = '\0';
-                    putchar(c); // Echo back
+                    // エコーもシリアルへ出るので、半角カタカナは UTF-8 に直して送る。
+                    // 生の JIS バイトのままだと端末には不正な UTF-8 として届く
+                    serial_putc_kana(static_cast<unsigned char>(c));
 
                     // Echo to LCD
                     char s[2] = {static_cast<char>(c), '\0'};
