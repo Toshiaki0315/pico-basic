@@ -27,11 +27,18 @@ inline int jis_kana_to_utf8(unsigned char c, char out[3]) {
 }
 
 // シリアル(stdout)へ 1 バイト書く。半角カタカナだけ UTF-8 にする。
+//
+// 出力は必ず putchar で行うこと。Pico SDK が USB CDC / UART に繋いでいるのは
+// printf / puts / putchar / getchar だけ（pico_stdio の pico_wrap_function）で、
+// fwrite は newlib の FILE 経由になり端末には何も届かない。
 inline void serial_putc_kana(unsigned char c) {
     char utf8[3];
     int n = jis_kana_to_utf8(c, utf8);
-    if (n > 0) fwrite(utf8, 1, (size_t)n, stdout);
-    else putchar(c);
+    if (n > 0) {
+        for (int i = 0; i < n; i++) putchar((unsigned char)utf8[i]);
+    } else {
+        putchar(c);
+    }
 }
 
 // 入力側の逆変換。UTF-8 の 3 バイトが半角カタカナ（U+FF61-U+FF9F）なら
