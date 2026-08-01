@@ -32,6 +32,7 @@
 | 画面保存（Ctrl-P） | 実装 | LCD を 24bit BMP で SD へ（`SCR00.BMP`〜）。実行中も可。`screenshot.cpp` は HAL 依存のみでホストテスト可能 |
 | `OPEN` / `CLOSE` | 実装 | シーケンシャルファイル。`OPEN f$ FOR INPUT\|OUTPUT\|APPEND AS #n`（#1〜#4） |
 | `PRINT #` / `INPUT #` | 実装 | 値を "," 区切りの行で往復。`EOF(n)` で終端判定。END/RUN/NEW で自動 CLOSE |
+| `LINE INPUT` | 実装 | `LINE INPUT [#n,] 変数$` で 1 行をそのまま読む（カンマで分割しない）。コンソール入力にも使え、プロンプト省略時は `? ` を出さない。文字列変数のみ |
 
 ## 制御・代入
 

@@ -355,3 +355,79 @@ TEST_F(ScreenshotTest, AutoNumbersFilenames) {
     EXPECT_STREQ(n2, "SCR01.BMP") << "既存ファイルを上書きしてしまう";
     std::remove("SCR00.BMP"); std::remove("SCR01.BMP");
 }
+
+// --- LINE INPUT #（カンマを含む文字列の往復）-----------------------------
+
+TEST_F(FileOpsTest, LineInputKeepsCommasIntact) {
+    // INPUT # ではカンマで割れてしまう文字列が、そのまま復元できる
+    store_line(10, lex("OPEN \"CSV.DAT\" FOR OUTPUT AS #1"));
+    store_line(20, lex("PRINT #1, \"TOKYO, JAPAN\""));
+    store_line(30, lex("CLOSE #1"));
+    store_line(40, lex("OPEN \"CSV.DAT\" FOR INPUT AS #1"));
+    store_line(50, lex("LINE INPUT #1, A$"));
+    store_line(60, lex("CLOSE #1"));
+    store_line(70, lex("PRINT A$"));
+    parse_and_execute(lex("RUN"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "TOKYO, JAPAN\n");
+}
+
+TEST_F(FileOpsTest, PlainInputStillSplitsOnCommas) {
+    // 従来の INPUT # の挙動は変わっていないこと（比較用）
+    store_line(10, lex("OPEN \"CSV2.DAT\" FOR OUTPUT AS #1"));
+    store_line(20, lex("PRINT #1, \"TOKYO, JAPAN\""));
+    store_line(30, lex("CLOSE #1"));
+    store_line(40, lex("OPEN \"CSV2.DAT\" FOR INPUT AS #1"));
+    store_line(50, lex("INPUT #1, A$"));
+    store_line(60, lex("CLOSE #1"));
+    store_line(70, lex("PRINT A$"));
+    parse_and_execute(lex("RUN"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "TOKYO\n"); // カンマ以降が切れる
+}
+
+TEST_F(FileOpsTest, LineInputReadsSuccessiveLines) {
+    store_line(10, lex("OPEN \"L.DAT\" FOR OUTPUT AS #1"));
+    store_line(20, lex("PRINT #1, \"FIRST, LINE\""));
+    store_line(30, lex("PRINT #1, \"SECOND, LINE\""));
+    store_line(40, lex("CLOSE #1"));
+    store_line(50, lex("OPEN \"L.DAT\" FOR INPUT AS #1"));
+    store_line(60, lex("LINE INPUT #1, A$"));
+    store_line(70, lex("LINE INPUT #1, B$"));
+    store_line(80, lex("CLOSE #1"));
+    store_line(90, lex("PRINT A$; \"/\"; B$"));
+    parse_and_execute(lex("RUN"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "FIRST, LINE/SECOND, LINE\n");
+}
+
+TEST_F(FileOpsTest, LineInputWorksWithEofLoop) {
+    store_line(10, lex("OPEN \"L2.DAT\" FOR OUTPUT AS #1"));
+    store_line(20, lex("PRINT #1, \"A, B\""));
+    store_line(30, lex("PRINT #1, \"C, D\""));
+    store_line(40, lex("CLOSE #1"));
+    store_line(50, lex("OPEN \"L2.DAT\" FOR INPUT AS #1"));
+    store_line(60, lex("IF EOF(1) THEN GOTO 100"));
+    store_line(70, lex("LINE INPUT #1, A$"));
+    store_line(80, lex("PRINT A$"));
+    store_line(90, lex("GOTO 60"));
+    store_line(100, lex("CLOSE #1"));
+    parse_and_execute(lex("RUN"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "A, B\nC, D\n");
+}
+
+TEST_F(FileOpsTest, LineInputRejectsNumericVariable) {
+    store_line(10, lex("OPEN \"L3.DAT\" FOR OUTPUT AS #1"));
+    store_line(20, lex("PRINT #1, \"X\""));
+    store_line(30, lex("CLOSE #1"));
+    store_line(40, lex("OPEN \"L3.DAT\" FOR INPUT AS #1"));
+    store_line(50, lex("LINE INPUT #1, N"));
+    parse_and_execute(lex("RUN"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("string variable"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+    parse_and_execute(lex("CLOSE"));
+}
+
+TEST_F(FileOpsTest, GraphicsLineStillWorks) {
+    // `LINE INPUT` を足しても図形の LINE が壊れていないこと
+    mock_hal::reset();
+    parse_and_execute(lex("LINE (0,0)-(50,50), 15"));
+    EXPECT_FALSE(mock_hal::get_draw_commands().empty());
+}

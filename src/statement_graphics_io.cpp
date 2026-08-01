@@ -755,6 +755,84 @@ static bool file_read_field(BasicFile& f, char* out, int maxlen) {
 }
 
 // INPUT #n, 変数 [, 変数 ...]
+// 1 行をそのまま読む（カンマで区切らない）。
+// INPUT # が途中まで読んだ行が残っていれば、その残りを返す
+static bool file_read_line_raw(BasicFile& f, char* out, int maxlen) {
+    if (!f.line_valid) {
+        if (!hal_file_gets(f.linebuf, sizeof(f.linebuf), f.fp)) return false;
+        f.linepos = 0;
+        f.line_valid = true;
+    }
+    int o = 0;
+    while (true) {
+        char c = f.linebuf[f.linepos];
+        if (c == '\0' || c == '\n' || c == '\r') break;
+        f.linepos++;
+        if (o < maxlen - 1) out[o++] = c;
+    }
+    out[o] = '\0';
+    f.line_valid = false; // 1 行使い切った
+    return true;
+}
+
+// LINE INPUT [#n,] 変数$ / LINE INPUT "プロンプト"; 変数$
+//
+// `INPUT #` はカンマで区切って読むため、カンマを含む文字列は復元できない。
+// こちらは 1 行をそのまま 1 個の文字列として読む。
+// コンソールから読む場合、`INPUT` と違ってプロンプトを指定しなければ "? " も出さない。
+void execute_line_input(const TokenList& tokens, int& pos) {
+    pos++; // LINE
+    pos++; // INPUT
+
+    bool from_file = false;
+    int  file_no = 0;
+    if (pos < tokens.size && tokens.tokens[pos].type == TokenType::HASH) {
+        file_no = parse_file_number(tokens, pos);
+        from_file = true;
+        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
+    } else if (pos < tokens.size && tokens.tokens[pos].type == TokenType::STRING) {
+        basic_print(tokens.tokens[pos].text);
+        pos++;
+        if (pos < tokens.size && (tokens.tokens[pos].type == TokenType::COMMA ||
+                                  tokens.tokens[pos].type == TokenType::SEMICOLON)) pos++;
+    }
+
+    require_token(tokens, pos, TokenType::IDENTIFIER,
+                  "Syntax Error: LINE INPUT expects a string variable");
+    char var_name[64];
+    strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name) - 1);
+    var_name[sizeof(var_name) - 1] = '\0';
+    pos++;
+
+    int nlen = (int)strlen(var_name);
+    if (nlen == 0 || var_name[nlen - 1] != '$')
+        throw std::runtime_error("Type Mismatch: LINE INPUT needs a string variable");
+
+    int arr_idx, arr_idx2;
+    parse_optional_indices(tokens, pos, arr_idx, arr_idx2);
+
+    char buf[256] = "";
+    if (from_file) {
+        BasicFile& f = file_slot(file_no);
+        if (f.mode == 0) throw std::runtime_error("File not open");
+        if (f.mode != 1) throw std::runtime_error("Bad file mode");
+        if (!file_read_line_raw(f, buf, sizeof(buf)))
+            throw std::runtime_error("Input past end of file");
+    } else {
+        hal_display_input(buf, sizeof(buf));
+    }
+
+    Value val(buf);
+    if (arr_idx >= 0) {
+        ArrayRef* arr = get_array(var_name);
+        if (!arr) throw std::runtime_error("Array not dimensioned");
+        int flat_idx = flatten_array_index(arr, arr_idx, arr_idx2);
+        write_heap_value(arr->start_addr + (flat_idx * 8), val);
+    } else {
+        set_variable(var_name, val);
+    }
+}
+
 void execute_input_file(const TokenList& tokens, int& pos) {
     int n = parse_file_number(tokens, pos); // pos は HASH を指して呼ばれる
     BasicFile& f = file_slot(n);

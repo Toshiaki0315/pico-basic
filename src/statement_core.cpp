@@ -1251,7 +1251,13 @@ void execute_statement(const TokenList& tokens, int& pos) {
         
         case TokenType::COLOR:   execute_color(tokens, pos); break;
         case TokenType::PSET:    execute_pset(tokens, pos); break;
-        case TokenType::LINE:    execute_line(tokens, pos); break;
+        case TokenType::LINE:
+            // `LINE INPUT` は 1 行読み込み、それ以外は図形の LINE
+            if (pos + 1 < tokens.size && tokens.tokens[pos + 1].type == TokenType::INPUT)
+                execute_line_input(tokens, pos);
+            else
+                execute_line(tokens, pos);
+            break;
         case TokenType::CIRCLE:  execute_circle(tokens, pos); break;
         case TokenType::CLS:     pos++; hal_display_cls(); break;
         case TokenType::LOCATE:  execute_locate(tokens, pos); break;

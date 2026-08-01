@@ -505,7 +505,16 @@ Raspberry Pi Pico 2の機能を活かした拡張コマンドです。
   30 HS = 0 : IF EOF(1) = 0 THEN INPUT #1, HS
   40 CLOSE #1
   ```
-  > 文字列にカンマを含めると読み戻しで分割されます。データはカンマを含まない形で保存してください。
+  - **`LINE INPUT #n, 変数$`**: 1 行をまるごと 1 個の文字列として読みます。`INPUT #` はカンマで区切って読むため、**カンマを含む文字列は復元できません**。そういうデータはこちらを使ってください。
+  ```basic
+  10 OPEN "MEMO.DAT" FOR OUTPUT AS #1
+  20 PRINT #1, "TOKYO, JAPAN"
+  30 CLOSE #1
+  40 OPEN "MEMO.DAT" FOR INPUT AS #1
+  50 LINE INPUT #1, A$      ' → "TOKYO, JAPAN"（INPUT # だと "TOKYO" で切れる）
+  60 CLOSE #1
+  ```
+  - `LINE INPUT` はキーボードからの入力にも使えます（`LINE INPUT A$`）。`INPUT` と違い、プロンプトを指定しなければ `? ` を表示しません。変数は**文字列型（`$`）のみ**です。
 
 ---
 

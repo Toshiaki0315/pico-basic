@@ -218,6 +218,7 @@ void execute_open(const TokenList& tokens, int& pos);
 void execute_close(const TokenList& tokens, int& pos);
 void execute_print_file(const TokenList& tokens, int& pos);  // PRINT #n, ...
 void execute_input_file(const TokenList& tokens, int& pos);  // INPUT #n, ...
+void execute_line_input(const TokenList& tokens, int& pos);  // LINE INPUT [#n,] A$
 int  basic_file_eof(int fileno);   // EOF(n): 1=終端 / 0=まだある
 void basic_files_close_all();      // NEW / RUN 開始 / END で全ファイルを閉じる
 
