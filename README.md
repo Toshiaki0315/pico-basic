@@ -92,9 +92,7 @@ RUN
 └── README.md         # 本ドキュメント
 ```
 
-ハードウェア依存コードは **`src/hal_*.cpp`** に、ボードの配線（ピン番号・バス・画面サイズ）は **`src/board_config.h`** に集約しています。移植手順は [docs/PORTING.md](./docs/PORTING.md) を参照してください。
-
-ハードウェア依存コードは **`src/hal_*.cpp`** に集約しています。BASIC エンジン本体（lexer / parser / メモリ管理）はハードウェア非依存で、ホスト PC 上でそのままテストできます。
+ハードウェア依存コードは **`src/hal_*.cpp`** に、ボードの配線（ピン番号・バス・画面サイズ）は **`src/board_config.h`** に集約しています。BASIC エンジン本体（lexer / parser / メモリ管理）はハードウェア非依存で、ホスト PC 上でそのままテストできます。別の RP2350 ボードへの移植手順は [docs/PORTING.md](./docs/PORTING.md) を参照してください。
 
 ## 🔨 ビルドとテスト
 
