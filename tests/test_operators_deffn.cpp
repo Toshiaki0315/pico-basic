@@ -833,3 +833,72 @@ TEST_F(RtcTest, TimeStampCanBeWrittenToAFile) {
     EXPECT_NE(mock_hal::get_raw_print_buffer().find("2026-08-01 09:05:03"), std::string::npos)
         << mock_hal::get_raw_print_buffer();
 }
+
+// --- RANDOMIZE と RUN 時の自動シード ------------------------------------
+TEST_F(OpDefFnTest, RandomizeWithSeedIsReproducible) {
+    // 同じ種を指定すれば同じ列になる（デバッグ用途）
+    parse_and_execute(lex("RANDOMIZE 12345"));
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT RND(1000)"));
+    std::string first = mock_hal::get_raw_print_buffer();
+
+    parse_and_execute(lex("RANDOMIZE 12345"));
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT RND(1000)"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), first);
+}
+
+TEST_F(OpDefFnTest, DifferentSeedsGiveDifferentSequences) {
+    parse_and_execute(lex("RANDOMIZE 1"));
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT RND(100000)"));
+    std::string a = mock_hal::get_raw_print_buffer();
+
+    parse_and_execute(lex("RANDOMIZE 999"));
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT RND(100000)"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer(), a);
+}
+
+TEST_F(OpDefFnTest, RandomizeWithoutArgumentDoesNotError) {
+    // 引数なしは時刻から種を作る。値は検証できないので通ることだけ見る
+    parse_and_execute(lex("RANDOMIZE"));
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT RND(10)"));
+    EXPECT_FALSE(mock_hal::get_raw_print_buffer().empty());
+}
+
+TEST_F(OpDefFnTest, RandomizeWorksInsideProgram) {
+    store_line(10, lex("RANDOMIZE 42"));
+    store_line(20, lex("PRINT RND(1000)"));
+    run("RUN");
+    std::string first = mock_hal::get_raw_print_buffer();
+    mock_hal::reset();
+    run("RUN");
+    // プログラム内で種を固定しているので、RUN の自動シードに勝つ
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), first);
+}
+
+TEST_F(OpDefFnTest, SeedSourceIsNeverZero) {
+    // 0 を種にすると実装によっては列が退化するので避けている
+    EXPECT_NE(basic_random_seed_source(), 0u);
+}
+
+TEST_F(OpDefFnTest, ExplicitRndSeedStillOverridesAutoSeed) {
+    // 従来の RND(-n) による再現も引き続き使える
+    store_line(10, lex("X = RND(-7)"));
+    store_line(20, lex("PRINT RND(1000)"));
+    run("RUN");
+    std::string first = mock_hal::get_raw_print_buffer();
+    mock_hal::reset();
+    run("RUN");
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), first);
+}
+
+TEST_F(OpDefFnTest, RandomizeSurvivesListRoundTrip) {
+    store_line(10, lex("RANDOMIZE 5"));
+    mock_hal::reset();
+    run("LIST");
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("RANDOMIZE"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}

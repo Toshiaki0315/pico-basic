@@ -40,6 +40,7 @@ static const Keyword KEYWORDS[] = {
     {"RENUM", TokenType::RENUM},   {"DELETE", TokenType::DELETE_CMD},
     {"CONT", TokenType::CONT},     {"TRON", TokenType::TRON},
     {"TROFF", TokenType::TROFF},   {"WHILE", TokenType::WHILE},
+    {"RANDOMIZE", TokenType::RANDOMIZE},
     {"WEND", TokenType::WEND},     {"USING", TokenType::USING},
     {"RESUME", TokenType::RESUME},
     {"KILL", TokenType::KILL},     {"NAME", TokenType::NAME},

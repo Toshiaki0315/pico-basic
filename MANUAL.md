@@ -10,7 +10,7 @@ SHARP X1 turbo (CZ-8FB02) の **Hu-BASIC を土台に、独自に拡張した仕
 | :--- | :--- |
 | **Hu-BASIC（X1 turbo）** | 基本文法、`SOUND`（AY-3-8910 相当の PSG レジスタ）、`GET@`/`PUT@`、`CONSOLE`、`REPEAT`〜`UNTIL`、`INIT`/`NEWON`（空実装） |
 | **S-BASIC（シャープ）** | `AUTO`（行番号自動生成） |
-| **N88-BASIC（NEC）** | `OPEN`/`PRINT #`/`INPUT #`/`EOF`、`ON ERROR GOTO`/`RESUME`/`ERR`/`ERL`、`PRINT USING`、`WHILE`/`WEND`、`RENUM`、`DELETE`、範囲 `LIST`、`CONT`、`TRON`/`TROFF`、`MOD`、`\`、`&H`/`&B`、`INSTR`/`STRING$`/`SPACE$`/`HEX$` |
+| **N88-BASIC（NEC）** | `RANDOMIZE`、`OPEN`/`PRINT #`/`INPUT #`/`EOF`、`ON ERROR GOTO`/`RESUME`/`ERR`/`ERL`、`PRINT USING`、`WHILE`/`WEND`、`RENUM`、`DELETE`、範囲 `LIST`、`CONT`、`TRON`/`TROFF`、`MOD`、`\`、`&H`/`&B`、`INSTR`/`STRING$`/`SPACE$`/`HEX$` |
 | **本実装の独自拡張** | 行ラベル `*NAME`、`GOSUB`/`FOR`/`WHILE` の**文単位の復帰**、`TOUCH()`、`POINT`、`TIMER`、`POLY`、`WINDOW`、`BRIGHTNESS`、`GPIO`/`PIN`/`ADIN`/`CPUTEMP`、`ACCEL`/`GYRO`/`IMU`、`TIME$`/`DATE$`/`RTC`、`POKE`/`PEEK`（論理メモリ）、**Ctrl-P による画面の BMP 保存**、半角カタカナ表示 |
 
 ## 1. 基本的な使い方
@@ -52,7 +52,7 @@ RUN
 
 ## 2. 変数とデータ型
 
-変数名は「英字1文字」または「英字1文字＋数字1文字」（例: `A`, `B1`）が使用できます。末尾の記号によって扱うデータの種類が変わります。
+変数名は **英字で始まる 8 文字以内**で、2 文字目以降は英数字が使えます（例: `A`、`B1`、`SCORE`、`COUNT`）。大文字・小文字は区別しません。末尾の記号によって扱うデータの種類が変わります（記号も 8 文字に含みます）。
 
 | 型 | 記号 | 説明 | 例 |
 | :--- | :---: | :--- | :--- |
@@ -60,6 +60,13 @@ RUN
 | **整数** | `%` | 16ビットの符号付き整数（-32768 〜 32767）を扱います。高速な処理が可能です。 | `X% = 256` |
 | **倍精度実数** | `#` | より精度の高い小数を扱います。 | `PI# = 3.14159265` |
 | **文字列** | `$` | 文字の並び（最大255文字）を扱います。ダブルクォーテーション `"` で囲みます。 | `N$ = "PICO 2"` |
+
+```basic
+SCORE = 100          ' 長い名前も使える
+NAME$ = "PICO"
+COUNT% = 0
+```
+> 組み込み関数と同じ名前（`LEN`、`POINT`、`TIME$` など）は変数には使えません。組み込みのほうが優先されます。
 
 *※配列を使用する場合は、事前に `DIM A(10)` のように宣言が必要です。*
 
@@ -125,6 +132,26 @@ PRINT HEX$(255)              ' → FF
 T = TIMER : GOSUB 100 : PRINT TIMER - T   ' 処理時間の計測
 IF POINT(X, Y) = 4 THEN PRINT "HIT"       ' 画面の色で衝突判定
 ```
+
+### 乱数（`RND` と `RANDOMIZE`）
+
+`RND(n)` は 0 以上 n 未満の乱数を返します。`RND(0)` は直前に返した値をもう一度返します。
+
+```basic
+PRINT INT(RND(6)) + 1     ' サイコロ（1〜6）
+```
+
+**`RUN` のたびに種は自動で撒き直されます。** 電源を入れ直しても毎回違う展開になります。
+
+* **`RANDOMIZE`**（引数なし）: その場で種を撒き直します。時刻をもとにするので、実行のたびに違う列になります。
+* **`RANDOMIZE n`**: 種を `n` に固定します。**毎回まったく同じ乱数列**になるので、不具合の再現やテストに使います。`RND(-n)` も同じ働きです。
+
+```basic
+10 RANDOMIZE 12345    ' いつも同じ面が出る（デバッグ用）
+20 PRINT INT(RND(100))
+```
+
+> 昔の BASIC は `RANDOMIZE` を書かないと毎回同じ乱数列になりましたが、本実装は `RUN` 時に自動で種を撒きます。ゲームが毎回同じ展開になるのを避けるためで、この点は意図的に元の仕様と変えています。再現したいときは上のように種を明示してください。
 
 ### ユーザー定義関数（`DEF FN`）
 よく使う計算式に名前を付けられます。名前は `FN` で始め、引数は 1 つです。

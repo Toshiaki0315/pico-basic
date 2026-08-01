@@ -246,6 +246,12 @@ void run_program(int max_steps) {
     // 2 回目の RUN が Out of Memory になる
     execute_clear();
 
+    // RUN のたびに乱数の種を撒き直す。これが無いと電源投入後は毎回同じ
+    // 乱数列になり、ゲームの展開が固定される。再現したいプログラムは
+    // 先頭で RANDOMIZE n（または RND(-n)）を書けば上書きできる
+    srand(basic_random_seed_source());
+    last_rnd_val = 0.5f;
+
     for_stack_ptr = 0;
     repeat_stack_ptr = 0;
     call_stack_ptr = 0;

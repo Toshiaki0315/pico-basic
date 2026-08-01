@@ -5,6 +5,9 @@ bool parse_and_execute(const TokenList& tokens);
 
 // BASIC の出力（LCD とシリアル端末の両方へ）
 void basic_print(const char* s);
+
+// 乱数の種を時刻から作る（RUN のたびに撒き直すのに使う）
+unsigned int basic_random_seed_source();
 void store_line(int line_number, const TokenList& tokens);
 void list_program(int from_line = 0, int to_line = 65535);
 void clear_program();

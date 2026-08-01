@@ -33,6 +33,7 @@ enum class TokenType {
     OPEN, CLOSE,  // シーケンシャルファイル I/O
     RENUM, DELETE_CMD,  // 行番号振り直し・行範囲削除
     CONT, TRON, TROFF,  // 実行再開・トレース
+    RANDOMIZE,          // 乱数の種の設定
     WHILE, WEND,        // 前判定ループ
     USING,              // PRINT USING
     RESUME,             // ON ERROR からの復帰

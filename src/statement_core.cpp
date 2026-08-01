@@ -1027,6 +1027,48 @@ void execute_imu_status(const TokenList& tokens, int& pos) {
     basic_print(buf);
 }
 
+// 乱数の種を作る。
+//
+// 従来の BASIC は明示的に RANDOMIZE を書かないと毎回同じ乱数列になるが、
+// それだと電源を入れ直すたびにゲームの展開が固定されてしまう。本実装は
+// RUN のたびにここで種を撒き直す（再現したいときは RANDOMIZE n / RND(-n)）。
+unsigned int basic_random_seed_source() {
+    // ユーザーが RUN を打つ時刻は毎回ずれるので、起動からの経過 ms だけでも
+    // 実用上はばらける
+    unsigned int seed = (unsigned int)hal_system_millis();
+
+    // RTC が動いていれば日時も混ぜる。電源投入直後に自動実行するような
+    // 使い方でも、日付が違えば違う列になる
+    RtcTime t;
+    if (hal_rtc_get(&t)) {
+        unsigned int stamp = (unsigned int)(((t.year * 12 + t.month) * 31 + t.day) * 86400
+                                            + t.hour * 3600 + t.minute * 60 + t.second);
+        seed ^= stamp * 2654435761u; // Knuth の乗数で下位ビットまで散らす
+    }
+    return seed ? seed : 1u; // 0 は種として避ける
+}
+
+// RANDOMIZE [式] — 引数なしなら時刻から、あれば指定値で種を撒く
+void execute_randomize(const TokenList& tokens, int& pos) {
+    pos++; // RANDOMIZE
+    bool has_arg = pos < tokens.size &&
+                   tokens.tokens[pos].type != TokenType::END_OF_FILE &&
+                   tokens.tokens[pos].type != TokenType::COLON &&
+                   tokens.tokens[pos].type != TokenType::REM &&
+                   tokens.tokens[pos].type != TokenType::ELSE;
+    unsigned int seed;
+    if (has_arg) {
+        Value v = parse_relation(tokens, pos);
+        if (!v.is_numeric())
+            throw std::runtime_error("Type Mismatch: RANDOMIZE needs a number");
+        seed = (unsigned int)(long)v.num_val;
+    } else {
+        seed = basic_random_seed_source();
+    }
+    srand(seed);
+    last_rnd_val = 0.5f; // RND(0) が前回の種の値を返さないようにする
+}
+
 // 引数なしの `RTC` — 日付・時刻と状態をまとめて表示する
 void execute_rtc_status(const TokenList& tokens, int& pos) {
     pos++; // RTC
@@ -1208,6 +1250,7 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::CLOSE:   execute_close(tokens, pos); break;
         case TokenType::DELETE_CMD: execute_delete(tokens, pos); break;
         case TokenType::TRON:    pos++; trace_enabled = true; break;
+        case TokenType::RANDOMIZE: execute_randomize(tokens, pos); break;
         case TokenType::TROFF:   pos++; trace_enabled = false; break;
         case TokenType::LOAD:    execute_load(tokens, pos); break;
 

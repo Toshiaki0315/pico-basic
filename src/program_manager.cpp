@@ -69,6 +69,7 @@ const char* token_type_to_string(TokenType type) {
         case TokenType::DELETE_CMD: return "DELETE";
         case TokenType::CONT: return "CONT";
         case TokenType::TRON: return "TRON";
+        case TokenType::RANDOMIZE: return "RANDOMIZE";
         case TokenType::TROFF: return "TROFF";
         case TokenType::WHILE: return "WHILE";
         case TokenType::WEND: return "WEND";
