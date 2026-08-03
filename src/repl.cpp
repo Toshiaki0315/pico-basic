@@ -1,5 +1,6 @@
 #include "repl.h"
 #include "kana_utf8.h"
+#include "hal_battery.h"
 #include "hal_display.h"
 #include "hal_sound.h"
 #include "lexer.h"
@@ -62,7 +63,12 @@ void repl_start() {
         bool aborted = false;
 
         while (true) {
-            int c = getchar(); // USB CDC Blocking Input
+            // 文字が来るまで待つ間、電源ボタンの長押しを監視する。
+            // ここを素の getchar() にすると Ready の待ち受け中に反応しなくなる
+            int c;
+            while ((c = hal_system_getchar_timeout(50000)) < 0) {
+                if (hal_battery_power_key_held()) basic_power_off();
+            }
 
             if (c == EOF) {
                 continue; // Prevent infinite loop on EOF

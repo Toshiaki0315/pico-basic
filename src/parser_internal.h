@@ -257,6 +257,7 @@ void execute_rtc_status(const TokenList& tokens, int& pos);
 void execute_rtc_set(const TokenList& tokens, int& pos);
 void execute_randomize(const TokenList& tokens, int& pos);
 void execute_sync(const TokenList& tokens, int& pos);
+void execute_poweroff(const TokenList& tokens, int& pos);
 void execute_not_implemented(const TokenList& tokens, int& pos);
 
 void execute_color(const TokenList& tokens, int& pos);

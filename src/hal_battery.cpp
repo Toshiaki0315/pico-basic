@@ -18,6 +18,40 @@
 
 static bool adc_ready = false;
 
+// 電源ボタンの長押し判定。押しっぱなしがこの時間続いたら電源を切る
+#define POWER_KEY_HOLD_MS 2000
+
+static uint32_t key_down_since = 0;
+static bool     key_fired      = false;
+
+void hal_battery_power_key_init() {
+  gpio_init(BOARD_KEY_GPIO);
+  gpio_set_dir(BOARD_KEY_GPIO, GPIO_IN);
+  gpio_pull_up(BOARD_KEY_GPIO); // 基板にも R8 10K があるが念のため
+}
+
+bool hal_battery_power_key_held() {
+  bool down = !gpio_get(BOARD_KEY_GPIO); // プルアップなので押すと Low
+  if (!down) {
+    key_down_since = 0;
+    key_fired = false;
+    return false;
+  }
+  uint32_t now = to_ms_since_boot(get_absolute_time());
+  if (key_down_since == 0) {
+    key_down_since = now;
+    return false;
+  }
+  if (key_fired) return false; // 1 回の長押しにつき 1 度だけ
+  if (now - key_down_since < POWER_KEY_HOLD_MS) return false;
+  key_fired = true;
+  return true;
+}
+
+void hal_battery_power_off() {
+  gpio_put(BOARD_BAT_EN_GPIO, 0); // T1 が切れ、R9 が Q1 のゲートを引き上げて遮断
+}
+
 void hal_battery_power_latch_hold() {
   // BAT_EN=High で T1 が導通し、Q1 のゲートを引き下げて電池パスを開く。
   // USB 接続中でも Q2 が遮断しているので競合しない（詳細は hal_battery.h）
@@ -63,7 +97,11 @@ void hal_battery_set_mock_usb(int) {}
 static int mock_mv = 0;
 static int mock_usb = 0;
 
-void hal_battery_power_latch_hold() {} // ホストには電源ラッチが無い
+// ホストには電源ラッチもボタンも無い
+void hal_battery_power_latch_hold() {}
+void hal_battery_power_off() {}
+void hal_battery_power_key_init() {}
+bool hal_battery_power_key_held() { return false; }
 
 void hal_battery_init() { mock_mv = 0; mock_usb = 0; }
 

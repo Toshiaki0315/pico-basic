@@ -23,6 +23,16 @@
 // ここを通るまでボタンを押し続けないと電源が落ちるため。
 void hal_battery_power_latch_hold();
 
+// 電池パスを閉じて電源を切る（BAT_EN=Low）。
+// USB 給電中は USB から電源が来続けるので切れない。
+// また Key2 を押している間はボタンが直接ゲートを引くので、離すまで切れない。
+void hal_battery_power_off();
+
+// 電源ボタン(Key2)が規定時間押し続けられたら true を返す（1 回の長押しにつき 1 度）。
+// 電源を切る処理は呼び出し側で行う（開いているファイルを閉じたいため）。
+void hal_battery_power_key_init();
+bool hal_battery_power_key_held();
+
 void hal_battery_init();
 
 // 電池電圧をミリボルトで返す。読めない場合は 0。

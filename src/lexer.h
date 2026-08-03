@@ -35,6 +35,7 @@ enum class TokenType {
     CONT, TRON, TROFF,  // 実行再開・トレース
     RANDOMIZE,          // 乱数の種の設定
     SYNC,               // 画面転送の制御（ちらつき防止）
+    POWEROFF,           // 電池パスを切って電源を落とす
     WHILE, WEND,        // 前判定ループ
     USING,              // PRINT USING
     RESUME,             // ON ERROR からの復帰

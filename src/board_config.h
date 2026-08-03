@@ -56,6 +56,9 @@
 // 起動時に High にしないと、USB を抜いた瞬間に電源が落ちる。
 // アナログ入力に切り替えると出力が切れて電源が落ちるので ADIN の対象外にしてある
 #define BOARD_BAT_EN_GPIO    26
+// 電源ボタン Key2（KEY_BAT）。3V3 に R8 10K でプルアップ、押すと GND。
+// 押すと Q1 のゲートを直接引き下げるので、電源を入れる側はハードだけで完結する
+#define BOARD_KEY_GPIO       25
 
 // ---- 拡張コネクタに出ている未使用ピン（ADIN / PIN で使える）----
 #define BOARD_FREE_GPIO_A    28 // ADC2

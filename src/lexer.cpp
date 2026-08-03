@@ -42,6 +42,7 @@ static const Keyword KEYWORDS[] = {
     {"TROFF", TokenType::TROFF},   {"WHILE", TokenType::WHILE},
     {"RANDOMIZE", TokenType::RANDOMIZE},
     {"SYNC", TokenType::SYNC},
+    {"POWEROFF", TokenType::POWEROFF},
     {"WEND", TokenType::WEND},     {"USING", TokenType::USING},
     {"RESUME", TokenType::RESUME},
     {"KILL", TokenType::KILL},     {"NAME", TokenType::NAME},

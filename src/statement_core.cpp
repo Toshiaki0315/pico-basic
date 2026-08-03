@@ -1023,6 +1023,27 @@ void execute_imu_status(const TokenList& tokens, int& pos) {
     basic_print(buf);
 }
 
+// 電源を切る。BASIC の POWEROFF と、電源ボタンの長押しの両方から呼ぶ。
+//
+// 電池パスを閉じる前に、開いているファイルを閉じて書き込みを確定させる。
+// 表示も出し切ってから切らないと、SPI 転送の途中で電源が消える。
+void basic_power_off() {
+    basic_files_close_all();
+    hal_display_set_deferred(false); // SYNC OFF のままだと表示が出ない
+    basic_print("POWER OFF\n");
+    hal_system_wait(300);            // 画面と USB へ出し切る猶予
+    hal_battery_power_off();
+
+    // ここに来たということは電源が切れていない。
+    // USB 給電中か、電源ボタンを押したままか（ボタンは離すまでゲートを引き続ける）
+    basic_print("STILL POWERED (USB OR KEY HELD)\n");
+}
+
+void execute_poweroff(const TokenList& tokens, int& pos) {
+    pos++; // POWEROFF
+    basic_power_off();
+}
+
 // SYNC / SYNC OFF / SYNC ON — 画面転送の制御。
 //
 // 既定（SYNC ON）は描画のたびに転送するので、「消してから描き直す」書き方だと
@@ -1273,6 +1294,7 @@ void execute_statement(const TokenList& tokens, int& pos) {
         case TokenType::TRON:    pos++; trace_enabled = true; break;
         case TokenType::RANDOMIZE: execute_randomize(tokens, pos); break;
         case TokenType::SYNC:    execute_sync(tokens, pos); break;
+        case TokenType::POWEROFF: execute_poweroff(tokens, pos); break;
         case TokenType::TROFF:   pos++; trace_enabled = false; break;
         case TokenType::LOAD:    execute_load(tokens, pos); break;
 

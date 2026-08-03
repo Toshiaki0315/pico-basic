@@ -2,6 +2,7 @@
 #include "parser.h"
 #include "lexer.h"
 #include "mock_hal_display.h"
+#include "hal_display.h"
 #include <cstdio>
 #include <fstream>
 #include <vector>
@@ -430,4 +431,47 @@ TEST_F(FileOpsTest, GraphicsLineStillWorks) {
     mock_hal::reset();
     parse_and_execute(lex("LINE (0,0)-(50,50), 15"));
     EXPECT_FALSE(mock_hal::get_draw_commands().empty());
+}
+
+// --- POWEROFF（電源を切る）----------------------------------------------
+
+TEST_F(FileOpsTest, PowerOffClosesOpenFilesFirst) {
+    // 切る前に書き込みを確定させないとデータが失われる
+    store_line(10, lex("OPEN \"PW.DAT\" FOR OUTPUT AS #1"));
+    store_line(20, lex("PRINT #1, \"SAVED\""));
+    store_line(30, lex("POWEROFF"));
+    parse_and_execute(lex("RUN"));
+
+    // 閉じられているので読み戻せる
+    clear_program();
+    mock_hal::reset();
+    store_line(10, lex("OPEN \"PW.DAT\" FOR INPUT AS #1"));
+    store_line(20, lex("LINE INPUT #1, A$"));
+    store_line(30, lex("CLOSE #1"));
+    store_line(40, lex("PRINT A$"));
+    parse_and_execute(lex("RUN"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "SAVED\n");
+}
+
+TEST_F(FileOpsTest, PowerOffReportsWhenPowerStaysOn) {
+    // ホストでは電源が切れないので、切れなかった旨まで出る
+    mock_hal::reset();
+    parse_and_execute(lex("POWEROFF"));
+    std::string out = mock_hal::get_raw_print_buffer();
+    EXPECT_NE(out.find("POWER OFF"), std::string::npos) << out;
+    EXPECT_NE(out.find("STILL POWERED"), std::string::npos) << out;
+}
+
+TEST_F(FileOpsTest, PowerOffClearsDeferredDrawing) {
+    // SYNC OFF のままだと「POWER OFF」の表示が出ないまま切れてしまう
+    parse_and_execute(lex("SYNC OFF"));
+    parse_and_execute(lex("POWEROFF"));
+    EXPECT_FALSE(hal_display_is_deferred());
+}
+
+TEST_F(FileOpsTest, PowerOffSurvivesListRoundTrip) {
+    store_line(10, lex("POWEROFF"));
+    mock_hal::reset();
+    parse_and_execute(lex("LIST"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("POWEROFF"), std::string::npos);
 }

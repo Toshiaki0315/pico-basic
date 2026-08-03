@@ -226,6 +226,10 @@ namespace mock_hal {
     int get_scroll_bottom() { return mock_scroll_bottom; }
 }
 
+int hal_system_getchar_timeout(int) {
+    return getchar(); // ホストには電源ボタンが無いので単純に待つ
+}
+
 int hal_system_break_requested() {
     // ホストテストでは中断しない（無限ループのテストは max_steps で止める）
     return 0;

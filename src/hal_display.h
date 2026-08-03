@@ -70,6 +70,10 @@ uint32_t hal_system_millis();
 // ブロックせずに戻ること。要求されていれば 1、されていなければ 0。
 int hal_system_break_requested();
 
+// タイムアウト付きの 1 文字入力。時間切れなら -1 を返す。
+// Ready の待ち受け中も電源ボタンを見られるようにするために使う
+int hal_system_getchar_timeout(int timeout_us);
+
 // キー入力を待たずに 1 文字取得する（BASIC の GET 用）。
 // 押されていなければ 0 を返す。Ctrl-C は中断扱いで捨てる。
 int hal_system_get_key();

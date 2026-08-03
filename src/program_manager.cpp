@@ -71,6 +71,7 @@ const char* token_type_to_string(TokenType type) {
         case TokenType::TRON: return "TRON";
         case TokenType::RANDOMIZE: return "RANDOMIZE";
         case TokenType::SYNC: return "SYNC";
+        case TokenType::POWEROFF: return "POWEROFF";
         case TokenType::TROFF: return "TROFF";
         case TokenType::WHILE: return "WHILE";
         case TokenType::WEND: return "WEND";

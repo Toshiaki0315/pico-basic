@@ -11,7 +11,7 @@ SHARP X1 turbo (CZ-8FB02) の **Hu-BASIC を土台に、独自に拡張した仕
 | **Hu-BASIC（X1 turbo）** | 基本文法、`SOUND`（AY-3-8910 相当の PSG レジスタ）、`GET@`/`PUT@`、`CONSOLE`、`REPEAT`〜`UNTIL`、`INIT`/`NEWON`（空実装） |
 | **S-BASIC（シャープ）** | `AUTO`（行番号自動生成） |
 | **N88-BASIC（NEC）** | `RANDOMIZE`、`OPEN`/`PRINT #`/`INPUT #`/`EOF`、`ON ERROR GOTO`/`RESUME`/`ERR`/`ERL`、`PRINT USING`、`WHILE`/`WEND`、`RENUM`、`DELETE`、範囲 `LIST`、`CONT`、`TRON`/`TROFF`、`MOD`、`\`、`&H`/`&B`、`INSTR`/`STRING$`/`SPACE$`/`HEX$` |
-| **本実装の独自拡張** | 行ラベル `*NAME`、`GOSUB`/`FOR`/`WHILE` の**文単位の復帰**、`TOUCH()`、`POINT`、`TIMER`、`POLY`、`WINDOW`、`BRIGHTNESS`、`SYNC`、`GPIO`/`PIN`/`ADIN`/`CPUTEMP`、`ACCEL`/`GYRO`/`IMU`、`TIME$`/`DATE$`/`RTC`、`POKE`/`PEEK`（論理メモリ）、**Ctrl-P による画面の BMP 保存**、半角カタカナ表示 |
+| **本実装の独自拡張** | 行ラベル `*NAME`、`GOSUB`/`FOR`/`WHILE` の**文単位の復帰**、`TOUCH()`、`POINT`、`TIMER`、`POLY`、`WINDOW`、`BRIGHTNESS`、`SYNC`、`POWEROFF`、`GPIO`/`PIN`/`ADIN`/`CPUTEMP`、`ACCEL`/`GYRO`/`IMU`、`TIME$`/`DATE$`/`RTC`、`POKE`/`PEEK`（論理メモリ）、**Ctrl-P による画面の BMP 保存**、半角カタカナ表示 |
 
 ## 1. 基本的な使い方
 
@@ -475,6 +475,16 @@ Raspberry Pi Pico 2の機能を活かした拡張コマンドです。
   CLOCK OK
   ```
   **`CLOCK NOT SET`** と出た場合は、電源が切れて時刻が失われた状態です（故障ではありません）。`DATE$` と `TIME$` を設定すれば `CLOCK OK` に変わります。
+* **`POWEROFF`**: **電池パスを切って電源を落とします。** 電池だけで動かしているときに使います。
+  ```basic
+  POWEROFF
+  ```
+  * 切る前に**開いているファイルを自動で閉じます**ので、`PRINT #` で書いたデータは失われません。
+  * **USB を挿している間は切れません**（USB から給電され続けるため）。その場合は `STILL POWERED` と表示されます。
+  * プログラムからも呼べます。「一定時間操作が無ければ切る」といった作りにできます。
+  > **切った後は基板の Key2 を押せば再び起動します**（USB を挿しても起動します）。電池を外す必要はありません。
+* **電源ボタン（Key2）の長押し**: **2 秒ほど押し続けると電源が切れます。** `POWEROFF` と同じ処理（ファイルを閉じてから切る）が走ります。プログラムの実行中でも効きます。
+  > ボタンを押している間はボタン自身が電源を保持するため、**実際に切れるのは指を離した瞬間**です。
 * **`CPUTEMP`**: RP2350 内蔵の温度センサーの値を摂氏で返します。括弧は不要です（`TIMER` と同じ形）。
   ```basic
   PRINT CPUTEMP

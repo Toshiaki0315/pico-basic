@@ -1,6 +1,7 @@
 #include "parser.h"
 #include "parser_internal.h"
 #include "hal_display.h"
+#include "hal_battery.h"
 #include "hal_sound.h"
 #include <cstdio>
 #include <cstdlib>
@@ -316,6 +317,9 @@ static void run_loop(int start_line, int start_pos, int max_steps) {
     while (current_line != -1 && (max_steps == -1 || steps < max_steps)) {
         // Ctrl-C による中断。無限ループから抜ける唯一の手段なので、
         // 反応が鈍らないよう十分短い間隔で確認する
+        // 電源ボタンの長押しは実行中でも効かせる（物理的な電源スイッチなので）
+        if ((steps & 0x0F) == 0 && hal_battery_power_key_held()) basic_power_off();
+
         if ((steps & 0x0F) == 0 && hal_system_break_requested()) {
             hal_sound_stop(); // 非同期で鳴っている演奏も止める
             // CONT でこの行の頭から再開できるようにする
