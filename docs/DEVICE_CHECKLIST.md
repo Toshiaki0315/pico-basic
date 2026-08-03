@@ -205,11 +205,10 @@
 > テスターの実測と大きくずれる場合は `src/hal_battery.cpp` の `BAT_DIVIDER` / `ADC_VREF` を調整してください。
 | I7 | `POWEROFF`（電池運用） | 電池だけで動作中に `POWEROFF`（LCD で確認） | `POWER OFF` と出て**電源が落ちる** | [x] |
 | I8 | `POWEROFF`（USB 接続中） | USB を挿したまま `POWEROFF` | `POWER OFF` の後に `STILL POWERED` と出て、電源は落ちない | [x] |
-| I11 | ボタンの識別 | `10 PRINT PIN(25) : WAIT 200 : GOTO 10` を `RUN` し、3 つのボタンを順に押す | **Key2 だけ `1`→`0` に変わる**。Key3(RESET) は再起動、Key1(BOOT) は無反応 | [ ] |
-| I9 | ボタン長押しで電源オフ | 電池だけで動作中に Key2 を 2 秒以上押して離す | 指を離した瞬間に電源が落ちる（押している間はボタンが電源を保持する） | [ ] |
-| I10 | ボタンで再起動 | `POWEROFF` で切ったあと Key2 を押す | 電池から起動し、`Ready` が出る（押し続ける必要はない） | [ ] |
+| I9 | ボタン長押しで電源オフ | 電池だけで動作中に Key2 を 2 秒以上押して離す | 指を離した瞬間に電源が落ちる（押している間はボタンが電源を保持する） | [x] |
+| I10 | ボタンで再起動 | `POWEROFF` で切ったあと Key2 を押す | 電池から起動し、`Ready` が出る（押し続ける必要はない） | [x] |
 
-> **ボタンは 3 つあり、役割が違います**（回路図 Core / Battery ブロックより）。**Key1 = BOOT**（`USB_BOOT`）、**Key2 = 電源**（回路図のネット名は `KEY_BAT` = GPIO25。Battery ブロック。基板のシルクは `BAT_PWR` と思われる）、**Key3 = RESET**（`RUN` ピン）。RESET は GPIO ではないので `PIN()` では読めません。どれが Key2 かは I11 で特定できます。
+> **ボタンは 3 つあり、役割が違います**（回路図 Core / Battery ブロックより）。**Key1 = BOOT**（`USB_BOOT`）、**Key2 = 電源**（回路図のネット名は `KEY_BAT` = GPIO25。Battery ブロック。基板のシルクは `BAT_PWR` と思われる）、**Key3 = RESET**（`RUN` ピン）。RESET は GPIO ではないので `PIN()` では読めません。どれが Key2 かは `10 PRINT PIN(25) : WAIT 200 : GOTO 10` を回して押し比べれば分かります（**Key2 だけ `1`→`0` に変わる**。Key3 は再起動、Key1 は無反応）。長押しが効かないときはまずこれで確認してください。
 > **BAT_EN（GPIO26）は電池パスのラッチ制御線**です。回路図より `BAT_EN=High` で NPN(T1) が導通し、P-ch MOSFET(Q1) のゲートを引き下げて VBAT→VSYS が繋がります。
 > **起動時に High にしないと、USB を抜いた瞬間に電源が落ちます**（実測で確認: 電池 4.03V / 80% でも落ちた）。`main()` の先頭で `hal_battery_power_latch_hold()` を呼んでいます。
 > USB 接続中は別段の Q2 が VBUS でゲートを引き上げて電池パスを遮断するため、先に High にしておいても競合しません。**Low にすると電池運用時にその場で電源が落ちます。**
