@@ -972,12 +972,8 @@ void execute_battery_status(const TokenList& tokens, int& pos) {
     int mv  = hal_battery_millivolts();
     int usb = hal_battery_usb_connected();
 
-    const char* cell = "UNKNOWN";
-    switch (battery_presence(mv, usb)) {
-        case 0: cell = "NONE"; break;
-        case 1: cell = "OK";   break;
-        default: break; // 2 = UNKNOWN
-    }
+    // 「無し」は返らない（電池が無いことは証明できない。hal_battery.h 参照）
+    const char* cell = (battery_presence(mv, usb) == 1) ? "OK" : "UNKNOWN";
 
     // 10mV 単位に四捨五入してから小数 2 桁にする（切り捨てると 4196 が 4.19 になる）
     int cv = (mv + 5) / 10;

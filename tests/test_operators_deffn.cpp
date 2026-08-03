@@ -326,10 +326,21 @@ TEST_F(OpDefFnTest, BatteryPresenceOnUsbAtFloatIsUnknown) {
     EXPECT_EQ(eval("BATTERY(2)"), "2\n") << "判別できないのに 1 を返している";
 }
 
-TEST_F(OpDefFnTest, BatteryPresenceLowVoltageIsAbsent) {
+TEST_F(OpDefFnTest, DeeplyDischargedCellIsStillPresent) {
+    // 実機で空の電池を挿したとき 2340mV になった。電池が無ければ充電 IC が
+    // 4.2V まで持ち上げるので、低電圧はむしろ「電池がある」証拠
     hal_battery_set_mock_usb(1);
-    hal_battery_set_mock_millivolts(100);
-    EXPECT_EQ(eval("BATTERY(2)"), "0\n");
+    hal_battery_set_mock_millivolts(2340);
+    EXPECT_EQ(eval("BATTERY(2)"), "1\n") << "空の電池を「無し」と誤判定している";
+}
+
+TEST_F(OpDefFnTest, PresenceNeverClaimsAbsence) {
+    // この基板では電池が「無い」ことを証明できないので 0 は返さない
+    hal_battery_set_mock_usb(1);
+    for (int mv = 0; mv <= 4300; mv += 100) {
+        hal_battery_set_mock_millivolts(mv);
+        EXPECT_NE(battery_presence(mv, 1), 0) << mv;
+    }
 }
 
 TEST_F(OpDefFnTest, BatteryUsbPowerFlag) {
