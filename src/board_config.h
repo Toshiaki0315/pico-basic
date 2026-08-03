@@ -52,7 +52,9 @@
 #define BOARD_BAT_ADC_GPIO   27
 #define BOARD_BAT_ADC_INPUT  1 // RP2350: GPIO26=0 / 27=1 / 28=2 / 29=3
 #define BOARD_BAT_DIVIDER    3.0f
-// 電源ラッチの制御線。**アナログ入力に切り替えると電源が落ちうるので触らないこと**
+// 電池パスのラッチ制御線。**High で電池パスが開く**（hal_battery.h に回路の説明）。
+// 起動時に High にしないと、USB を抜いた瞬間に電源が落ちる。
+// アナログ入力に切り替えると出力が切れて電源が落ちるので ADIN の対象外にしてある
 #define BOARD_BAT_EN_GPIO    26
 
 // ---- 拡張コネクタに出ている未使用ピン（ADIN / PIN で使える）----

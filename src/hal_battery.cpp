@@ -18,6 +18,14 @@
 
 static bool adc_ready = false;
 
+void hal_battery_power_latch_hold() {
+  // BAT_EN=High で T1 が導通し、Q1 のゲートを引き下げて電池パスを開く。
+  // USB 接続中でも Q2 が遮断しているので競合しない（詳細は hal_battery.h）
+  gpio_init(BOARD_BAT_EN_GPIO);
+  gpio_set_dir(BOARD_BAT_EN_GPIO, GPIO_OUT);
+  gpio_put(BOARD_BAT_EN_GPIO, 1);
+}
+
 void hal_battery_init() {
   adc_init();
   adc_gpio_init(BAT_ADC_GPIO); // デジタル入力を切ってアナログ入力にする
@@ -54,6 +62,8 @@ void hal_battery_set_mock_usb(int) {}
 // ---------------------------------------------------------
 static int mock_mv = 0;
 static int mock_usb = 0;
+
+void hal_battery_power_latch_hold() {} // ホストには電源ラッチが無い
 
 void hal_battery_init() { mock_mv = 0; mock_usb = 0; }
 

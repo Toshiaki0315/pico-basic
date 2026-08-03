@@ -11,6 +11,11 @@
 #include "repl.h"
 
 int main() {
+    // 電池パスのラッチを最初に保持する。
+    // 表示の初期化にはスプラッシュの 2 秒待ちがあるため、それより後にすると
+    // Key2 で電池起動したときにボタンを 2 秒以上押し続ける必要が出てしまう
+    hal_battery_power_latch_hold();
+
     // Initialize standard I/O (USB CDC)
     stdio_init_all();
 
