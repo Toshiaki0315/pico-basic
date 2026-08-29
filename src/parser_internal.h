@@ -15,7 +15,9 @@ struct Value {
     Type type;
     float num_val;
     int int_val;
-    char str_val[128];
+    // 文字列型のときは本体、数値型のときは c_str() の書式化先として使う。
+    // c_str() は const なので mutable（下の説明を参照）
+    mutable char str_val[128];
 
     Value() : type(Type::NUM), num_val(0.0f), int_val(0) { str_val[0] = '\0'; }
     Value(float n) : type(Type::NUM), num_val(n), int_val(0) { str_val[0] = '\0'; }
@@ -47,12 +49,18 @@ struct Value {
         return type == Type::NUM || type == Type::INT;
     }
 
+    // 数値を文字列として見る。返すのは自分の str_val で、有効期間はこの Value と同じ。
+    //
+    // 書式化先を関数内の static なバッファにすると、1 つの式の中で 2 つの Value に
+    // c_str() を呼んだとき、後の書式化が前を上書きして同じ文字列が 2 回出る
+    // （printf("%s %s", a.c_str(), b.c_str()) のような書き方をした瞬間に壊れる）。
+    // str_val は数値型では使っていないので、そこへ書けば Value ごとに別の場所になり、
+    // 大きさも増えない。
     const char* c_str() const {
         if (type == Type::STR) return str_val;
-        static char buf[32];
-        if (type == Type::INT) snprintf(buf, sizeof(buf), "%d", int_val);
-        else snprintf(buf, sizeof(buf), "%g", num_val);
-        return buf;
+        if (type == Type::INT) snprintf(str_val, sizeof(str_val), "%d", int_val);
+        else snprintf(str_val, sizeof(str_val), "%g", num_val);
+        return str_val;
     }
 };
 
@@ -222,6 +230,10 @@ void user_to_screen(float ux, float uy, int& out_x, int& out_y);
 
 // 変数名の直後の `(添字[, 添字2])` を読む（READ / INPUT / INPUT# / 代入で共用）
 void parse_optional_indices(const TokenList& tokens, int& pos, int& arr_idx, int& arr_idx2);
+
+// 変数、または配列の要素へ値を書く。arr_idx が負なら単純変数として扱う。
+// 代入 / READ / INPUT / INPUT# / LINE INPUT# が同じ形を使うのでまとめてある
+void set_variable_at(const char* var_name, int arr_idx, int arr_idx2, const Value& val);
 
 // シーケンシャルファイル I/O（statement_graphics_io.cpp）。番号は #1〜#4
 #define MAX_BASIC_FILES 4

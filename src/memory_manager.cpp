@@ -131,6 +131,23 @@ bool get_variable(const char* name, Value& out_val) {
     return true;
 }
 
+// 変数、または配列の要素へ値を書く。
+//
+// 代入 / READ / INPUT / INPUT# / LINE INPUT# が同じ 4 行を写し取っていたのを
+// まとめたもの。get_array() が返すのは静的な ArrayRef へのポインタなので、
+// 受け取ってから式を評価すると次の get_array() に上書きされる。ここでは
+// 受け取って添字を畳んで書くまでを続けて行い、その隙を作らない。
+void set_variable_at(const char* var_name, int arr_idx, int arr_idx2, const Value& val) {
+    if (arr_idx < 0) {
+        set_variable(var_name, val);
+        return;
+    }
+    ArrayRef* arr = get_array(var_name);
+    if (!arr) throw std::runtime_error("Array not dimensioned");
+    int flat_idx = flatten_array_index(arr, arr_idx, arr_idx2);
+    write_heap_value(arr->start_addr + (flat_idx * 8), val);
+}
+
 void set_variable(const char* name, const Value& val) {
     uint16_t addr = find_var_slot(name);
     if (addr != 0xFFFF) {

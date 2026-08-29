@@ -216,14 +216,7 @@ void execute_line_input(const TokenList& tokens, int& pos) {
     }
 
     Value val(buf);
-    if (arr_idx >= 0) {
-        ArrayRef* arr = get_array(var_name);
-        if (!arr) throw std::runtime_error("Array not dimensioned");
-        int flat_idx = flatten_array_index(arr, arr_idx, arr_idx2);
-        write_heap_value(arr->start_addr + (flat_idx * 8), val);
-    } else {
-        set_variable(var_name, val);
-    }
+    set_variable_at(var_name, arr_idx, arr_idx2, val);
 }
 
 void execute_input_file(const TokenList& tokens, int& pos) {
@@ -254,14 +247,7 @@ void execute_input_file(const TokenList& tokens, int& pos) {
         else if (is_int_var) val = Value((int)atof(field));
         else                 val = Value((float)atof(field));
 
-        if (arr_idx >= 0) {
-            ArrayRef* arr = get_array(var_name);
-            if (!arr) throw std::runtime_error("Array not dimensioned");
-            int flat_idx = flatten_array_index(arr, arr_idx, arr_idx2);
-            write_heap_value(arr->start_addr + (flat_idx * 8), val);
-        } else {
-            set_variable(var_name, val);
-        }
+        set_variable_at(var_name, arr_idx, arr_idx2, val);
 
         if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
         else break;

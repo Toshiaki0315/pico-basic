@@ -267,14 +267,7 @@ void execute_read(const TokenList& tokens, int& pos) {
         if (is_int_var) val = Value((int)val.num_val);
         else if (!is_str_var && val.type == Value::Type::INT) val = Value(val.num_val);
         
-        if (arr_idx >= 0) {
-            ArrayRef* arr = get_array(var_name);
-            if (!arr) throw std::runtime_error("Array not dimensioned");
-            int flat_idx = flatten_array_index(arr, arr_idx, arr_idx2);
-            write_heap_value(arr->start_addr + (flat_idx * 8), val);
-        } else {
-            set_variable(var_name, val);
-        }
+        set_variable_at(var_name, arr_idx, arr_idx2, val);
         
         if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) { pos++; } else { break; }
     }
@@ -389,14 +382,7 @@ void execute_assignment(const TokenList& tokens, int& pos, bool explicit_let) {
         result = Value(result.num_val);
     }
 
-    if (arr_idx >= 0) {
-        ArrayRef* arr = get_array(var_name);
-        if (!arr) throw std::runtime_error("Array not dimensioned");
-        int flat_idx = flatten_array_index(arr, arr_idx, arr_idx2);
-        write_heap_value(arr->start_addr + (flat_idx * 8), result);
-    } else {
-        set_variable(var_name, result);
-    }
+    set_variable_at(var_name, arr_idx, arr_idx2, result);
 }
 
 void execute_input(const TokenList& tokens, int& pos) {
@@ -439,14 +425,7 @@ void execute_input(const TokenList& tokens, int& pos) {
             val = Value((float)atof(in_buf));
         }
         
-        if (arr_idx >= 0) {
-            ArrayRef* arr = get_array(var_name);
-            if (!arr) throw std::runtime_error("Array not dimensioned");
-            int flat_idx = flatten_array_index(arr, arr_idx, arr_idx2);
-            write_heap_value(arr->start_addr + (flat_idx * 8), val);
-        } else {
-            set_variable(var_name, val);
-        }
+        set_variable_at(var_name, arr_idx, arr_idx2, val);
         
         if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) pos++;
         else break;

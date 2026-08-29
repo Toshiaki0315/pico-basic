@@ -107,6 +107,7 @@ if(BUILD_TESTS)
         tests/test_file_ops.cpp
         tests/test_power.cpp
         tests/test_strutil.cpp
+        tests/test_value.cpp
         tests/test_builtin_functions_ext.cpp
         tests/test_advanced_features.cpp
         tests/test_sound_logic.cpp
