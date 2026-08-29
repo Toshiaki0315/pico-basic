@@ -2,6 +2,7 @@
 
 #if __has_include("pico/stdlib.h")
 #include "hardware/adc.h"
+#include "hal_adc.h"
 #include "pico/stdlib.h"
 #include "board_config.h"
 #include "pico/stdio_usb.h"
@@ -45,7 +46,9 @@ void hal_battery_power_latch_hold() {
 }
 
 void hal_battery_init() {
-  adc_init();
+  // ブロックのリセットは hal_adc に任せる。ここで adc_init() を呼び直すと
+  // hal_adc_init() が有効にした温度センサーが黙って落ちる（hal_adc.h 参照）
+  hal_adc_block_init();
   adc_gpio_init(BAT_ADC_GPIO); // デジタル入力を切ってアナログ入力にする
   adc_ready = true;
 }

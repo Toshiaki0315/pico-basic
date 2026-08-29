@@ -30,9 +30,7 @@ int main() {
     hal_sound_init();
     hal_touch_init();
     hal_battery_init();
-    // ADIN / CPUTEMP 用。adc_init() は ADC ブロックをリセットするので、
-    // 温度センサーを有効にするこちらを必ず hal_battery_init() の後に呼ぶこと
-    hal_adc_init();
+    hal_adc_init(); // ADIN / CPUTEMP 用。順序は問わない（hal_adc.h 参照）
     // IMU はタッチと同じ i2c1 を使うので、hal_touch_init() の後に呼ぶ
     hal_imu_init();
     hal_rtc_init();

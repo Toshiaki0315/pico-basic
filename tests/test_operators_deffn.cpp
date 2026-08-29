@@ -473,6 +473,32 @@ TEST_F(OpDefFnTest, AdcPinAllowedCoversOnlyFreePins) {
     EXPECT_FALSE(adc_pin_allowed(30));
 }
 
+// GPIO 番号から ADC 入力番号への対応。読み書きの添字はすべてこれを通るので、
+// 範囲外を -1 で返せることが配列外アクセスを防ぐ最後の砦になる
+TEST_F(OpDefFnTest, AdcInputMappingCoversTheChipsRange) {
+    EXPECT_EQ(adc_input_for_gpio(26), 0);
+    EXPECT_EQ(adc_input_for_gpio(27), 1);
+    EXPECT_EQ(adc_input_for_gpio(28), 2);
+    EXPECT_EQ(adc_input_for_gpio(29), 3);
+}
+
+TEST_F(OpDefFnTest, AdcInputMappingRejectsPinsOutsideTheChipsRange) {
+    EXPECT_EQ(adc_input_for_gpio(25), -1);
+    EXPECT_EQ(adc_input_for_gpio(30), -1);
+    EXPECT_EQ(adc_input_for_gpio(0), -1);
+    EXPECT_EQ(adc_input_for_gpio(-1), -1);
+}
+
+// board_config.h が ADC の無いピンを指していても、そのまま入力番号として
+// 使われないこと。許可判定が先に対応の有無を見るのはこのため
+TEST_F(OpDefFnTest, AdcPinAllowedRefusesPinsWithNoAdcInput) {
+    for (int gpio = -2; gpio < 40; gpio++) {
+        if (!adc_pin_allowed(gpio)) continue;
+        EXPECT_GE(adc_input_for_gpio(gpio), 0) << gpio;
+        EXPECT_LT(adc_input_for_gpio(gpio), ADC_INPUT_COUNT) << gpio;
+    }
+}
+
 TEST_F(OpDefFnTest, CpuTempIsReadWithoutParens) {
     hal_adc_set_mock_temp_c(25.0f);
     EXPECT_EQ(print_expr("CPUTEMP"), "25\n");
