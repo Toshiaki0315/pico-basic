@@ -2,8 +2,8 @@
 #
 # コミット前のフル確認。ホストテストと実機ビルドの両方を通す。
 #
-#   tools/check.sh           ホストは作り直し、実機は自分のソースだけ作り直す
-#   tools/check.sh --clean   実機側も SDK から作り直す（数分かかる）
+#   tools/check.sh           自分のソースだけ作り直して両方を通す
+#   tools/check.sh --clean   依存ごと作り直す（googletest と SDK。数分かかる）
 #
 # 両方を通す必要があるのは、警告の出方がコンパイラで違うため。ホストは
 # clang、実機は arm-none-eabi-gcc で、gcc にしか無い警告（strncpy の切り詰め
@@ -40,9 +40,17 @@ build_into() {
     return "$rc"
 }
 
-# ---- 1. ホスト: 作り直してビルド、テスト ----
+# ---- 1. ホスト: 自分のソースを作り直してビルド、テスト ----
 say "[1/2] ホストテスト"
-rm -rf "$HOST_BUILD_DIR"
+if [ "$CLEAN" = 1 ]; then
+    rm -rf "$HOST_BUILD_DIR"
+else
+    # ビルドディレクトリごと消すと _deps も消えて、実行のたびに googletest の
+    # 取得とビルドが走る（ネットワークも要る）。依存はそのままに、自分の
+    # ソースだけ作り直させる。警告は再コンパイルしないと出てこないため
+    touch_project_sources
+    touch "$REPO_ROOT"/tests/*.cpp "$REPO_ROOT"/tests/*.h 2> /dev/null || true
+fi
 cmake -S "$REPO_ROOT" -B "$HOST_BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON > /dev/null
 HOST_LOG="$HOST_BUILD_DIR/build.log"
 if build_into "$HOST_BUILD_DIR" "$HOST_LOG"; then
