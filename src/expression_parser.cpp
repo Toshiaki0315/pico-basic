@@ -42,7 +42,13 @@ static void need_args(bool ok, const char* fn_name) {
     }
 }
 
-static Value evaluate_builtin_function(const char* var_name, Value* args, int arg_count) {
+// 組み込み関数の評価。名前で 4 群に分けてある。どれも「担当なら handled を
+// true にして値を返し、当たらなければ handled を false にして抜ける」。
+// 群の中身は if/else if の連鎖なので、最後まで落ちたら自分の担当ではない。
+
+// 数値計算（引数も戻り値も数値）
+static Value eval_math_function(const char* var_name, Value* args, int arg_count, bool& handled) {
+    handled = true;
     if (strcmp(var_name, "ABS") == 0) {
         need_args(arg_count == 1 && args[0].is_numeric(), "ABS");
         return Value(std::abs(args[0].num_val));
@@ -90,7 +96,16 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
             last_rnd_val = static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
             return Value(last_rnd_val * n);
         }
-    } else if (strcmp(var_name, "LEN") == 0) {
+    }
+
+    handled = false; // どれにも当たらなかった
+    return Value();
+}
+
+// 文字列
+static Value eval_string_function(const char* var_name, Value* args, int arg_count, bool& handled) {
+    handled = true;
+    if (strcmp(var_name, "LEN") == 0) {
         need_args(arg_count == 1 && args[0].type == Value::Type::STR, "LEN");
         return Value((float)strlen(args[0].str_val));
     } else if (strcmp(var_name, "MID$") == 0) {
@@ -187,7 +202,16 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
         char buf[16];
         snprintf(buf, sizeof(buf), "%X", (unsigned)(int)args[0].num_val);
         return Value(buf);
-    } else if (strcmp(var_name, "POINT") == 0) {
+    }
+
+    handled = false; // どれにも当たらなかった
+    return Value();
+}
+
+// 画面・センサー・GPIO
+static Value eval_device_function(const char* var_name, Value* args, int arg_count, bool& handled) {
+    handled = true;
+    if (strcmp(var_name, "POINT") == 0) {
         // POINT(x, y): 画面の色番号（0-15）を返す。画面外は -1。
         // 座標は WINDOW のユーザー座標系に従う（描画コマンドと同じ）
         need_args(arg_count == 2 && args[0].is_numeric() && args[1].is_numeric(), "POINT");
@@ -248,7 +272,16 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
         int axis = (int)args[0].num_val;
         if (axis < 0 || axis > 2) throw std::runtime_error("GYRO argument must be 0, 1, or 2");
         return Value((float)hal_imu_gyro_dps(axis));
-    } else if (strcmp(var_name, "EOF") == 0) {
+    }
+
+    handled = false; // どれにも当たらなかった
+    return Value();
+}
+
+// ファイルとタッチ
+static Value eval_file_function(const char* var_name, Value* args, int arg_count, bool& handled) {
+    handled = true;
+    if (strcmp(var_name, "EOF") == 0) {
         need_args(arg_count == 1 && args[0].is_numeric(), "EOF");
         return Value(basic_file_eof((int)args[0].num_val));
     } else if (strcmp(var_name, "TOUCH") == 0) {
@@ -261,10 +294,95 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
             default: throw std::runtime_error("TOUCH argument must be 0, 1, or 2");
         }
     }
+
+    handled = false; // どれにも当たらなかった
+    return Value();
+}
+
+static Value evaluate_builtin_function(const char* var_name, Value* args, int arg_count) {
+    using Group = Value (*)(const char*, Value*, int, bool&);
+    static const Group GROUPS[] = {
+        eval_math_function, eval_string_function, eval_device_function, eval_file_function,
+    };
+    for (Group group : GROUPS) {
+        bool handled = false;
+        Value v = group(var_name, args, arg_count, handled);
+        if (handled) return v;
+    }
     throw std::runtime_error("Unknown Function");
 }
 
 static Value parse_power_expr(const TokenList& tokens, int& pos);
+
+// `NAME(...)` の中身。ユーザー定義関数・組み込み関数・配列参照のいずれか。
+// 引数はここで先に評価しておく（get_array() が返す静的な ArrayRef を
+// 受け取ったあとで式を評価すると、その式の中の配列参照に上書きされる）
+static Value parse_call_or_subscript(const char* var_name, const TokenList& tokens, int& pos) {
+    pos++; // '('
+    Value args[16];
+    int arg_count = 0;
+    args[arg_count++] = parse_relation(tokens, pos);
+    while (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
+        pos++;
+        if (arg_count < 16) args[arg_count++] = parse_relation(tokens, pos);
+        else { parse_relation(tokens, pos); arg_count++; } 
+    }
+    require_token(tokens, pos, TokenType::RPAREN, "Syntax Error: Expected ')' for function or array");
+    pos++; 
+    
+    // DEF FN で定義したユーザー関数を優先して判定する。
+    // `FN` で始まる名前は関数用に予約されており、未定義ならその旨を返す。
+    if (var_name[0] == 'F' && var_name[1] == 'N' && var_name[2] != '\0') {
+        if (!is_user_func(var_name)) throw std::runtime_error("Undefined function");
+        if (arg_count != 1) throw std::runtime_error("FN takes exactly one argument");
+        return call_user_func(var_name, args[0]);
+    }
+
+    if (is_builtin_function(var_name)) {
+        return evaluate_builtin_function(var_name, args, arg_count);
+    }
+
+    ArrayRef* arr = get_array(var_name);
+    if (!arr) throw std::runtime_error("Array not dimensioned");
+    int flat_idx;
+    if (arg_count == 1) {
+        if (!args[0].is_numeric())
+            throw std::runtime_error("Type Mismatch: Array index must be numeric");
+        flat_idx = flatten_array_index(arr, static_cast<int>(args[0].num_val));
+    } else if (arg_count == 2) {
+        if (!args[0].is_numeric() || !args[1].is_numeric())
+            throw std::runtime_error("Type Mismatch: Array index must be numeric");
+        flat_idx = flatten_array_index(arr,
+            static_cast<int>(args[0].num_val),
+            static_cast<int>(args[1].num_val));
+    } else {
+        throw std::runtime_error("Syntax Error: Arrays support 1 or 2 dimensions");
+    }
+    return read_heap_value(arr->start_addr + (flat_idx * 8));
+}
+
+// TIMER / CPUTEMP / TIME$ / DATE$ / ERR / ERL は括弧なしで書く組み込み値。
+// 担当なら out に入れて true。変数名かもしれないので、当たらなければ false
+static bool read_nullary_builtin(const char* var_name, Value& out) {
+    // TIMER / CPUTEMP / ERR / ERL は括弧なしの組み込み値
+    if (strcmp(var_name, "TIMER") == 0) { out = Value((float)hal_system_millis()); return true; }
+    // TEMP という名前は変数として使われがちなので CPUTEMP にしてある
+    if (strcmp(var_name, "CPUTEMP") == 0) { out = Value(hal_adc_read_temp_c()); return true; }
+    if (strcmp(var_name, "TIME$") == 0 || strcmp(var_name, "DATE$") == 0) {
+        RtcTime t;
+        if (!hal_rtc_get(&t)) throw std::runtime_error("RTC not found");
+        char buf[16];
+        if (var_name[0] == 'T')
+            snprintf(buf, sizeof(buf), "%02d:%02d:%02d", t.hour, t.minute, t.second);
+        else
+            snprintf(buf, sizeof(buf), "%04d-%02d-%02d", t.year, t.month, t.day);
+        out = Value(buf);
+        return true;
+    }
+    if (strcmp(var_name, "ERR") == 0) { out = Value(err_code); return true; }
+    if (strcmp(var_name, "ERL") == 0) { out = Value(err_line); return true; }
+    return false;
+}
 
 static Value parse_factor(const TokenList& tokens, int& pos) {
     if (pos >= tokens.size) return Value(0.0f);
@@ -305,65 +423,11 @@ static Value parse_factor(const TokenList& tokens, int& pos) {
         pos++;
 
         if (pos < tokens.size && tokens.tokens[pos].type == TokenType::LPAREN) {
-            pos++; 
-            Value args[16];
-            int arg_count = 0;
-            args[arg_count++] = parse_relation(tokens, pos);
-            while (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
-                pos++;
-                if (arg_count < 16) args[arg_count++] = parse_relation(tokens, pos);
-                else { parse_relation(tokens, pos); arg_count++; } 
-            }
-            require_token(tokens, pos, TokenType::RPAREN, "Syntax Error: Expected ')' for function or array");
-            pos++; 
-            
-            // DEF FN で定義したユーザー関数を優先して判定する。
-            // `FN` で始まる名前は関数用に予約されており、未定義ならその旨を返す。
-            if (var_name[0] == 'F' && var_name[1] == 'N' && var_name[2] != '\0') {
-                if (!is_user_func(var_name)) throw std::runtime_error("Undefined function");
-                if (arg_count != 1) throw std::runtime_error("FN takes exactly one argument");
-                return call_user_func(var_name, args[0]);
-            }
-
-            if (is_builtin_function(var_name)) {
-                return evaluate_builtin_function(var_name, args, arg_count);
-            }
-
-            ArrayRef* arr = get_array(var_name);
-            if (!arr) throw std::runtime_error("Array not dimensioned");
-            int flat_idx;
-            if (arg_count == 1) {
-                if (!args[0].is_numeric())
-                    throw std::runtime_error("Type Mismatch: Array index must be numeric");
-                flat_idx = flatten_array_index(arr, static_cast<int>(args[0].num_val));
-            } else if (arg_count == 2) {
-                if (!args[0].is_numeric() || !args[1].is_numeric())
-                    throw std::runtime_error("Type Mismatch: Array index must be numeric");
-                flat_idx = flatten_array_index(arr,
-                    static_cast<int>(args[0].num_val),
-                    static_cast<int>(args[1].num_val));
-            } else {
-                throw std::runtime_error("Syntax Error: Arrays support 1 or 2 dimensions");
-            }
-            return read_heap_value(arr->start_addr + (flat_idx * 8));
+            return parse_call_or_subscript(var_name, tokens, pos);
         }
         
-        // TIMER / CPUTEMP / ERR / ERL は括弧なしの組み込み値
-        if (strcmp(var_name, "TIMER") == 0) return Value((float)hal_system_millis());
-        // TEMP という名前は変数として使われがちなので CPUTEMP にしてある
-        if (strcmp(var_name, "CPUTEMP") == 0) return Value(hal_adc_read_temp_c());
-        if (strcmp(var_name, "TIME$") == 0 || strcmp(var_name, "DATE$") == 0) {
-            RtcTime t;
-            if (!hal_rtc_get(&t)) throw std::runtime_error("RTC not found");
-            char buf[16];
-            if (var_name[0] == 'T')
-                snprintf(buf, sizeof(buf), "%02d:%02d:%02d", t.hour, t.minute, t.second);
-            else
-                snprintf(buf, sizeof(buf), "%04d-%02d-%02d", t.year, t.month, t.day);
-            return Value(buf);
-        }
-        if (strcmp(var_name, "ERR") == 0) return Value(err_code);
-        if (strcmp(var_name, "ERL") == 0) return Value(err_line);
+        Value nullary;
+        if (read_nullary_builtin(var_name, nullary)) return nullary;
 
         Value v_val;
         if (!get_variable(var_name, v_val)) {
