@@ -1,5 +1,6 @@
 #pragma once
 #include "lexer.h"
+#include "strutil.h"
 #include <cstdint>
 #include <cstring>
 #include <cstdio>
@@ -9,21 +10,6 @@
 // ---------------------------------------------------------
 // Data Representation
 // ---------------------------------------------------------
-// 収まらなければ切り詰めて、必ず終端する。
-//
-// strncpy は「入りきったときだけ終端する」ので、正しく使うには毎回
-// 終端の 1 行が要る。その書き方は GCC が切り詰めの可能性として警告してくるため、
-// 意図（切り詰めてよい・必ず終端する）を名前にして 1 か所にまとめる。
-// src は終端済みの C 文字列であること（strnlen で上限を切ると、src が
-// dst より小さい配列だったときに「上限まで読むかもしれない」と警告される）。
-inline void copy_string(char* dst, size_t dst_size, const char* src) {
-    if (dst_size == 0) return;
-    size_t n = strlen(src);
-    if (n > dst_size - 1) n = dst_size - 1;
-    memcpy(dst, src, n);
-    dst[n] = '\0';
-}
-
 struct Value {
     enum class Type { NUM, INT, STR };
     Type type;

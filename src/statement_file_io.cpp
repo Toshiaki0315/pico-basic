@@ -193,8 +193,7 @@ void execute_line_input(const TokenList& tokens, int& pos) {
     require_token(tokens, pos, TokenType::IDENTIFIER,
                   "Syntax Error: LINE INPUT expects a string variable");
     char var_name[64];
-    strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name) - 1);
-    var_name[sizeof(var_name) - 1] = '\0';
+    copy_string(var_name, sizeof(var_name), tokens.tokens[pos].text);
     pos++;
 
     int nlen = (int)strlen(var_name);
@@ -237,8 +236,7 @@ void execute_input_file(const TokenList& tokens, int& pos) {
     while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE) {
         require_token(tokens, pos, TokenType::IDENTIFIER, "Syntax Error: INPUT# expects identifier");
         char var_name[64];
-        strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name) - 1);
-        var_name[sizeof(var_name) - 1] = '\0';
+        copy_string(var_name, sizeof(var_name), tokens.tokens[pos].text);
         pos++;
 
         int arr_idx, arr_idx2;
@@ -381,7 +379,7 @@ void execute_name(const TokenList& tokens, int& pos) {
     pos++; 
     require_token(tokens, pos, TokenType::STRING, "Syntax Error: NAME expects old filename string");
     char oldname[128];
-    strncpy(oldname, tokens.tokens[pos].text, sizeof(oldname)-1);
+    copy_string(oldname, sizeof(oldname), tokens.tokens[pos].text);
     pos++;
     
     require_token(tokens, pos, TokenType::AS, "Syntax Error: Expected AS in NAME command");

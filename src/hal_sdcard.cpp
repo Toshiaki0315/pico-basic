@@ -1,4 +1,5 @@
 #include "hal_sdcard.h"
+#include "strutil.h"
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -14,8 +15,7 @@ void hal_sdcard_resolve_path(const char* input_path, char* resolved_path, size_t
         p += 4;
     }
     
-    strncpy(resolved_path, p, max_len - 1);
-    resolved_path[max_len - 1] = '\0';
+    copy_string(resolved_path, (size_t)max_len, p);
 }
 
 #if __has_include("pico/stdlib.h")

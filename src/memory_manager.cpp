@@ -1,4 +1,5 @@
 #include "parser_internal.h"
+#include "strutil.h"
 #include <cstring>
 #include <stdexcept>
 
@@ -64,6 +65,8 @@ static Value read_compact_value(uint16_t addr) {
     } else if (v.type == Value::Type::STR) {
         uint16_t str_ptr;
         memcpy(&str_ptr, &logical_memory[addr + 10], 2);
+        // ここは copy_string ではなく strncpy。読み出し元は論理メモリの生バイトで、
+        // 127 バイト以内に終端がある保証を型では持てないため、上限を渡して止める
         strncpy(v.str_val, (const char*)&logical_memory[str_ptr + 2], 127);
         v.str_val[127] = '\0';
     }
@@ -139,7 +142,7 @@ void set_variable(const char* name, const Value& val) {
         uint16_t saddr = MEMORY_VAR_BASE + (i * 16);
         if (logical_memory[saddr + 9] == 0) {
             logical_memory[saddr + 9] = 1;
-            strncpy((char*)&logical_memory[saddr], name, 8);
+            copy_fixed_field(&logical_memory[saddr], 8, name); // 終端無しの 8 バイト欄
             write_compact_value(saddr, val);
             if (var_hash_valid) var_hash_put(i);
             return;
@@ -213,6 +216,8 @@ Value read_heap_value(uint16_t addr) {
     } else if (v.type == Value::Type::STR) {
         uint16_t str_ptr;
         memcpy(&str_ptr, &logical_memory[addr + 4], 2);
+        // ここは copy_string ではなく strncpy。読み出し元は論理メモリの生バイトで、
+        // 127 バイト以内に終端がある保証を型では持てないため、上限を渡して止める
         strncpy(v.str_val, (const char*)&logical_memory[str_ptr + 2], 127);
         v.str_val[127] = '\0';
     }
@@ -225,6 +230,7 @@ ArrayRef* get_array(const char* name) {
         uint16_t addr = ARRAY_TABLE_BASE + (i * 16);
         bool active = logical_memory[addr + 8] != 0;
         if (active && strncmp((const char*)&logical_memory[addr], name, 8) == 0) {
+            // 終端無しの 8 バイト欄からの読み出し。上限を渡して止める（上と同じ理由）
             strncpy(temp_arr.name, (const char*)&logical_memory[addr], 8);
             temp_arr.name[8] = '\0';
             temp_arr.active  = true;

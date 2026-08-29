@@ -143,7 +143,7 @@ static TokenList detokenize(const uint8_t* buffer) {
             ptr += len;
         } else {
             const char* kw = token_type_to_string(t.tokens[t.size].type);
-            strncpy(t.tokens[t.size].text, kw, MAX_TOKEN_LEN - 1);
+            copy_string(t.tokens[t.size].text, MAX_TOKEN_LEN, kw);
             t.tokens[t.size].text[MAX_TOKEN_LEN - 1] = '\0';
         }
         t.size++;

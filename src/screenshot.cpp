@@ -1,4 +1,5 @@
 #include "screenshot.h"
+#include "strutil.h"
 #include "hal_display.h"
 #include "hal_sdcard.h"
 #include <stdint.h>
@@ -96,8 +97,7 @@ bool screenshot_save_next(char* out_name, int out_size) {
         }
         if (!screenshot_save(name)) return false;
         if (out_name && out_size > 0) {
-            strncpy(out_name, name, (size_t)out_size - 1);
-            out_name[out_size - 1] = '\0';
+            copy_string(out_name, (size_t)out_size, name);
         }
         return true;
     }

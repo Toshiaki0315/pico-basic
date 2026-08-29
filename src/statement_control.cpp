@@ -141,8 +141,7 @@ void execute_for(const TokenList& tokens, int& pos) {
     pos++; 
     require_token(tokens, pos, TokenType::IDENTIFIER, "Syntax Error: Expected Identifier in FOR");
     char var_name[64];
-    strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name)-1);
-    var_name[sizeof(var_name)-1] = '\0';
+    copy_string(var_name, sizeof(var_name), tokens.tokens[pos].text);
     pos++;
 
     require_token(tokens, pos, TokenType::ASSIGN, "Syntax Error: Expected '=' in FOR");
@@ -180,8 +179,7 @@ void execute_next(const TokenList& tokens, int& pos) {
     
     char var_name[64] = "";
     if (pos < tokens.size && tokens.tokens[pos].type == TokenType::IDENTIFIER) {
-        strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name)-1);
-        var_name[sizeof(var_name)-1] = '\0';
+        copy_string(var_name, sizeof(var_name), tokens.tokens[pos].text);
         pos++;
     }
     

@@ -94,7 +94,7 @@ void execute_def(const TokenList& tokens, int& pos) {
     if (pos >= tokens.size || tokens.tokens[pos].type != TokenType::IDENTIFIER)
         throw std::runtime_error("Syntax Error: Expected FN name after DEF");
     char fname[MAX_TOKEN_LEN];
-    strncpy(fname, tokens.tokens[pos].text, MAX_TOKEN_LEN - 1);
+    copy_string(fname, sizeof(fname), tokens.tokens[pos].text);
     fname[MAX_TOKEN_LEN - 1] = '\0';
     if (!(fname[0] == 'F' && fname[1] == 'N' && fname[2] != '\0'))
         throw std::runtime_error("Syntax Error: DEF name must start with FN");
@@ -103,7 +103,7 @@ void execute_def(const TokenList& tokens, int& pos) {
     require_token(tokens, pos, TokenType::LPAREN, "Syntax Error: Expected '(' after FN name"); pos++;
     require_token(tokens, pos, TokenType::IDENTIFIER, "Syntax Error: Expected parameter name");
     char pname[MAX_TOKEN_LEN];
-    strncpy(pname, tokens.tokens[pos].text, MAX_TOKEN_LEN - 1);
+    copy_string(pname, sizeof(pname), tokens.tokens[pos].text);
     pname[MAX_TOKEN_LEN - 1] = '\0';
     pos++;
     require_token(tokens, pos, TokenType::RPAREN, "Syntax Error: Expected ')' after parameter"); pos++;
@@ -136,9 +136,9 @@ void execute_def(const TokenList& tokens, int& pos) {
         if (user_func_count >= MAX_USER_FUNCS) throw std::runtime_error("Too many DEF FN definitions");
         f = &user_funcs[user_func_count++];
     }
-    strncpy(f->name, fname, MAX_TOKEN_LEN - 1);  f->name[MAX_TOKEN_LEN - 1] = '\0';
-    strncpy(f->param, pname, MAX_TOKEN_LEN - 1); f->param[MAX_TOKEN_LEN - 1] = '\0';
-    strncpy(f->body, body, sizeof(f->body) - 1); f->body[sizeof(f->body) - 1] = '\0';
+    copy_string(f->name, sizeof(f->name), fname);
+    copy_string(f->param, sizeof(f->param), pname);
+    copy_string(f->body, sizeof(f->body), body);
 }
 
 // DELETE 開始[-終了] — 行番号の範囲を削除する（DELETE 100 は 1 行だけ）
@@ -250,8 +250,7 @@ void execute_read(const TokenList& tokens, int& pos) {
     while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE) {
         require_token(tokens, pos, TokenType::IDENTIFIER, "Syntax Error: READ expects identifier");
         char var_name[64];
-        strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name)-1);
-        var_name[sizeof(var_name)-1] = '\0';
+        copy_string(var_name, sizeof(var_name), tokens.tokens[pos].text);
         pos++;
         
         int arr_idx, arr_idx2;
@@ -285,8 +284,7 @@ void execute_dim(const TokenList& tokens, int& pos) {
     pos++; 
     require_token(tokens, pos, TokenType::IDENTIFIER, "Syntax Error: Expected identifier after DIM");
     char var_name[64];
-    strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name)-1);
-    var_name[sizeof(var_name)-1] = '\0';
+    copy_string(var_name, sizeof(var_name), tokens.tokens[pos].text);
     pos++;
     
     require_token(tokens, pos, TokenType::LPAREN, "Syntax Error: Expected '(' after DIM variable");
@@ -347,10 +345,8 @@ void execute_dim(const TokenList& tokens, int& pos) {
 
     logical_memory[table_addr + 8] = 1;              
     logical_memory[table_addr + 9] = (uint8_t)ndim;  
-    // 配列表の名前欄は 8 バイト固定長。終端は持たず、短い名前は 0 で埋める
-    // （strncpy の埋める挙動をそのまま書き下したもの）
-    memset(&logical_memory[table_addr], 0, 8);
-    memcpy(&logical_memory[table_addr], var_name, strnlen(var_name, 8));
+    // 配列表の名前欄は 8 バイト固定長。終端は持たない
+    copy_fixed_field(&logical_memory[table_addr], 8, var_name);
     memcpy(&logical_memory[table_addr + 10], &dim1_u16,    2);
     memcpy(&logical_memory[table_addr + 12], &dim2_u16,    2);
     memcpy(&logical_memory[table_addr + 14], &start_addr,  2);
@@ -420,8 +416,7 @@ void execute_input(const TokenList& tokens, int& pos) {
     while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE) {
         require_token(tokens, pos, TokenType::IDENTIFIER, "Syntax Error: INPUT expects identifier");
         char var_name[64];
-        strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name)-1);
-        var_name[sizeof(var_name)-1] = '\0';
+        copy_string(var_name, sizeof(var_name), tokens.tokens[pos].text);
         pos++;
         
         int arr_idx, arr_idx2;
@@ -541,8 +536,7 @@ void execute_get(const TokenList& tokens, int& pos) {
     pos++;
     require_token(tokens, pos, TokenType::IDENTIFIER, "Syntax Error: GET expects a variable");
     char var_name[64];
-    strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name) - 1);
-    var_name[sizeof(var_name) - 1] = '\0';
+    copy_string(var_name, sizeof(var_name), tokens.tokens[pos].text);
     pos++;
 
     int key = hal_system_get_key();
@@ -565,7 +559,7 @@ void execute_mid_statement(const TokenList& tokens, int& pos) {
     
     char var_name[64];
     require_token(tokens, pos, TokenType::IDENTIFIER, "Expected string variable name");
-    strncpy(var_name, tokens.tokens[pos].text, sizeof(var_name)-1);
+    copy_string(var_name, sizeof(var_name), tokens.tokens[pos].text);
     pos++;
     
     require_token(tokens, pos, TokenType::COMMA, "Expected ','"); pos++;

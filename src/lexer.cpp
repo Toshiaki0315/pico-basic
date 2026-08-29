@@ -1,4 +1,5 @@
 #include "lexer.h"
+#include "strutil.h"
 #include <cctype>
 #include <cstring>
 #include <cstdio>
@@ -223,7 +224,7 @@ TokenList lex(const char* source) {
 
             Token t;
             t.type = TokenType::IDENTIFIER;
-            strncpy(t.text, upper_ident, MAX_TOKEN_LEN);
+            copy_string(t.text, sizeof(t.text), upper_ident);
 
             TokenType kw;
             if (lookup_keyword(upper_ident, kw)) {

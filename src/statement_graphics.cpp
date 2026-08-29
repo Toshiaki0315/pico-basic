@@ -531,7 +531,7 @@ void execute_get_at(const TokenList& tokens, int& pos) {
         throw std::runtime_error("Expected array name");
     
     char array_name[64];
-    strncpy(array_name, tokens.tokens[pos].text, sizeof(array_name)-1);
+    copy_string(array_name, sizeof(array_name), tokens.tokens[pos].text);
     pos++;
     
     ArrayRef* arr = get_array(array_name);
@@ -612,8 +612,7 @@ void execute_put_at(const TokenList& tokens, int& pos) {
     if (pos >= tokens.size || tokens.tokens[pos].type != TokenType::IDENTIFIER)
         throw std::runtime_error("Expected array name");
     char array_name[64];
-    strncpy(array_name, tokens.tokens[pos].text, sizeof(array_name) - 1);
-    array_name[sizeof(array_name) - 1] = '\0';
+    copy_string(array_name, sizeof(array_name), tokens.tokens[pos].text);
     pos++;
 
     int mode = PUT_PSET;
