@@ -18,11 +18,8 @@
 
 static bool adc_ready = false;
 
-// 電源ボタンの長押し判定。押しっぱなしがこの時間続いたら電源を切る
-#define POWER_KEY_HOLD_MS 2000
-
-static uint32_t key_down_since = 0;
-static bool     key_fired      = false;
+// 判定そのものは power_key_step()（hal_battery.h）。ここは GPIO と時刻を渡すだけ
+static PowerKeyState power_key;
 
 void hal_battery_power_key_init() {
   gpio_init(BOARD_KEY_GPIO);
@@ -32,20 +29,7 @@ void hal_battery_power_key_init() {
 
 bool hal_battery_power_key_held() {
   bool down = !gpio_get(BOARD_KEY_GPIO); // プルアップなので押すと Low
-  if (!down) {
-    key_down_since = 0;
-    key_fired = false;
-    return false;
-  }
-  uint32_t now = to_ms_since_boot(get_absolute_time());
-  if (key_down_since == 0) {
-    key_down_since = now;
-    return false;
-  }
-  if (key_fired) return false; // 1 回の長押しにつき 1 度だけ
-  if (now - key_down_since < POWER_KEY_HOLD_MS) return false;
-  key_fired = true;
-  return true;
+  return power_key_step(power_key, down, to_ms_since_boot(get_absolute_time()));
 }
 
 void hal_battery_power_off() {

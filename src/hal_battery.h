@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 
 // バッテリ電圧の読み取り（Waveshare RP2350-Touch-LCD-2.8）
 //
@@ -32,6 +33,46 @@ void hal_battery_power_off();
 // 電源を切る処理は呼び出し側で行う（開いているファイルを閉じたいため）。
 void hal_battery_power_key_init();
 bool hal_battery_power_key_held();
+
+// ---------------------------------------------------------
+// 長押し判定のロジック（ハードウェアに依存しない）
+//
+// GPIO を読む部分・時刻を取る部分と切り離してあるのは、下の
+// battery_percent_from_mv() などと同じ理由。しきい値ぎりぎりの挙動や
+// 「1 回の長押しにつき 1 度だけ」は実機に触らないと確かめられない場所に
+// あると誰も確かめないので、ホストのテストから叩ける形にしておく。
+// ---------------------------------------------------------
+
+// 押しっぱなしがこの時間続いたら長押しと見なす
+constexpr uint32_t POWER_KEY_HOLD_MS = 2000;
+
+struct PowerKeyState {
+    bool     down_seen  = false; // 押されている状態を見たか
+    uint32_t down_since = 0;     // 押し始めの時刻
+    bool     fired      = false; // この長押しでは既に知らせた
+};
+
+// ポーリング 1 回ぶん。長押しが成立した「瞬間」だけ true を返す。
+//
+// 押し始めを down_since ではなく down_seen で覚えるのは、起動直後は
+// now_ms が 0 になり得るため。0 を「押していない」の目印に使うと、
+// その 1ms の間だけ時間の計測が始まらない。
+inline bool power_key_step(PowerKeyState& st, bool down, uint32_t now_ms) {
+    if (!down) { // 離した。次の長押しに備えて畳む
+        st.down_seen = false;
+        st.fired     = false;
+        return false;
+    }
+    if (!st.down_seen) { // 押し始め。ここから時間を測る
+        st.down_seen  = true;
+        st.down_since = now_ms;
+        return false;
+    }
+    if (st.fired) return false; // 1 回の長押しにつき 1 度だけ
+    if (now_ms - st.down_since < POWER_KEY_HOLD_MS) return false;
+    st.fired = true;
+    return true;
+}
 
 void hal_battery_init();
 

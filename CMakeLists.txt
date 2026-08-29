@@ -85,6 +85,7 @@ if(BUILD_TESTS)
         tests/test_operators_deffn.cpp
         tests/test_edit_debug_lang.cpp
         tests/test_file_ops.cpp
+        tests/test_power.cpp
         tests/test_builtin_functions_ext.cpp
         tests/test_advanced_features.cpp
         tests/test_sound_logic.cpp
