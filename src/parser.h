@@ -6,6 +6,10 @@ bool parse_and_execute(const TokenList& tokens);
 // BASIC の出力（LCD とシリアル端末の両方へ）
 void basic_print(const char* s);
 
+// Ctrl-C で実行中のプログラムを止める（CONT で再開できる状態にする）。
+// 実行ループの定期チェックと、入力待ちの最中に読んだ Ctrl-C の両方から呼ぶ
+void basic_break_program();
+
 // 電源を切る（POWEROFF 文と電源ボタンの長押しの共通処理）。
 // 電源が落ちれば戻らない。戻ったときは切れなかったということで、
 // 開いていたファイルは閉じたうえで実行中のプログラムを停止させてある。

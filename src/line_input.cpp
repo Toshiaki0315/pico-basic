@@ -82,6 +82,16 @@ bool line_input_read_line(char* buffer, int max_len) {
         if (c == LINE_INPUT_POWER_OFF) return false;
         if (c == LINE_INPUT_SKIP) continue;
 
+        if (c == 0x03) { // Ctrl-C
+            // 入力待ちで塞がっている間は実行ループが回らないので、ここで
+            // 読んだ Ctrl-C は自分で中断させる。そうしないと INPUT で止まった
+            // プログラムを止める手段が電源の長押ししか無くなる
+            printf("\n");
+            hal_display_print("\n");
+            basic_break_program();
+            return false;
+        }
+
         if (c == '\r' || c == '\n') {
             printf("\n");
             hal_display_print("\n");

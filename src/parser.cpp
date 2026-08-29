@@ -307,6 +307,33 @@ void run_program(int max_steps) {
     run_loop(prog_line_no(ptr), -1, max_steps);
 }
 
+// Ctrl-C による中断。
+//
+// 実行ループの定期チェックからも、入力待ちで塞がっている最中（INPUT）からも
+// 呼ぶ。塞がっている間は実行ループが回らないので、そこで押された Ctrl-C は
+// 読み取った側が自分で中断させる必要がある。
+void basic_break_program() {
+    hal_sound_stop(); // 非同期で鳴っている演奏も止める
+
+    if (current_line < 0) { // ダイレクトモード。止めるプログラムが無い
+        basic_print("Break\n");
+        branch_taken = true;
+        return;
+    }
+
+    // CONT でこの行の頭から再開できるようにする
+    cont_line  = current_line;
+    cont_pos   = -1;
+    cont_valid = true;
+
+    char buf[64];
+    snprintf(buf, sizeof(buf), "Break in %d\n", current_line);
+    basic_print(buf);
+
+    current_line = -1;
+    branch_taken = true;
+}
+
 // 実行ループ本体。RUN は先頭行から、CONT は中断位置から入る。
 // start_pos が 0 以上なら、その行をその位置（文の区切り）から再開する。
 static void run_loop(int start_line, int start_pos, int max_steps) {
@@ -325,14 +352,7 @@ static void run_loop(int start_line, int start_pos, int max_steps) {
         // Ctrl-C による中断。無限ループから抜ける唯一の手段なので、
         // 反応が鈍らないよう十分短い間隔で確認する
         if ((steps & 0x0F) == 0 && hal_system_break_requested()) {
-            hal_sound_stop(); // 非同期で鳴っている演奏も止める
-            // CONT でこの行の頭から再開できるようにする
-            cont_line = current_line;
-            cont_pos = -1;
-            cont_valid = true;
-            char buf[64];
-            snprintf(buf, sizeof(buf), "Break in %d\n", current_line);
-            basic_print(buf);
+            basic_break_program();
             break;
         }
 

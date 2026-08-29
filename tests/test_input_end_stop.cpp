@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include "parser.h"
 #include "hal_display.h"
+#include "mock_hal_display.h"
+#include "lexer.h"
 
 class InputEndStopTest : public ::testing::Test {
 protected:
@@ -95,4 +97,58 @@ TEST_F(InputEndStopTest, InputDropsUndisplayableMultibyteWhole) {
     parse_and_execute(lex("PRINT LEN(A$)"));
     std::string output = testing::internal::GetCapturedStdout();
     EXPECT_EQ(output, "? AB\n2\n");
+}
+
+// --- INPUT 待ちの Ctrl-C ---------------------------------------------------
+//
+// 実行ループの Ctrl-C チェックは INPUT で塞がっている間は回らない。
+// 読み取る側が自分で中断させないと、INPUT で止まったプログラムを止める手段が
+// 電源の長押ししか無くなる。
+
+TEST_F(InputEndStopTest, CtrlCAtInputPromptBreaksTheProgram) {
+    hal_display_set_mock_input("\x03"); // Ctrl-C
+    parse_and_execute(lex("10 INPUT A$"));
+    parse_and_execute(lex("20 PRINT \"AFTER\""));
+
+    testing::internal::CaptureStdout();
+    run_program();
+    std::string output = testing::internal::GetCapturedStdout();
+
+    EXPECT_NE(output.find("Break in 10"), std::string::npos) << output;
+    EXPECT_EQ(output.find("AFTER"), std::string::npos) << output;
+}
+
+// 中断したところから CONT で再開できること（実行ループ側の Ctrl-C と同じ扱い）
+TEST_F(InputEndStopTest, CtrlCAtInputPromptAllowsCont) {
+    hal_display_set_mock_input("\x03");
+    parse_and_execute(lex("10 INPUT A$"));
+    parse_and_execute(lex("20 PRINT \"AFTER\""));
+    run_program();
+
+    hal_display_set_mock_input("HI"); // 今度はちゃんと入力する
+    testing::internal::CaptureStdout();
+    parse_and_execute(lex("CONT"));
+    std::string output = testing::internal::GetCapturedStdout();
+    EXPECT_NE(output.find("AFTER"), std::string::npos) << output;
+}
+
+// ダイレクトモードの INPUT では止めるプログラムが無いので行番号を出さない
+TEST_F(InputEndStopTest, CtrlCAtDirectModeInputSaysBreakWithoutLine) {
+    hal_display_set_mock_input("\x03");
+    testing::internal::CaptureStdout();
+    parse_and_execute(lex("INPUT A$"));
+    std::string output = testing::internal::GetCapturedStdout();
+    EXPECT_NE(output.find("Break"), std::string::npos) << output;
+    EXPECT_EQ(output.find("Break in"), std::string::npos) << output;
+}
+
+// 中断されたら変数には書かない
+TEST_F(InputEndStopTest, CtrlCAtInputLeavesVariableUntouched) {
+    parse_and_execute(lex("A$ = \"KEEP\""));
+    hal_display_set_mock_input("\x03");
+    parse_and_execute(lex("INPUT A$"));
+
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT A$"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "KEEP\n");
 }
