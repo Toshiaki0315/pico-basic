@@ -1,4 +1,7 @@
 #pragma once
+
+/// @file hal_battery.h
+/// 電池電圧・電源ラッチ・電源ボタン。
 #include <cstdint>
 
 // バッテリ電圧の読み取り（Waveshare RP2350-Touch-LCD-2.8）
@@ -19,19 +22,30 @@
 // そのため USB 接続中に BAT_EN を立てても電池と USB がぶつかることはない。
 // **Low にすると電池運用時にその場で電源が落ちる**ので、下げてはならない。
 
-// 電池パスのラッチを保持する（BAT_EN=High）。
-// **main() の先頭で、他の初期化より前に呼ぶこと。** Key2 で電池起動したとき、
-// ここを通るまでボタンを押し続けないと電源が落ちるため。
+/**
+ * @brief 電池パスのラッチを保持する（BAT_EN=High）。
+ *
+ * **main() の先頭で、他の初期化より前に呼ぶこと。** Key2 で電池起動したとき、
+ * ここを通るまでボタンを押し続けないと電源が落ちるため。
+ */
 void hal_battery_power_latch_hold();
 
-// 電池パスを閉じて電源を切る（BAT_EN=Low）。
-// USB 給電中は USB から電源が来続けるので切れない。
-// また Key2 を押している間はボタンが直接ゲートを引くので、離すまで切れない。
+/**
+ * @brief 電池パスを閉じて電源を切る（BAT_EN=Low）。
+ *
+ * USB 給電中は USB から電源が来続けるので切れない。
+ * また Key2 を押している間はボタンが直接ゲートを引くので、離すまで切れない。
+ */
 void hal_battery_power_off();
 
-// 電源ボタン(Key2)が規定時間押し続けられたら true を返す（1 回の長押しにつき 1 度）。
-// 電源を切る処理は呼び出し側で行う（開いているファイルを閉じたいため）。
+/// @brief 電源ボタン(Key2)のピンをプルアップ付き入力にする
 void hal_battery_power_key_init();
+
+/**
+ * @brief 電源ボタン(Key2)が規定時間押し続けられたかを調べる。
+ * @return 長押しが成立した「瞬間」だけ true（1 回の長押しにつき 1 度）。
+ *         電源を切る処理は呼び出し側で行う（開いているファイルを閉じたいため）
+ */
 bool hal_battery_power_key_held();
 
 // ---------------------------------------------------------
@@ -57,6 +71,13 @@ struct PowerKeyState {
 // 押し始めを down_since ではなく down_seen で覚えるのは、起動直後は
 // now_ms が 0 になり得るため。0 を「押していない」の目印に使うと、
 // その 1ms の間だけ時間の計測が始まらない。
+/**
+ * @brief 長押し判定のポーリング 1 回ぶん。
+ * @param st 押し始めからの状態。呼び出し側が保持する
+ * @param down いまボタンが押されているか
+ * @param now_ms 現在時刻（ミリ秒）
+ * @return 長押しが成立した「瞬間」だけ true
+ */
 inline bool power_key_step(PowerKeyState& st, bool down, uint32_t now_ms) {
     if (!down) { // 離した。次の長押しに備えて畳む
         st.down_seen = false;
@@ -74,9 +95,14 @@ inline bool power_key_step(PowerKeyState& st, bool down, uint32_t now_ms) {
     return true;
 }
 
+/// @brief 電池電圧を読む ADC ピンを用意する
 void hal_battery_init();
 
 // 電池電圧をミリボルトで返す。読めない場合は 0。
+/**
+ * @brief 電池電圧を読む（16 サンプルの平均）。
+ * @return ミリボルト。読めない場合は 0
+ */
 int hal_battery_millivolts();
 
 // USB から給電されているか（1=USB、0=電池のみ）。
@@ -84,11 +110,24 @@ int hal_battery_millivolts();
 // 基板には VBUS を MCU に戻す配線が無いため、USB の CDC が
 // ホストと接続されているか（pico の stdio_usb_connected）で代用している。
 // そのため「データ通信をしない充電器だけに挿した場合」は 0 を返す。
+/**
+ * @brief USB から給電されているか。
+ * @return 給電中なら 1。VBUS の配線が無いので USB シリアルの接続状態で代用する
+ */
 int hal_battery_usb_connected();
 
 // ホストテスト用: 次に hal_battery_millivolts() が返す値を差し替える。
 // 実機ビルドでは何もしない。
+/// @brief テスト用の差し込み口（実機では何もしない）
+/**
+ * @brief テスト用の差し込み口（実機では何もしない）。
+ * @param mv 以降 hal_battery_millivolts() が返す値
+ */
 void hal_battery_set_mock_millivolts(int mv);
+/**
+ * @brief テスト用の差し込み口（実機では何もしない）。
+ * @param connected 以降 hal_battery_usb_connected() が返す値
+ */
 void hal_battery_set_mock_usb(int connected);
 
 // ---------------------------------------------------------
@@ -98,6 +137,11 @@ void hal_battery_set_mock_usb(int connected);
 
 // 残量の目安 0-100%。3.30V を 0%、4.20V を 100% とした直線近似。
 // リチウムポリマーの放電曲線は中間が平坦なので、あくまで目安。
+/**
+ * @brief 電圧から残量の目安を出す。
+ * @param mv 電池電圧（ミリボルト）
+ * @return 0-100（%）
+ */
 inline int battery_percent_from_mv(int mv) {
     int pct = (mv - 3300) * 100 / (4200 - 3300);
     if (pct < 0) pct = 0;
@@ -131,6 +175,12 @@ enum class BatteryPresence {
 //   空の電池 + USB      → 2340mV（電池が引き下げる。充電されて徐々に上がる）
 // 以前は 2500mV 未満を「電池なし」と判定していたが、実測はその逆で、
 // 低電圧はむしろ「深く放電した電池がある」ことを示していた。
+/**
+ * @brief 電池があるか判定する。
+ * @param mv 電池電圧（ミリボルト）
+ * @param usb_connected USB 給電中なら非 0
+ * @return Present か Unknown。「無し」は返らない
+ */
 inline BatteryPresence battery_presence(int mv, int usb_connected) {
     if (!usb_connected) return BatteryPresence::Present;   // 電源が電池しかない
     if (mv < BATTERY_FLOAT_MV) return BatteryPresence::Present; // 電池が引き下げている

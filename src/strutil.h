@@ -1,4 +1,7 @@
 #pragma once
+
+/// @file strutil.h
+/// 固定長バッファへの文字列コピー。
 #include <cstring>
 
 // ---------------------------------------------------------
@@ -13,10 +16,15 @@
 // strncpy に上限を渡すこと。下の関数は src が終端済みであることを前提にする。
 // ---------------------------------------------------------
 
-// 収まらなければ切り詰めて、必ず終端する。src は終端済みの C 文字列であること。
-//
-// strlen を使うのは、strnlen で上限を切ると src が dst より小さい配列だった
-// ときに「上限まで読むかもしれない」と警告されるため。
+/**
+ * @brief C 文字列を固定長バッファへ写す。収まらなければ切り詰め、必ず終端する。
+ * @param dst 書き込み先
+ * @param dst_size dst の大きさ（終端を含む）。0 なら何もしない
+ * @param src 終端済みの C 文字列
+ *
+ * strlen を使うのは、strnlen で上限を切ると src が dst より小さい配列だった
+ * ときに「上限まで読むかもしれない」と警告されるため。
+ */
 inline void copy_string(char* dst, size_t dst_size, const char* src) {
     if (dst_size == 0) return;
     size_t n = strlen(src);
@@ -25,8 +33,12 @@ inline void copy_string(char* dst, size_t dst_size, const char* src) {
     dst[n] = '\0';
 }
 
-// 終端を持たない固定長の欄に書く（論理メモリ上の 8 バイトの変数名など）。
-// 短い名前は 0 で埋める。strncpy の埋める挙動をそのまま書き下したもの。
+/**
+ * @brief 終端を持たない固定長の欄に書く（論理メモリ上の 8 バイトの変数名など）。
+ * @param dst 書き込み先の欄
+ * @param width 欄の大きさ。ここより後ろへは書かない
+ * @param src 終端済みの C 文字列。width より短ければ残りを 0 で埋める
+ */
 inline void copy_fixed_field(void* dst, size_t width, const char* src) {
     size_t n = strlen(src);
     if (n > width) n = width;

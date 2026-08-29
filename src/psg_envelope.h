@@ -1,4 +1,8 @@
 #pragma once
+
+/// @file psg_envelope.h
+/// PSG（AY-3-8910 相当）のハードウェアエンベロープ。
+/// ハードウェアに依存しないので、ホストのテストからそのまま検証できる。
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -13,6 +17,13 @@
 // ---------------------------------------------------------
 
 // 形状書き込み時の初期化
+/**
+ * @brief 形状に応じてエンベロープの初期状態を作る。
+ * @param[out] vol 音量（0-15）
+ * @param[out] dir 進む向き（+1 で増加、-1 で減少）
+ * @param[out] hold 端に達したら止まるか
+ * @param shape 形状レジスタの値（下位 4bit）
+ */
 static inline void psg_envelope_init(int* vol, int* dir, bool* hold, uint8_t shape) {
     bool attack = shape & 0x04;
     *vol  = attack ? 0 : 15;   // Attack:0 から上昇 / それ以外:15 から下降
@@ -21,6 +32,13 @@ static inline void psg_envelope_init(int* vol, int* dir, bool* hold, uint8_t sha
 }
 
 // 振幅を 1 段進める
+/**
+ * @brief エンベロープを 1 段進める。
+ * @param[in,out] vol 音量（0-15）
+ * @param[in,out] dir 進む向き
+ * @param[in,out] hold 端で止まる状態か
+ * @param shape 形状レジスタの値（下位 4bit）
+ */
 static inline void psg_envelope_step(int* vol, int* dir, bool* hold, uint8_t shape) {
     if (*hold) return;
 

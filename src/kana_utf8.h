@@ -1,4 +1,7 @@
 #pragma once
+
+/// @file kana_utf8.h
+/// 半角カタカナの UTF-8 <-> JIS X 0201 変換（端末とのやり取り用）。
 #include <stdio.h>
 
 // ---------------------------------------------------------
@@ -17,6 +20,12 @@
 // ---------------------------------------------------------
 
 // 戻り値は out に書いたバイト数（半角カタカナなら 3、それ以外は 0）。
+/**
+ * @brief JIS X 0201 の 1 バイトを UTF-8 へ直す。
+ * @param c 変換する 1 バイト
+ * @param[out] out UTF-8 の 3 バイト
+ * @return out に書いたバイト数（半角カタカナなら 3、それ以外は 0）
+ */
 inline int jis_kana_to_utf8(unsigned char c, char out[3]) {
     if (c < 0xA1 || c > 0xDF) return 0;
     unsigned int cp = 0xFF61u + (unsigned int)(c - 0xA1u);
@@ -31,6 +40,10 @@ inline int jis_kana_to_utf8(unsigned char c, char out[3]) {
 // 出力は必ず putchar で行うこと。Pico SDK が USB CDC / UART に繋いでいるのは
 // printf / puts / putchar / getchar だけ（pico_stdio の pico_wrap_function）で、
 // fwrite は newlib の FILE 経由になり端末には何も届かない。
+/**
+ * @brief シリアルへ 1 バイト書く。半角カタカナだけ UTF-8 にする。
+ * @param c 書くバイト
+ */
 inline void serial_putc_kana(unsigned char c) {
     char utf8[3];
     int n = jis_kana_to_utf8(c, utf8);
@@ -46,6 +59,11 @@ inline void serial_putc_kana(unsigned char c) {
 //
 // 端末は 3 バイトで送ってくるので、2 バイトだけ読み捨てると 1 バイト分ずれて
 // 残りが別の文字に化ける（`ﾀﾁﾂ` が `ｾ` になる、など）。必ず 3 バイトで扱うこと。
+/**
+ * @brief UTF-8 の 3 バイトを JIS X 0201 の 1 バイトへ畳む。
+ * @param b1,b2,b3 UTF-8 の 3 バイト
+ * @return JIS の 1 バイト（0xA1-0xDF）。半角カタカナでなければ 0
+ */
 inline unsigned char utf8_to_jis_kana(unsigned char b1, unsigned char b2, unsigned char b3) {
     if ((b1 & 0xF0) != 0xE0) return 0;                     // 3 バイト文字の 1 バイト目か
     if ((b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80) return 0; // 継続バイトか
@@ -56,6 +74,10 @@ inline unsigned char utf8_to_jis_kana(unsigned char b1, unsigned char b2, unsign
     return (unsigned char)(0xA1 + (cp - 0xFF61));
 }
 
+/**
+ * @brief 文字列をシリアルへ書く。半角カタカナだけ UTF-8 にする。
+ * @param s 書く文字列
+ */
 inline void serial_print_kana(const char* s) {
     for (const unsigned char* p = (const unsigned char*)s; *p; ++p) {
         serial_putc_kana(*p);

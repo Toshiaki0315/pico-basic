@@ -1,5 +1,8 @@
 #pragma once
 
+/// @file lexer.h
+/// 字句解析。1 行のソースをトークン列に変換する。
+
 #define MAX_TOKEN_LEN 128
 #define MAX_TOKENS_PER_LINE 128
 
@@ -71,11 +74,13 @@ enum class TokenType {
     END_OF_FILE
 };
 
+/// トークン 1 個。text は種別によって意味が変わる（本文を持たない種別では命令語）
 struct Token {
     TokenType type;
     char text[MAX_TOKEN_LEN];
 };
 
+/// 1 行ぶんのトークン列。固定長で、動的確保はしない
 struct TokenList {
     Token tokens[MAX_TOKENS_PER_LINE];
     int size;
@@ -83,4 +88,12 @@ struct TokenList {
     TokenList() : size(0) {}
 };
 
+/**
+ * @brief 1 行のソースをトークン列に変換する。
+ * @param source 解析する 1 行。改行は含めないこと
+ *               （REM は行末までを本文に取り込むため、残っていると混ざる）
+ * @return トークン列。末尾には必ず END_OF_FILE が入る。
+ *         MAX_TOKENS_PER_LINE を超える分は切り捨てる
+ * @throws std::runtime_error 変数名の規則に反する語、不正な &- リテラル
+ */
 TokenList lex(const char* source);

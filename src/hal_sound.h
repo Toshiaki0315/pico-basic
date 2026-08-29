@@ -1,4 +1,7 @@
 #pragma once
+
+/// @file hal_sound.h
+/// I2S サウンド出力。発音は DMA で非同期に進む。
 #include <stdint.h>
 
 // ---------------------------------------------------------
@@ -33,25 +36,47 @@ typedef struct {
 // キューが満杯のときだけ、空きができるまで待つ。
 // ---------------------------------------------------------
 
+/// @brief PIO と DMA を用意して I2S 出力を始める
 void hal_sound_init();
+/// @brief 短いビープを鳴らす
 void hal_sound_beep();
 
 // 単音発音（内部的には voice 0 のみを使う）
+/**
+ * @brief 単音を鳴らす（非同期。すぐ戻る）。
+ * @param frequency 周波数（Hz）。0 以下なら休符
+ * @param duration_ms 長さ（ミリ秒）
+ */
 void hal_sound_play(float frequency, int duration_ms);
 
 // 最大 HAL_SOUND_VOICES 声を duration_ms だけ同時に発音する。
 // 連続して積めば、周波数が変わらない声は位相を保って繋がる。
+/**
+ * @brief 複数声部を同時に鳴らす（非同期）。
+ * @param voices 声部ごとの周波数と音量
+ * @param duration_ms 長さ（ミリ秒）
+ */
 void hal_sound_play_voices(const HalSoundVoice voices[HAL_SOUND_VOICES], int duration_ms);
 
 // キューを捨てて即座に全声を消音する（Ctrl-C や NEW から呼ぶ）
+/// @brief 鳴っている音を止める
 void hal_sound_stop();
 
 // 再生中（キューに残りがある、または発音中）なら 1
+/**
+ * @brief まだ鳴っているか。
+ * @return 鳴っていれば 1
+ */
 int hal_sound_is_playing();
 
 // 起動音（PC-9801 風の 2 音「ピポッ」）を鳴らす
+/// @brief 起動音を鳴らす（非同期なので待たされない）
 void hal_sound_startup_chime();
 
+/**
+ * @brief 音量を変える。
+ * @param volume 0-15
+ */
 void hal_sound_set_volume(int volume); // 0-15
 
 // ---------------------------------------------------------
@@ -72,6 +97,11 @@ void hal_sound_set_volume(int volume); // 0-15
 // トーン周波数 = 2MHz / (16 × 周期)
 // ---------------------------------------------------------
 #define HAL_SOUND_PSG_REGS 16
+/**
+ * @brief PSG 相当のレジスタへ書く（BASIC の SOUND 文）。
+ * @param reg レジスタ番号（0-15）
+ * @param data 書き込む値
+ */
 void hal_sound_psg_write(int reg, int data);
 
 #ifdef __cplusplus
