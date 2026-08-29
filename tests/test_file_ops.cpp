@@ -469,6 +469,44 @@ TEST_F(FileOpsTest, PowerOffClearsDeferredDrawing) {
     EXPECT_FALSE(hal_display_is_deferred());
 }
 
+// 電源が切れなかったとき、閉じたファイルのまま実行が続くとデータが落ちる。
+// ホストでは必ず「切れない」経路を通るので、そのまま回帰テストになる
+TEST_F(FileOpsTest, PowerOffStopsTheProgramWhenPowerStaysOn) {
+    store_line(10, lex("POWEROFF"));
+    store_line(20, lex("PRINT \"AFTER\""));
+    mock_hal::reset();
+    parse_and_execute(lex("RUN"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer().find("AFTER"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}
+
+// 同じ行に続く文も実行しない（END と同じ扱い）
+TEST_F(FileOpsTest, PowerOffStopsRestOfTheSameLine) {
+    store_line(10, lex("POWEROFF : PRINT \"AFTER\""));
+    mock_hal::reset();
+    parse_and_execute(lex("RUN"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer().find("AFTER"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}
+
+// 停止しても、閉じた内容は確定していること（1 の対の確認）
+TEST_F(FileOpsTest, PowerOffFlushesBeforeStopping) {
+    store_line(10, lex("OPEN \"PW2.DAT\" FOR OUTPUT AS #1"));
+    store_line(20, lex("PRINT #1, \"FLUSHED\""));
+    store_line(30, lex("POWEROFF"));
+    store_line(40, lex("PRINT #1, \"NEVER\""));
+    parse_and_execute(lex("RUN"));
+
+    clear_program();
+    mock_hal::reset();
+    store_line(10, lex("OPEN \"PW2.DAT\" FOR INPUT AS #1"));
+    store_line(20, lex("LINE INPUT #1, A$"));
+    store_line(30, lex("CLOSE #1"));
+    store_line(40, lex("PRINT A$"));
+    parse_and_execute(lex("RUN"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "FLUSHED\n");
+}
+
 TEST_F(FileOpsTest, PowerOffSurvivesListRoundTrip) {
     store_line(10, lex("POWEROFF"));
     mock_hal::reset();

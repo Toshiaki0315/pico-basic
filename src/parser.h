@@ -6,7 +6,9 @@ bool parse_and_execute(const TokenList& tokens);
 // BASIC の出力（LCD とシリアル端末の両方へ）
 void basic_print(const char* s);
 
-// 電源を切る（POWEROFF 文と電源ボタンの長押しの共通処理）
+// 電源を切る（POWEROFF 文と電源ボタンの長押しの共通処理）。
+// 電源が落ちれば戻らない。戻ったときは切れなかったということで、
+// 開いていたファイルは閉じたうえで実行中のプログラムを停止させてある。
 void basic_power_off();
 
 // 乱数の種を時刻から作る（RUN のたびに撒き直すのに使う）

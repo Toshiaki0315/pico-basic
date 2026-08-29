@@ -1027,6 +1027,11 @@ void execute_imu_status(const TokenList& tokens, int& pos) {
 //
 // 電池パスを閉じる前に、開いているファイルを閉じて書き込みを確定させる。
 // 表示も出し切ってから切らないと、SPI 転送の途中で電源が消える。
+//
+// 電源が落ちればこの関数からは戻らない。戻ってきたのは切れなかったとき
+// （USB 給電中か、ボタンを押したまま）で、そのときは実行中のプログラムを
+// END と同じ形で止める。ファイルを閉じてしまった以上、閉じたまま次の文へ
+// 進ませると、そこから「File not open」が出るか書いたつもりの出力が落ちる。
 void basic_power_off() {
     basic_files_close_all();
     hal_display_set_deferred(false); // SYNC OFF のままだと表示が出ない
@@ -1037,11 +1042,15 @@ void basic_power_off() {
     // ここに来たということは電源が切れていない。
     // USB 給電中か、電源ボタンを押したままか（ボタンは離すまでゲートを引き続ける）
     basic_print("STILL POWERED (USB OR KEY HELD)\n");
+
+    // END と同じ止め方。ダイレクトモードでは current_line は元から -1
+    current_line = -1;
+    branch_taken = true;
 }
 
 void execute_poweroff(const TokenList& tokens, int& pos) {
-    pos++; // POWEROFF
-    basic_power_off();
+    basic_power_off();  // 電源が落ちればここから戻らない
+    pos = tokens.size;  // 戻ってきた＝切れなかった。同じ行の残りも実行しない
 }
 
 // SYNC / SYNC OFF / SYNC ON — 画面転送の制御。
