@@ -47,7 +47,6 @@ TEST_F(BuiltInFunctionsExtTest, StringFunctions) {
 TEST_F(BuiltInFunctionsExtTest, RndSeeding) {
     // Seeding with -1 should produce repeatable results
     parse_and_execute(lex("X = RND(-1)"));
-    float r1 = 0; // we just check it doesn't crash here
     parse_and_execute(lex("PRINT RND(0)"));
     std::string out1 = mock_hal::get_raw_print_buffer();
     

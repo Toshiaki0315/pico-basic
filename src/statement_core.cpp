@@ -317,7 +317,7 @@ void execute_gosub(const TokenList& tokens, int& pos) {
     gosub_branch(target, pos, "Out of Memory: Call Stack Limit Reached");
 }
 
-void execute_return(const TokenList& tokens, int& pos) {
+void execute_return(const TokenList&, int& pos) {
     pos++;
     if (call_stack_ptr == 0) throw std::runtime_error("RETURN WITHOUT GOSUB");
     call_stack_ptr--;
@@ -735,7 +735,7 @@ void execute_while(const TokenList& tokens, int& pos) {
     skip_to_matching_wend(tokens, pos);
 }
 
-void execute_wend(const TokenList& tokens, int& pos) {
+void execute_wend(const TokenList&, int& pos) {
     pos++;
     if (while_stack_ptr == 0) throw std::runtime_error("WEND without WHILE");
     current_line = while_stack_line[while_stack_ptr - 1];
@@ -841,7 +841,7 @@ static void execute_print_using(const TokenList& tokens, int& pos) {
     basic_print(out);
 }
 
-void execute_repeat(const TokenList& tokens, int& pos) {
+void execute_repeat(const TokenList&, int& pos) {
     pos++;
 
     // 同じ REPEAT に再突入したとき（UNTIL から戻ってきた場合）は
@@ -970,7 +970,7 @@ void execute_on(const TokenList& tokens, int& pos) {
 
 // 引数なしの `BATTERY` — 電池の状態をまとめて表示する。
 // 40 桁に収めるため 2 行に分ける。
-void execute_battery_status(const TokenList& tokens, int& pos) {
+void execute_battery_status(const TokenList&, int& pos) {
     pos++; // BATTERY
     int mv  = hal_battery_millivolts();
     int usb = hal_battery_usb_connected();
@@ -992,7 +992,7 @@ void execute_battery_status(const TokenList& tokens, int& pos) {
 
 // 引数なしの `IMU` — 6 軸の値をまとめて表示する（BATTERY と同じ形）。
 // 傾け方と数値の対応を実機で確かめるときの入口。
-void execute_imu_status(const TokenList& tokens, int& pos) {
+void execute_imu_status(const TokenList&, int& pos) {
     pos++; // IMU
     char buf[96];
     if (!hal_imu_present()) {
@@ -1118,7 +1118,7 @@ void execute_randomize(const TokenList& tokens, int& pos) {
 }
 
 // 引数なしの `RTC` — 日付・時刻と状態をまとめて表示する
-void execute_rtc_status(const TokenList& tokens, int& pos) {
+void execute_rtc_status(const TokenList&, int& pos) {
     pos++; // RTC
     RtcTime t;
     if (!hal_rtc_present() || !hal_rtc_get(&t)) {

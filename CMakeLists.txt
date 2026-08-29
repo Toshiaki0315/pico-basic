@@ -41,6 +41,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # 【追加修正2】Pico SDK で C++ の例外処理 (try/catch/throw) を有効にする
 set(PICO_CXX_ENABLE_EXCEPTIONS 1)
 
+# 警告を出す。組み込みでは踏んでから気づくと調査が高くつくので、
+# コンパイラが静的に言えることは全部言わせる。
+# 自分たちのコードにだけ効かせたいので、SDK や FetchContent で持ってくる
+# 依存（googletest / FatFS ドライバ）に及ばないターゲット単位で付ける
+set(PROJECT_WARNINGS -Wall -Wextra)
+
 if(BUILD_TESTS)
     message(STATUS "🚀 Building for HOST tests (Google Test will be downloaded)")
     
@@ -70,6 +76,7 @@ if(BUILD_TESTS)
         src/hal_sdcard.cpp
     )
     target_include_directories(core_lib PUBLIC src)
+    target_compile_options(core_lib PRIVATE ${PROJECT_WARNINGS})
 
     add_executable(basic_tests
         tests/test_lexer.cpp
@@ -96,6 +103,7 @@ if(BUILD_TESTS)
         src/hal_sound.cpp
     )
     target_include_directories(basic_tests PRIVATE src tests)
+    target_compile_options(basic_tests PRIVATE ${PROJECT_WARNINGS})
     target_link_libraries(basic_tests PRIVATE core_lib GTest::gtest_main)
 
     include(GoogleTest)
@@ -149,6 +157,8 @@ else()
         src/line_input.cpp
         src/screenshot.cpp
     )
+
+    target_compile_options(pico_basic PRIVATE ${PROJECT_WARNINGS})
 
     if (TARGET pico_stdlib)
         pico_generate_pio_header(pico_basic ${CMAKE_CURRENT_LIST_DIR}/src/pio/i2s_out.pio)

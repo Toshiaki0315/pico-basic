@@ -1010,7 +1010,7 @@ void execute_name(const TokenList& tokens, int& pos) {
     basic_print("Renamed\n");
 }
 
-void execute_files(const TokenList& tokens, int& pos) {
+void execute_files(const TokenList&, int& pos) {
     pos++; 
     
     void* dir = hal_dir_open(".");
@@ -1057,7 +1057,7 @@ void execute_files(const TokenList& tokens, int& pos) {
     basic_print(buf);
 }
 
-void execute_beep(const TokenList& tokens, int& pos) {
+void execute_beep(const TokenList&, int& pos) {
     pos++; 
     hal_sound_beep();
 }

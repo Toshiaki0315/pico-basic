@@ -433,7 +433,7 @@ int hal_system_get_key() {
 
 void hal_display_init() {}
 
-void hal_display_print(const char *text) {
+void hal_display_print(const char *) {
   // Implementation is in mock_hal_display.cpp
 }
 
@@ -441,17 +441,17 @@ void hal_display_cls() {
   // Implementation is in mock_hal_display.cpp
 }
 
-void hal_display_locate(int x, int y) {}
+void hal_display_locate(int, int) {}
 
-void hal_graphics_pset(int x, int y, uint16_t color) {
+void hal_graphics_pset(int, int, uint16_t) {
   // Implementation is in mock_hal_display.cpp
 }
 
-void hal_graphics_line(int x1, int y1, int x2, int y2, uint16_t color) {
+void hal_graphics_line(int, int, int, int, uint16_t) {
   // Implementation is in mock_hal_display.cpp
 }
 
-void hal_graphics_circle(int x, int y, int r, uint16_t color) {
+void hal_graphics_circle(int, int, int, uint16_t) {
   // Implementation is in mock_hal_display.cpp
 }
 
@@ -460,6 +460,6 @@ void hal_display_get_info(int &width, int &height) {
   height = 240;
 }
 
-void hal_display_set_brightness(int level) {}
+void hal_display_set_brightness(int) {}
 
 #endif
