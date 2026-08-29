@@ -334,13 +334,32 @@ TEST_F(OpDefFnTest, DeeplyDischargedCellIsStillPresent) {
     EXPECT_EQ(eval("BATTERY(2)"), "1\n") << "空の電池を「無し」と誤判定している";
 }
 
+// この基板では電池が「無い」ことを証明できない。返り値の型に「無し」が
+// 無いこと自体がその保証になったので、ここでは判定の中身を押さえる
 TEST_F(OpDefFnTest, PresenceNeverClaimsAbsence) {
-    // この基板では電池が「無い」ことを証明できないので 0 は返さない
     hal_battery_set_mock_usb(1);
-    for (int mv = 0; mv <= 4300; mv += 100) {
+    for (int mv = 0; mv < BATTERY_FLOAT_MV; mv += 100) {
         hal_battery_set_mock_millivolts(mv);
-        EXPECT_NE(battery_presence(mv, 1), 0) << mv;
+        EXPECT_EQ(battery_presence(mv, 1), BatteryPresence::Present) << mv;
     }
+}
+
+// 浮動電圧に達していれば、満充電の電池と電池なしを区別できない
+TEST_F(OpDefFnTest, PresenceIsUnknownAtTheFloatVoltage) {
+    EXPECT_EQ(battery_presence(BATTERY_FLOAT_MV, 1), BatteryPresence::Unknown);
+    EXPECT_EQ(battery_presence(4196, 1), BatteryPresence::Unknown); // 実測（電池なし）
+}
+
+// USB が無ければ電源は電池しかないので、電圧に関わらず「有り」
+TEST_F(OpDefFnTest, PresenceIsCertainOnBatteryPower) {
+    for (int mv = 0; mv <= 4300; mv += 100)
+        EXPECT_EQ(battery_presence(mv, 0), BatteryPresence::Present) << mv;
+}
+
+// BASIC が見る数は MANUAL.md と対で決まっている
+TEST_F(OpDefFnTest, PresenceValuesMatchTheDocumentedNumbers) {
+    EXPECT_EQ(static_cast<int>(BatteryPresence::Present), 1);
+    EXPECT_EQ(static_cast<int>(BatteryPresence::Unknown), 2);
 }
 
 TEST_F(OpDefFnTest, BatteryUsbPowerFlag) {

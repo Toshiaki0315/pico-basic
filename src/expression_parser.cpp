@@ -208,7 +208,9 @@ static Value evaluate_builtin_function(const char* var_name, Value* args, int ar
         switch ((int)args[0].num_val) {
             case 0: return Value(mv);
             case 1: return Value(battery_percent_from_mv(mv));
-            case 2: return Value(battery_presence(mv, hal_battery_usb_connected()));
+            // BATTERY(2) は 1=有り / 2=判別不能。数は BatteryPresence の値と対
+            case 2: return Value(static_cast<int>(
+                        battery_presence(mv, hal_battery_usb_connected())));
             case 3:
                 // USB から給電されているか。VBUS を読む線が無いので
                 // USB シリアルの接続で代用している（充電器だけの接続は 0）
