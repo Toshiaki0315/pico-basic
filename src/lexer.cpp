@@ -176,7 +176,8 @@ TokenList lex(const char* source) {
             t.type = TokenType::STRING;
             int text_len = pos - start;
             if (text_len >= MAX_TOKEN_LEN) text_len = MAX_TOKEN_LEN - 1;
-            strncpy(t.text, source + start, text_len);
+            // 終端の無い元文字列から範囲を切り出すので memcpy（strncpy ではない）
+            memcpy(t.text, source + start, text_len);
             t.text[text_len] = '\0';
             token_list.tokens[token_list.size++] = t;
             
@@ -198,7 +199,8 @@ TokenList lex(const char* source) {
             t.type = TokenType::NUMBER;
             int text_len = pos - start;
             if (text_len >= MAX_TOKEN_LEN) text_len = MAX_TOKEN_LEN - 1;
-            strncpy(t.text, source + start, text_len);
+            // 終端の無い元文字列から範囲を切り出すので memcpy（strncpy ではない）
+            memcpy(t.text, source + start, text_len);
             t.text[text_len] = '\0';
             token_list.tokens[token_list.size++] = t;
             continue;
@@ -212,7 +214,7 @@ TokenList lex(const char* source) {
             char ident[MAX_TOKEN_LEN];
             int text_len = pos - start;
             if (text_len >= MAX_TOKEN_LEN) text_len = MAX_TOKEN_LEN - 1;
-            strncpy(ident, source + start, text_len);
+            memcpy(ident, source + start, text_len); // 同上
             ident[text_len] = '\0';
 
             // Convert to uppercase for keywords

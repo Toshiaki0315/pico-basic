@@ -166,7 +166,7 @@ void execute_for(const TokenList& tokens, int& pos) {
     set_variable(var_name, start_val);
     if (for_stack_ptr >= MAX_FOR_STACK) throw std::runtime_error("Out of Memory: FOR Stack Limit Reached");
     ForLoopContext ctx = {};
-    strncpy(ctx.var_name, var_name, sizeof(ctx.var_name)-1);
+    copy_string(ctx.var_name, sizeof(ctx.var_name), var_name);
     ctx.target = end_val.num_val;
     ctx.step = step_val;
     ctx.loop_start_line = current_line;

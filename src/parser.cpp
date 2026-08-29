@@ -279,8 +279,8 @@ void run_program(int max_steps) {
             label_table_size < MAX_LABELS) {
             // 同名ラベルは最初の定義を優先（重複は無視）
             if (resolve_label(tokens.tokens[0].text) < 0) {
-                strncpy(label_table[label_table_size].name, tokens.tokens[0].text, MAX_TOKEN_LEN - 1);
-                label_table[label_table_size].name[MAX_TOKEN_LEN - 1] = '\0';
+                copy_string(label_table[label_table_size].name, MAX_TOKEN_LEN,
+                            tokens.tokens[0].text);
                 label_table[label_table_size].line = line_no;
                 label_table_size++;
             }

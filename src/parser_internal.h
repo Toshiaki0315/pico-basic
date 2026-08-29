@@ -9,6 +9,21 @@
 // ---------------------------------------------------------
 // Data Representation
 // ---------------------------------------------------------
+// 収まらなければ切り詰めて、必ず終端する。
+//
+// strncpy は「入りきったときだけ終端する」ので、正しく使うには毎回
+// 終端の 1 行が要る。その書き方は GCC が切り詰めの可能性として警告してくるため、
+// 意図（切り詰めてよい・必ず終端する）を名前にして 1 か所にまとめる。
+// src は終端済みの C 文字列であること（strnlen で上限を切ると、src が
+// dst より小さい配列だったときに「上限まで読むかもしれない」と警告される）。
+inline void copy_string(char* dst, size_t dst_size, const char* src) {
+    if (dst_size == 0) return;
+    size_t n = strlen(src);
+    if (n > dst_size - 1) n = dst_size - 1;
+    memcpy(dst, src, n);
+    dst[n] = '\0';
+}
+
 struct Value {
     enum class Type { NUM, INT, STR };
     Type type;
@@ -20,8 +35,7 @@ struct Value {
     Value(float n) : type(Type::NUM), num_val(n), int_val(0) { str_val[0] = '\0'; }
     Value(int i) : type(Type::INT), num_val((float)i), int_val(i) { str_val[0] = '\0'; }
     Value(const char* s) : type(Type::STR), num_val(0.0f), int_val(0) {
-        strncpy(str_val, s, sizeof(str_val) - 1);
-        str_val[sizeof(str_val) - 1] = '\0';
+        copy_string(str_val, sizeof(str_val), s);
     }
 
     // 128 バイトの str_val は文字列型のときだけ意味を持つ。数値のコピーで

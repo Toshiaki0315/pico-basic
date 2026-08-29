@@ -43,9 +43,16 @@ set(PICO_CXX_ENABLE_EXCEPTIONS 1)
 
 # 警告を出す。組み込みでは踏んでから気づくと調査が高くつくので、
 # コンパイラが静的に言えることは全部言わせる。
-# 自分たちのコードにだけ効かせたいので、SDK や FetchContent で持ってくる
-# 依存（googletest / FatFS ドライバ）に及ばないターゲット単位で付ける
+#
+# 自分たちのコードにだけ効かせる。FatFS ドライバは FetchContent で取り込んで
+# pico_basic の中で直接コンパイルされるため、ターゲット単位で付けると
+# 他人のコードの警告まで出て自分の警告が埋もれる。ファイル単位で付ける
 set(PROJECT_WARNINGS -Wall -Wextra)
+
+# 指定したソースにだけ警告フラグを付ける
+function(enable_project_warnings)
+    set_source_files_properties(${ARGN} PROPERTIES COMPILE_OPTIONS "${PROJECT_WARNINGS}")
+endfunction()
 
 if(BUILD_TESTS)
     message(STATUS "🚀 Building for HOST tests (Google Test will be downloaded)")
@@ -58,7 +65,7 @@ if(BUILD_TESTS)
     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
     FetchContent_MakeAvailable(googletest)
 
-    add_library(core_lib
+    set(CORE_LIB_SOURCES
         src/lexer.cpp
         src/parser.cpp
         src/memory_manager.cpp
@@ -80,10 +87,11 @@ if(BUILD_TESTS)
         src/hal_touch.cpp
         src/hal_sdcard.cpp
     )
+    add_library(core_lib ${CORE_LIB_SOURCES})
     target_include_directories(core_lib PUBLIC src)
-    target_compile_options(core_lib PRIVATE ${PROJECT_WARNINGS})
+    enable_project_warnings(${CORE_LIB_SOURCES})
 
-    add_executable(basic_tests
+    set(TEST_SOURCES
         tests/test_lexer.cpp
         tests/test_parser.cpp
         tests/test_input_end_stop.cpp
@@ -107,8 +115,9 @@ if(BUILD_TESTS)
         src/hal_gpio.cpp
         src/hal_sound.cpp
     )
+    add_executable(basic_tests ${TEST_SOURCES})
     target_include_directories(basic_tests PRIVATE src tests)
-    target_compile_options(basic_tests PRIVATE ${PROJECT_WARNINGS})
+    enable_project_warnings(${TEST_SOURCES})
     target_link_libraries(basic_tests PRIVATE core_lib GTest::gtest_main)
 
     include(GoogleTest)
@@ -139,7 +148,7 @@ else()
 
     FetchContent_MakeAvailable(no-OS-FatFS-SD-SDIO-SPI-RPi-Pico)
 
-    add_executable(pico_basic
+    set(PICO_BASIC_SOURCES
         src/main.cpp
         src/hw_config.c
         src/hal_display.cpp
@@ -168,7 +177,8 @@ else()
         src/screenshot.cpp
     )
 
-    target_compile_options(pico_basic PRIVATE ${PROJECT_WARNINGS})
+    add_executable(pico_basic ${PICO_BASIC_SOURCES})
+    enable_project_warnings(${PICO_BASIC_SOURCES})
 
     if (TARGET pico_stdlib)
         pico_generate_pio_header(pico_basic ${CMAKE_CURRENT_LIST_DIR}/src/pio/i2s_out.pio)

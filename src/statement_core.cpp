@@ -347,7 +347,10 @@ void execute_dim(const TokenList& tokens, int& pos) {
 
     logical_memory[table_addr + 8] = 1;              
     logical_memory[table_addr + 9] = (uint8_t)ndim;  
-    strncpy((char*)&logical_memory[table_addr], var_name, 8);
+    // 配列表の名前欄は 8 バイト固定長。終端は持たず、短い名前は 0 で埋める
+    // （strncpy の埋める挙動をそのまま書き下したもの）
+    memset(&logical_memory[table_addr], 0, 8);
+    memcpy(&logical_memory[table_addr], var_name, strnlen(var_name, 8));
     memcpy(&logical_memory[table_addr + 10], &dim1_u16,    2);
     memcpy(&logical_memory[table_addr + 12], &dim2_u16,    2);
     memcpy(&logical_memory[table_addr + 14], &start_addr,  2);

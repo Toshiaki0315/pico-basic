@@ -471,8 +471,14 @@ static Value apply_binop(TokenType op, const Value& a, const Value& b) {
         }
         case TokenType::PLUS: {
             if (a.type == Value::Type::STR && b.type == Value::Type::STR) {
-                char buf[128];
-                snprintf(buf, sizeof(buf), "%s%s", a.str_val, b.str_val);
+                // 文字列変数の上限は 127 文字。両辺とも上限いっぱいだと
+                // 連結結果は必ず溢れるので、切り詰めを明示して組み立てる
+                char buf[sizeof(a.str_val)];
+                size_t la = strnlen(a.str_val, sizeof(buf) - 1);
+                memcpy(buf, a.str_val, la);
+                size_t lb = strnlen(b.str_val, sizeof(buf) - 1 - la);
+                memcpy(buf + la, b.str_val, lb);
+                buf[la + lb] = '\0';
                 return Value(buf);
             }
             if (a.type != Value::Type::STR && b.type != Value::Type::STR)
