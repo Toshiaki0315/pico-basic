@@ -421,28 +421,78 @@ void execute_brightness(const TokenList& tokens, int& pos) {
     hal_display_set_brightness(static_cast<int>(level.num_val));
 }
 
+// PAINT が積む点の上限。実行中に確保しないので固定長
+#define MAX_PAINT_STACK 4096
+
+// 塗りつぶしの本体（走査線を単位に広げる flood fill）。
+//
+// 塗る範囲を 1 画素ずつ積むのではなく、横一列まとめて塗ってから上下の行だけを
+// 積む。積む点が減るのでスタックの 4096 段で足りる。
+// @return 途中でスタックが溢れて塗り残したら false
+static bool flood_fill(int x, int y, uint16_t target_color, uint16_t fill_color) {
+    struct Point { int x, y; };
+    static Point stack[MAX_PAINT_STACK]; // 実行中の動的確保を避けるため静的に確保する
+    int sp = 0;
+    bool overflowed = false;
+
+    // 画面サイズを直書きすると別解像度のボードで壊れるので HAL から取る
+    int scr_w, scr_h;
+    hal_display_get_info(scr_w, scr_h);
+
+    auto push = [&](int px, int py) {
+        if (px < 0 || px >= scr_w || py < 0 || py >= scr_h) return;
+        if (hal_graphics_get_pixel(px, py) != target_color) return;
+        // 溢れたら黙って塗り残すのではなく、後で利用者に知らせる
+        if (sp >= MAX_PAINT_STACK) { overflowed = true; return; }
+        stack[sp++] = {px, py};
+    };
+
+    push(x, y);
+
+    while (sp > 0) {
+        Point p = stack[--sp];
+        if (hal_graphics_get_pixel(p.x, p.y) != target_color) continue;
+
+        // まず左右いっぱいまで伸ばして、その一列を塗る
+        int lx = p.x;
+        while (lx > 0 && hal_graphics_get_pixel(lx - 1, p.y) == target_color) lx--;
+        int rx = p.x;
+        while (rx < scr_w - 1 && hal_graphics_get_pixel(rx + 1, p.y) == target_color) rx++;
+        for (int i = lx; i <= rx; i++) hal_graphics_pset(i, p.y, fill_color);
+
+        // 上下の行は、続きの左端だけを積む（同じ列を何度も積まないため）
+        for (int i = lx; i <= rx; i++) {
+            if (p.y > 0 && hal_graphics_get_pixel(i, p.y - 1) == target_color &&
+                (i == lx || hal_graphics_get_pixel(i - 1, p.y - 1) != target_color)) {
+                push(i, p.y - 1);
+            }
+            if (p.y < scr_h - 1 && hal_graphics_get_pixel(i, p.y + 1) == target_color &&
+                (i == lx || hal_graphics_get_pixel(i - 1, p.y + 1) != target_color)) {
+                push(i, p.y + 1);
+            }
+        }
+    }
+    return !overflowed;
+}
+
+// PAINT (x, y), 塗る色 [, 境界色]
 void execute_paint(const TokenList& tokens, int& pos) {
-    pos++; 
-    require_token(tokens, pos, TokenType::LPAREN, "Expected '('"); pos++;
-    Value vx = parse_relation(tokens, pos);
+    pos++;
+    int x, y;
+    parse_point(tokens, pos, x, y);
     require_token(tokens, pos, TokenType::COMMA, "Expected ','"); pos++;
-    Value vy = parse_relation(tokens, pos);
-    require_token(tokens, pos, TokenType::RPAREN, "Expected ')'"); pos++;
-    require_token(tokens, pos, TokenType::COMMA, "Expected ','"); pos++;
+
     Value vc = parse_relation(tokens, pos);
-    
-    int x = static_cast<int>(vx.num_val);
-    int y = static_cast<int>(vy.num_val);
     int color_idx = static_cast<int>(vc.num_val);
     if (color_idx < 0 || color_idx > 15) throw std::runtime_error("Invalid color index");
     uint16_t fill_color = PALETTE[color_idx];
-    
+
+    // 境界色の指定があれば、その色の画素で止まる
     uint16_t border_color = 0xFFFF;
     bool stop_at_border = false;
     if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COMMA) {
         pos++;
-        Value vb = parse_relation(tokens, pos);
-        int b_idx = static_cast<int>(vb.num_val);
+        int b_idx = static_cast<int>(parse_relation(tokens, pos).num_val);
         if (b_idx >= 0 && b_idx <= 15) {
             border_color = PALETTE[b_idx];
             stop_at_border = true;
@@ -450,66 +500,12 @@ void execute_paint(const TokenList& tokens, int& pos) {
     }
 
     uint16_t target_color = hal_graphics_get_pixel(x, y);
-    if (target_color == fill_color) return;
-    if (stop_at_border && target_color == border_color) return;
+    if (target_color == fill_color) return;                   // 塗る必要が無い
+    if (stop_at_border && target_color == border_color) return; // 始点が境界
 
-    struct Point { int x, y; };
-    static Point stack[4096];
-    int sp = 0;
-    
-    // 溢れたら黙って塗り残すのではなく、後で利用者に知らせる
-    bool stack_overflowed = false;
-    // 画面サイズを直書きすると別解像度のボードで壊れるので HAL から取る
-    int scr_w, scr_h;
-    hal_display_get_info(scr_w, scr_h);
-    auto push = [&](int px, int py) {
-        if (px < 0 || px >= scr_w || py < 0 || py >= scr_h) return;
-        if (hal_graphics_get_pixel(px, py) != target_color) return;
-
-        if (sp >= 4096) {
-            stack_overflowed = true;
-            return;
-        }
-        stack[sp++] = {px, py};
-    };
-    
-    push(x, y);
-    
-    while (sp > 0) {
-        Point p = stack[--sp];
-        int px = p.x;
-        int py = p.y;
-        
-        if (hal_graphics_get_pixel(px, py) != target_color) continue;
-        
-        int lx = px;
-        while (lx > 0 && hal_graphics_get_pixel(lx - 1, py) == target_color) lx--;
-        int rx = px;
-        while (rx < scr_w - 1 && hal_graphics_get_pixel(rx + 1, py) == target_color) rx++;
-        
-        for (int i = lx; i <= rx; i++) {
-            hal_graphics_pset(i, py, fill_color);
-        }
-        
-        for (int i = lx; i <= rx; i++) {
-            if (py > 0 && hal_graphics_get_pixel(i, py - 1) == target_color) {
-                if (i == lx || hal_graphics_get_pixel(i - 1, py - 1) != target_color) {
-                    push(i, py - 1);
-                }
-            }
-            if (py < scr_h - 1 && hal_graphics_get_pixel(i, py + 1) == target_color) {
-                if (i == lx || hal_graphics_get_pixel(i - 1, py + 1) != target_color) {
-                    push(i, py + 1);
-                }
-            }
-        }
-    }
-    
+    bool complete = flood_fill(x, y, target_color, fill_color);
     hal_display_sync();
-
-    if (stack_overflowed) {
-        basic_print("Paint incomplete: region too complex\n");
-    }
+    if (!complete) basic_print("Paint incomplete: region too complex\n");
 }
 
 void execute_get_at(const TokenList& tokens, int& pos) {

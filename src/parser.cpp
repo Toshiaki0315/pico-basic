@@ -134,107 +134,135 @@ static void report_error(const char* what, int line) {
 // ---------------------------------------------------------
 // Public API
 // ---------------------------------------------------------
+// 行番号つきの行を格納する（実行はしない）
+static void store_numbered_line(const TokenList& tokens) {
+    int line_num = atoi(tokens.tokens[0].text);
+    TokenList remainder;
+    int j = 0;
+    for (int i = 1; i < tokens.size; i++) remainder.tokens[j++] = tokens.tokens[i];
+    remainder.size = j;
+    store_line(line_num, remainder);
+}
+
+// LIST / LIST 100 / LIST 100-200 / LIST 100- / LIST -200
+static void command_list(const TokenList& tokens) {
+    int from = 0, to = 65535, p = 1;
+    bool single = false;
+
+    if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
+        from = atoi(tokens.tokens[p].text); p++;
+        single = true; // ここで終われば 1 行だけ
+    }
+    if (p < tokens.size && tokens.tokens[p].type == TokenType::MINUS) {
+        p++;
+        single = false;
+        if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
+            to = atoi(tokens.tokens[p].text); p++;
+        }
+    }
+    if (single) to = from;
+
+    list_program(from, to);
+}
+
+static void command_new() {
+    hal_sound_stop(); // 再生中の演奏も止める
+    basic_files_close_all();
+    clear_program();
+}
+
+static void command_cont() {
+    if (!cont_valid) {
+        basic_print("Can't continue\n");
+        return;
+    }
+    cont_valid = false; // 再開は 1 回きり（次の STOP/Break で再び有効になる）
+    run_loop(cont_line, cont_pos, -1);
+}
+
+// RENUM [新開始 [, 刻み]] — 既定 10, 10
+static void command_renum(const TokenList& tokens) {
+    int start = 10, step = 10, p = 1;
+    if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
+        start = atoi(tokens.tokens[p].text); p++;
+        if (p < tokens.size && tokens.tokens[p].type == TokenType::COMMA) {
+            p++;
+            if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
+                step = atoi(tokens.tokens[p].text); p++;
+            }
+        }
+    }
+    if (start < 1) start = 10;
+    if (step < 1) step = 10;
+    renum_program(start, step);
+}
+
+// AUTO [開始番号 [, 刻み]] — 行番号自動生成モードを要求する。
+// 実際に行番号を出すのは対話入力を持つ repl 側（auto_mode_requested）
+static void command_auto(const TokenList& tokens) {
+    int start = 10, step = 10, p = 1;
+    if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
+        start = atoi(tokens.tokens[p].text); p++;
+    }
+    if (p < tokens.size && tokens.tokens[p].type == TokenType::COMMA) {
+        p++;
+        if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
+            step = atoi(tokens.tokens[p].text); p++;
+        }
+    }
+    if (start < 0) start = 0;
+    if (step <= 0) step = 10; // 刻み 0 や負値は既定に戻す（無限ループ回避）
+
+    g_auto_pending = true;
+    g_auto_start = start;
+    g_auto_step = step;
+}
+
+// ダイレクトモードでしか意味を持たない命令の結果
+enum class DirectResult {
+    NotDirect,  // ここの担当ではない。通常の文として実行する
+    Handled,    // 実行した
+    LineStored, // 行番号つきだったので格納した（実行はしていない）
+};
+
+// プログラムの編集や実行を指示する命令。行の途中には書けないので、
+// 通常の文の実行ループとは別にここで捌く
+static DirectResult execute_direct_command(const TokenList& tokens) {
+    switch (tokens.tokens[0].type) {
+        case TokenType::NUMBER: store_numbered_line(tokens); return DirectResult::LineStored;
+        case TokenType::NEW:    command_new();               break;
+        case TokenType::LIST:   command_list(tokens);        break;
+        case TokenType::RUN:    run_program();               break;
+        case TokenType::CONT:   command_cont();              break;
+        case TokenType::RENUM:  command_renum(tokens);       break;
+        case TokenType::AUTO:   command_auto(tokens);        break;
+        case TokenType::SAVE:  { int p = 0; execute_save(tokens, p);  break; }
+        case TokenType::LOAD:  { int p = 0; execute_load(tokens, p);  break; }
+        case TokenType::FILES: { int p = 0; execute_files(tokens, p); break; }
+        default: return DirectResult::NotDirect;
+    }
+    return DirectResult::Handled;
+}
+
+// `:` で区切られた文を順に実行する。分岐したらそこで抜ける
+static void execute_statement_sequence(const TokenList& tokens) {
+    int pos = 0;
+    branch_taken = false;
+    while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE) {
+        execute_statement(tokens, pos);
+        if (branch_taken) break;
+        if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COLON) pos++;
+        else break;
+    }
+}
+
 bool parse_and_execute(const TokenList& tokens) {
     if (tokens.size == 0 || tokens.tokens[0].type == TokenType::END_OF_FILE) return false;
-    
+
     try {
-        if (tokens.tokens[0].type == TokenType::NUMBER) {
-            int line_num = atoi(tokens.tokens[0].text);
-            TokenList remainder;
-            int j = 0;
-            for (int i = 1; i < tokens.size; i++) remainder.tokens[j++] = tokens.tokens[i];
-            remainder.size = j;
-            store_line(line_num, remainder);
-            return true;
-        } else if (tokens.tokens[0].type == TokenType::NEW) {
-            hal_sound_stop(); // 再生中の演奏も止める
-            basic_files_close_all();
-            clear_program();
-            return false;
-        } else if (tokens.tokens[0].type == TokenType::LIST) {
-            // LIST / LIST 100 / LIST 100-200 / LIST 100- / LIST -200
-            int from = 0, to = 65535, p = 1;
-            bool single = false;
-            if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
-                from = atoi(tokens.tokens[p].text); p++;
-                single = true;
-            }
-            if (p < tokens.size && tokens.tokens[p].type == TokenType::MINUS) {
-                p++;
-                single = false;
-                if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
-                    to = atoi(tokens.tokens[p].text); p++;
-                }
-            }
-            if (single) to = from;
-            list_program(from, to);
-            return false;
-        } else if (tokens.tokens[0].type == TokenType::RUN) {
-            run_program();
-            return false;
-        } else if (tokens.tokens[0].type == TokenType::SAVE) {
-            int p = 0; execute_save(tokens, p);
-            return false;
-        } else if (tokens.tokens[0].type == TokenType::LOAD) {
-            int p = 0; execute_load(tokens, p);
-            return false;
-        } else if (tokens.tokens[0].type == TokenType::FILES) {
-            int p = 0; execute_files(tokens, p);
-            return false;
-        } else if (tokens.tokens[0].type == TokenType::CONT) {
-            if (!cont_valid) {
-                basic_print("Can't continue\n");
-            } else {
-                cont_valid = false; // 再開は 1 回きり（次の STOP/Break で再び有効になる）
-                run_loop(cont_line, cont_pos, -1);
-            }
-            return false;
-        } else if (tokens.tokens[0].type == TokenType::RENUM) {
-            // RENUM [新開始 [, 刻み]] — 既定 10, 10
-            int start = 10, stp = 10, p = 1;
-            if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
-                start = atoi(tokens.tokens[p].text); p++;
-                if (p < tokens.size && tokens.tokens[p].type == TokenType::COMMA) {
-                    p++;
-                    if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
-                        stp = atoi(tokens.tokens[p].text); p++;
-                    }
-                }
-            }
-            if (start < 1) start = 10;
-            if (stp < 1) stp = 10;
-            renum_program(start, stp);
-            return false;
-        } else if (tokens.tokens[0].type == TokenType::AUTO) {
-            // AUTO [開始番号 [, 刻み]] — 行番号自動生成モードを要求する。
-            // 実際に行番号を出すのは対話入力を持つ repl 側（auto_mode_requested）。
-            int start = 10, step = 10;
-            int p = 1;
-            if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
-                start = atoi(tokens.tokens[p].text); p++;
-            }
-            if (p < tokens.size && tokens.tokens[p].type == TokenType::COMMA) {
-                p++;
-                if (p < tokens.size && tokens.tokens[p].type == TokenType::NUMBER) {
-                    step = atoi(tokens.tokens[p].text); p++;
-                }
-            }
-            if (start < 0) start = 0;
-            if (step <= 0) step = 10; // 刻み 0 や負値は既定に戻す（無限ループ回避）
-            g_auto_pending = true;
-            g_auto_start = start;
-            g_auto_step = step;
-            return false;
-        }
-        int pos = 0;
-        branch_taken = false;
-        while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE) {
-            execute_statement(tokens, pos);
-            if (branch_taken) break;
-            if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COLON) {
-                pos++;
-            } else break;
-        }
+        DirectResult result = execute_direct_command(tokens);
+        if (result == DirectResult::LineStored) return true;
+        if (result == DirectResult::NotDirect) execute_statement_sequence(tokens);
     } catch (const std::exception& e) {
         report_error(e.what(), -1); // ダイレクトモード（行番号なし）
     }
@@ -334,33 +362,66 @@ void basic_break_program() {
     branch_taken = true;
 }
 
+// 実行を止める要求が来ていないか見る。止めるべきなら true。
+//
+// 電源ボタンと Ctrl-C は、どちらも実行中の行の切れ目でしか見られない。
+// 反応が鈍らないよう十分短い間隔で確認する
+static bool run_loop_interrupted(int steps) {
+    if ((steps & 0x0F) != 0) return false;
+
+    // 電源ボタンの長押しは実行中でも効かせる（物理的な電源スイッチなので）。
+    // 戻ってきた＝電源が切れなかった。ファイルは閉じてあるので実行は続けない
+    if (hal_battery_power_key_held()) {
+        basic_power_off();
+        return true;
+    }
+    // Ctrl-C による中断。無限ループから抜ける唯一の手段
+    if (hal_system_break_requested()) {
+        basic_break_program();
+        return true;
+    }
+    return false;
+}
+
+// 行の実行で投げられた例外を捌く。ON ERROR GOTO があればそこへ飛ばす。
+// @return まだ実行を続けるなら true、抜けるなら false
+static bool handle_runtime_error(const std::exception& e, int& steps) {
+    // ハンドラ内で起きたエラーは通常どおり表示して止める（無限に飛ばさない）
+    if (error_handler_line <= 0 || in_error_handler) {
+        report_error(e.what(), current_line);
+        return false;
+    }
+    int code = basic_error_code(e.what());
+    err_code = (code > 0) ? code : 99; // 表に無いエラーは 99
+    err_line = current_line;
+    in_error_handler = true;
+    current_line = error_handler_line;
+    steps++;
+    return true;
+}
+
+// 次に実行する行へ進む。最後の行なら current_line を -1 にして終わらせる
+static void advance_to_next_line(uint16_t line_ptr) {
+    uint16_t next_ptr = prog_next_ptr(line_ptr);
+    bool at_end = (next_ptr == 0) ||
+                  (logical_memory[next_ptr+2] == 0 && logical_memory[next_ptr+3] == 0);
+    current_line = at_end ? -1 : prog_line_no(next_ptr);
+}
+
 // 実行ループ本体。RUN は先頭行から、CONT は中断位置から入る。
 // start_pos が 0 以上なら、その行をその位置（文の区切り）から再開する。
 static void run_loop(int start_line, int start_pos, int max_steps) {
     current_line = start_line;
     int steps = 0;
-    int resume_pos = start_pos; // 次の行を行頭ではなく途中から始める場合の位置（-1 は行頭）
+    int resume_pos = start_pos; // 行頭ではなく途中から始める場合の位置（-1 は行頭）
 
     while (current_line != -1 && (max_steps == -1 || steps < max_steps)) {
-        // 電源ボタンの長押しは実行中でも効かせる（物理的な電源スイッチなので）。
-        // 戻ってきた＝電源が切れなかった。ファイルは閉じてあるので実行は続けない
-        if ((steps & 0x0F) == 0 && hal_battery_power_key_held()) {
-            basic_power_off();
-            break;
-        }
-
-        // Ctrl-C による中断。無限ループから抜ける唯一の手段なので、
-        // 反応が鈍らないよう十分短い間隔で確認する
-        if ((steps & 0x0F) == 0 && hal_system_break_requested()) {
-            basic_break_program();
-            break;
-        }
+        if (run_loop_interrupted(steps)) break;
 
         uint16_t line_ptr = find_program_line(current_line);
         if (line_ptr == 0xFFFF) break;
 
-        // TRON: 実行する行番号を [N] 形式で流す
-        if (trace_enabled) {
+        if (trace_enabled) { // TRON: 実行する行番号を [N] 形式で流す
             char tb[16];
             snprintf(tb, sizeof(tb), "[%d]", current_line);
             basic_print(tb);
@@ -369,7 +430,7 @@ static void run_loop(int start_line, int start_pos, int max_steps) {
         TokenList tokens = get_detokenized_line(line_ptr);
         int pos = 0;
         // 直前の分岐が「行の途中」への復帰（RETURN / NEXT / UNTIL）を要求していたら
-        // その位置から再開する。復帰位置は文の区切り（`:`）を指すので 1 つ読み飛ばす。
+        // その位置から再開する。復帰位置は文の区切り（`:`）を指すので 1 つ読み飛ばす
         if (resume_pos >= 0) {
             pos = resume_pos;
             if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COLON) pos++;
@@ -382,36 +443,17 @@ static void run_loop(int start_line, int start_pos, int max_steps) {
             while (pos < tokens.size && tokens.tokens[pos].type != TokenType::END_OF_FILE) {
                 execute_statement(tokens, pos);
                 if (branch_taken) break;
-                if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COLON) {
-                    pos++;
-                } else break;
+                if (pos < tokens.size && tokens.tokens[pos].type == TokenType::COLON) pos++;
+                else break;
             }
         } catch (const std::exception& e) {
-            // ON ERROR GOTO が設定されていればハンドラへ飛ぶ（ハンドラ内のエラーは通常表示）
-            if (error_handler_line > 0 && !in_error_handler) {
-                int code = basic_error_code(e.what());
-                err_code = (code > 0) ? code : 99; // 表に無いエラーは 99
-                err_line = current_line;
-                in_error_handler = true;
-                current_line = error_handler_line;
-                steps++;
-                continue;
-            }
-            report_error(e.what(), current_line);
+            if (handle_runtime_error(e, steps)) continue;
             break;
         }
 
-        if (branch_taken) {
-            // 制御構文が行内復帰位置を指定していれば次の行でそこから再開する
-            resume_pos = branch_resume_pos;
-        } else {
-            uint16_t next_ptr = prog_next_ptr(line_ptr);
-            if (next_ptr == 0 || (logical_memory[next_ptr+2] == 0 && logical_memory[next_ptr+3] == 0)) {
-                current_line = -1;
-            } else {
-                current_line = prog_line_no(next_ptr);
-            }
-        }
+        // 制御構文が行内復帰位置を指定していれば次の行でそこから再開する
+        if (branch_taken) resume_pos = branch_resume_pos;
+        else advance_to_next_line(line_ptr);
         steps++;
     }
 

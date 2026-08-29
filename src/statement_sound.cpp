@@ -77,6 +77,46 @@ static int read_mml_number(const char* mml, int& i, int fallback) {
     return val;
 }
 
+// 音名を C からの半音数へ。CDEFGAB 以外は 0（呼び出し側が休符と区別する）
+static int mml_note_offset(char c) {
+    switch (c) {
+        case 'C': return 0;  case 'D': return 2;  case 'E': return 4;
+        case 'F': return 5;  case 'G': return 7;  case 'A': return 9;
+        case 'B': return 11;
+        default:  return 0;
+    }
+}
+
+// 音符 1 つ（または休符）を読み取ってイベント列へ足す。
+// i は音名の次を指した状態で入り、読み終えた位置まで進む
+static void append_mml_note(const char* mml, int& i, char c, MmlTrack& track,
+                            int octave, int default_len, int tempo, int volume) {
+    bool is_rest = (c == 'R');
+    int note = mml_note_offset(c);
+    if (!is_rest) {
+        if (mml[i] == '#' || mml[i] == '+') { note++; i++; }
+        else if (mml[i] == '-')             { note--; i++; }
+    }
+
+    int len = read_mml_number(mml, i, default_len);
+    if (len <= 0) len = default_len;
+
+    float duration_ms = (60.0f / tempo) * (4.0f / len) * 1000.0f;
+    if (mml[i] == '.') { duration_ms *= 1.5f; i++; } // 付点は 1.5 倍
+
+    if (track.count >= MAX_MML_EVENTS) throw std::runtime_error("MML too long");
+
+    MmlEvent& ev = track.events[track.count++];
+    ev.duration_ms = duration_ms;
+    ev.volume      = volume;
+    ev.freq = is_rest ? 0.0f
+                      : 440.0f * powf(2.0f, (note - 9 + (octave - 4) * 12) / 12.0f);
+    // 音符の末尾に短い切れ目を入れる（休符には不要）。
+    // 常に音長より短くなるよう割合で頭打ちにする
+    ev.gap_ms = is_rest ? 0.0f
+                        : (duration_ms * 0.15f < 10.0f ? duration_ms * 0.15f : 10.0f);
+}
+
 // MML 文字列を解釈してイベント列に変換する（この時点では発音しない）
 static void parse_mml(const char* mml, MmlTrack& track) {
     track.count = 0;
@@ -118,48 +158,9 @@ static void parse_mml(const char* mml, MmlTrack& track) {
             case '<': octave--; if (octave < 1) octave = 1; break;
 
             case 'C': case 'D': case 'E': case 'F': case 'G': case 'A': case 'B':
-            case 'R': {
-                int note = 0;
-                bool is_rest = (c == 'R');
-                if (!is_rest) {
-                    if (c == 'C') note = 0;
-                    else if (c == 'D') note = 2;
-                    else if (c == 'E') note = 4;
-                    else if (c == 'F') note = 5;
-                    else if (c == 'G') note = 7;
-                    else if (c == 'A') note = 9;
-                    else if (c == 'B') note = 11;
-
-                    if (mml[i] == '#' || mml[i] == '+') { note++; i++; }
-                    else if (mml[i] == '-') { note--; i++; }
-                }
-
-                int len = read_mml_number(mml, i, default_len);
-                if (len <= 0) len = default_len;
-
-                float duration_ms = (60.0f / tempo) * (4.0f / len) * 1000.0f;
-                if (mml[i] == '.') {
-                    duration_ms *= 1.5f;
-                    i++;
-                }
-
-                if (track.count >= MAX_MML_EVENTS) {
-                    throw std::runtime_error("MML too long");
-                }
-
-                MmlEvent& ev = track.events[track.count++];
-                ev.duration_ms = duration_ms;
-                ev.volume      = volume;
-                ev.freq = is_rest
-                    ? 0.0f
-                    : 440.0f * powf(2.0f, (note - 9 + (octave - 4) * 12) / 12.0f);
-                // 音符の末尾に短い切れ目を入れる（休符には不要）
-                // 常に音長より短くなるよう割合で頭打ちにする
-                ev.gap_ms = is_rest
-                    ? 0.0f
-                    : (duration_ms * 0.15f < 10.0f ? duration_ms * 0.15f : 10.0f);
+            case 'R':
+                append_mml_note(mml, i, c, track, octave, default_len, tempo, volume);
                 break;
-            }
         }
     }
 }
