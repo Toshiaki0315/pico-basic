@@ -1,6 +1,7 @@
 # CMake and build artifacts
 build/
 build_host/
+build-test/
 CMakeCache.txt
 CMakeFiles/
 CMakeScripts/
@@ -50,3 +51,5 @@ cmake_tmp/
 # Local task tracking
 TASK.md
 
+# テストが書き出すデータファイル（実行のたびに作り直される）
+*.DAT

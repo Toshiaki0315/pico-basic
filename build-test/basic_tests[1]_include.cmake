@@ -1,5 +1,0 @@
-if(EXISTS "/Users/nomura/01_project/pico-basic/build-test/basic_tests[1]_tests.cmake")
-  include("/Users/nomura/01_project/pico-basic/build-test/basic_tests[1]_tests.cmake")
-else()
-  add_test(basic_tests_NOT_BUILT basic_tests_NOT_BUILT)
-endif()
