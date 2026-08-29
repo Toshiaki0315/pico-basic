@@ -193,3 +193,69 @@ TEST_F(AdvancedGraphicsTest, PutAtScalesToDestRect) {
     EXPECT_NE(hal_graphics_get_pixel(109, 109), 0) << "拡大先の右下端が塗られていない";
     EXPECT_NE(hal_graphics_get_pixel(105, 105), 0);
 }
+
+// --- GET@ / PUT@ の寸法検証 ---------------------------------------------
+//
+// 寸法は掛ける前に確かめる必要がある。w * h を先に計算すると int が溢れ、
+// 「配列が小さい」判定を素通りしたループが論理メモリ全体を上書きしていた。
+// 下のテストはどれも、直っていなければ戻ってこない（= タイムアウトで落ちる）。
+
+TEST_F(AdvancedGraphicsTest, GetAtRejectsRectangleLargerThanScreen) {
+    parse_and_execute(lex("DIM A(10)"));
+    mock_hal::reset();
+    // w = h = 65536。65536 * 65536 は int で 0 に折り返す
+    parse_and_execute(lex("GET@ (0,0)-(65535,65535), A"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("larger than the screen"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}
+
+// 溢れない大きさでも、画面より広ければ受け付けない。
+// 辺の判定は配列の大きさの判定より先に来る（どちらの理由で断ったか分かるように）
+TEST_F(AdvancedGraphicsTest, GetAtRejectsModestlyOversizedRectangle) {
+    parse_and_execute(lex("DIM A(10)"));
+    mock_hal::reset();
+    parse_and_execute(lex("GET@ (0,0)-(400,300), A"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("larger than the screen"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}
+
+// 画面に収まる矩形はこれまでどおり通る。
+// 配列ヒープは 0x9000-0xC000 の 12KB で 1 要素 8 バイトなので 1536 要素まで。
+// GET@ は 1 画素に 1 要素使うため、取り込めるのは 38x38 程度が上限になる
+TEST_F(AdvancedGraphicsTest, GetAtAcceptsRectangleThatFits) {
+    parse_and_execute(lex("DIM A(950)"));
+    mock_hal::reset();
+    parse_and_execute(lex("GET@ (0,0)-(29,29), A")); // 30x30 = 900 画素
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "") << mock_hal::get_raw_print_buffer();
+}
+
+// 画像の寸法は配列の先頭 2 要素そのものなので BASIC から書き換えられる
+TEST_F(AdvancedGraphicsTest, PutAtRejectsForgedImageSize) {
+    parse_and_execute(lex("DIM A(10)"));
+    parse_and_execute(lex("A(0) = 30000"));
+    parse_and_execute(lex("A(1) = 30000"));
+    mock_hal::reset();
+    parse_and_execute(lex("PUT@ (0,0), A"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("image size is not valid"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}
+
+TEST_F(AdvancedGraphicsTest, PutAtRejectsDestinationLargerThanScreen) {
+    parse_and_execute(lex("DIM A(200)"));
+    parse_and_execute(lex("GET@ (0,0)-(7,7), A")); // 正しい 8x8 の画像を作る
+    mock_hal::reset();
+    parse_and_execute(lex("PUT@ (0,0)-(9000,9000), A"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("larger than the screen"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}
+
+// 取り込んだ画像がそのまま戻せること（ガードで壊していないことの確認）
+TEST_F(AdvancedGraphicsTest, GetAtPutAtStillRoundTrips) {
+    parse_and_execute(lex("DIM A(200)"));
+    parse_and_execute(lex("LINE (0,0)-(7,7), 12, BF"));
+    parse_and_execute(lex("GET@ (0,0)-(7,7), A"));
+    mock_hal::reset();
+    parse_and_execute(lex("PUT@ (100,100), A"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer().find("Illegal function call"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}

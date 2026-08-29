@@ -542,7 +542,21 @@ void execute_get_at(const TokenList& tokens, int& pos) {
     user_to_screen(vx1.num_val, vy1.num_val, x1, y1);
     user_to_screen(vx2.num_val, vy2.num_val, x2, y2);
     int w = abs(x2 - x1) + 1, h = abs(y2 - y1) + 1;
-    
+
+    // 掛ける前に、辺の長さだけを先に確かめる。
+    //
+    // user_to_screen() は座標をクランプしないので、w と h はいくらでも大きくなる。
+    // 先に w * h を計算すると int が溢れ、`GET@ (0,0)-(65535,65535), A` では
+    // 65536 * 65536 が 0 に折り返して下の「配列が小さい」判定を素通りしてしまう。
+    // 素通りした先のループは write_heap_value() を 43 億回呼び、アドレスが
+    // uint16_t で折り返しながらプログラム本文まで上書きする。
+    //
+    // GET@ は画面の内容を取る命令なので、画面より大きい矩形に意味は無い
+    int scr_w, scr_h;
+    hal_display_get_info(scr_w, scr_h);
+    if (w > scr_w || h > scr_h)
+        throw std::runtime_error("Illegal function call: GET@ rectangle is larger than the screen");
+
     if (2 + w * h > arr->total_size()) throw std::runtime_error("Array too small for image");
     
     write_heap_value(arr->start_addr, Value((float)w));
@@ -613,11 +627,22 @@ void execute_put_at(const TokenList& tokens, int& pos) {
 
     int w = static_cast<int>(read_heap_value(arr->start_addr).num_val);
     int h = static_cast<int>(read_heap_value(arr->start_addr + 8).num_val);
-    if (w <= 0 || h <= 0) return;
+    if (w <= 0 || h <= 0) return; // GET@ していない配列。描くものが無い
+
+    // 画像の寸法は配列の先頭 2 要素そのものなので、BASIC から書き換えられる。
+    // GET@ が作れない大きさが入っていたら信じない。信じると戻ってこない
+    // （A(0)=30000 : A(1)=30000 で 9 億回のループになる）
+    int scr_w, scr_h;
+    hal_display_get_info(scr_w, scr_h);
+    if (w > scr_w || h > scr_h)
+        throw std::runtime_error("Illegal function call: PUT@ image size is not valid");
 
     // 転送先のサイズ。矩形指定がなければ元画像と同じ
     int dst_w = has_dst_rect ? (abs(px2 - px1) + 1) : w;
     int dst_h = has_dst_rect ? (abs(py2 - py1) + 1) : h;
+    // 転送先も同じ理由で確かめる。画面より広い矩形へ拡大しても描く先が無い
+    if (dst_w > scr_w || dst_h > scr_h)
+        throw std::runtime_error("Illegal function call: PUT@ destination is larger than the screen");
     int ox = (px1 < px2) ? px1 : px2;
     int oy = (py1 < py2) ? py1 : py2;
 
