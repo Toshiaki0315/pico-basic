@@ -192,15 +192,12 @@ bool hal_gpio_read(int pin) {
 }
 
 static char mock_input_buf[256] = "";
-
-void hal_display_input(char* buffer, int max_len) {
-    strncpy(buffer, mock_input_buf, max_len - 1);
-    buffer[max_len - 1] = '\0';
-}
+static int  mock_line_pos = 0; // 1 行入力の読み取り位置
 
 void hal_display_set_mock_input(const char* input) {
     strncpy(mock_input_buf, input, sizeof(mock_input_buf) - 1);
     mock_input_buf[sizeof(mock_input_buf) - 1] = '\0';
+    mock_line_pos = 0;
     extern int mock_get_key_pos;
     mock_get_key_pos = 0; // GET 用の読み取り位置も先頭へ
 }
@@ -226,8 +223,19 @@ namespace mock_hal {
     int get_scroll_bottom() { return mock_scroll_bottom; }
 }
 
+// テストの入力は 1 バイトずつここから流す。こうすると INPUT / LINE INPUT が
+// 本物の行エディタ（src/line_input.cpp）を通るので、多バイト文字の畳み込みや
+// バックスペースの扱いまでホストで検証できる。
+//
+// 尽きたら改行を返して行を確定させ、位置を先頭へ戻す。1 回の
+// hal_display_set_mock_input() で何度 INPUT しても同じ内容が読める
+// （差し込んだ値をそのまま返していた従来のモックと同じ挙動）。
 int hal_system_getchar_timeout(int) {
-    return getchar(); // ホストには電源ボタンが無いので単純に待つ
+    if (mock_input_buf[mock_line_pos] == '\0') {
+        mock_line_pos = 0;
+        return '\n';
+    }
+    return (unsigned char)mock_input_buf[mock_line_pos++];
 }
 
 int hal_system_break_requested() {

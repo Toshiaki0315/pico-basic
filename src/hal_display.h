@@ -57,9 +57,6 @@ bool hal_display_is_deferred();
 // ためた更新範囲をまとめて転送する（何も溜まっていなければ何もしない）
 void hal_display_flush();
 
-// Text Input related functions
-void hal_display_input(char* buffer, int max_len);
-
 // System functions
 void hal_system_wait(int ms);
 
@@ -71,7 +68,8 @@ uint32_t hal_system_millis();
 int hal_system_break_requested();
 
 // タイムアウト付きの 1 文字入力。時間切れなら -1 を返す。
-// Ready の待ち受け中も電源ボタンを見られるようにするために使う
+// 入力待ちで塞がっている間も電源ボタンを見られるよう、文字入力は必ず
+// これを経由する（src/line_input.cpp がまとめて面倒を見る）
 int hal_system_getchar_timeout(int timeout_us);
 
 // キー入力を待たずに 1 文字取得する（BASIC の GET 用）。

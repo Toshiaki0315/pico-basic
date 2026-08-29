@@ -60,6 +60,7 @@ if(BUILD_TESTS)
         src/expression_parser.cpp
         src/statement_core.cpp
         src/statement_graphics_io.cpp
+        src/line_input.cpp
         src/screenshot.cpp
         src/hal_battery.cpp
         src/hal_adc.cpp
@@ -144,6 +145,7 @@ else()
         src/expression_parser.cpp
         src/statement_core.cpp
         src/statement_graphics_io.cpp
+        src/line_input.cpp
         src/screenshot.cpp
     )
 

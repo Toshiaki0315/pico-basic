@@ -1,6 +1,7 @@
 #include "parser_internal.h"
 #include "hal_display.h"
 #include "hal_battery.h"
+#include "line_input.h"
 #include "kana_utf8.h"
 #include "hal_imu.h"
 #include "hal_rtc.h"
@@ -619,7 +620,9 @@ void execute_input(const TokenList& tokens, int& pos) {
         parse_optional_indices(tokens, pos, arr_idx, arr_idx2);
         
         char in_buf[128] = "";
-        hal_display_input(in_buf, sizeof(in_buf));
+        // 入力待ちの間に電源ボタンが長押しされたら、電源を切りに行ったあと
+        // ここへ戻る。プログラムは既に停止済みなので変数へは書かずに抜ける
+        if (!line_input_read_line(in_buf, sizeof(in_buf))) return;
         
         int nlen = strlen(var_name);
         bool is_str_var = (nlen > 0 && var_name[nlen-1] == '$');

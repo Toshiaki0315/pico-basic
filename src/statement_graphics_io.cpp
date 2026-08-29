@@ -5,6 +5,9 @@
 #include "hal_sound.h"
 
 #include "hal_touch.h"
+#include "hal_battery.h"
+#include "parser.h"
+#include "line_input.h"
 #include <stdexcept>
 #include <cstring>
 #include <cstdlib>
@@ -103,10 +106,25 @@ static uint16_t parse_optional_color(const TokenList& tokens, int& pos) {
     return color;
 }
 
+// 長い待ちの間も電源ボタンを効かせたいので、まとめて眠らずに細かく刻んで、
+// その合間にボタンを見る。塞がっている間は誰もボタンを見られないため。
+// 刻み幅は、反応の速さと刻むこと自体が積む誤差との兼ね合いで決めた
+#define WAIT_SLICE_MS 50
+
 void execute_wait(const TokenList& tokens, int& pos) {
-    pos++; 
+    pos++;
     Value val = parse_relation(tokens, pos);
-    hal_system_wait(static_cast<int>(val.num_val));
+    int remain = static_cast<int>(val.num_val);
+
+    while (remain > 0) {
+        int slice = (remain < WAIT_SLICE_MS) ? remain : WAIT_SLICE_MS;
+        hal_system_wait(slice);
+        remain -= slice;
+        if (hal_battery_power_key_held()) {
+            basic_power_off(); // 落ちれば戻らない。戻ったら実行は既に止まっている
+            return;
+        }
+    }
 }
 
 // CONSOLE ys, yl : テキストのスクロール領域を行 ys から yl 行分に制限する。
@@ -822,7 +840,8 @@ void execute_line_input(const TokenList& tokens, int& pos) {
         if (!file_read_line_raw(f, buf, sizeof(buf)))
             throw std::runtime_error("Input past end of file");
     } else {
-        hal_display_input(buf, sizeof(buf));
+        // 長押しで中断されたときは既にプログラムが止まっている（line_input.h 参照）
+        if (!line_input_read_line(buf, sizeof(buf))) return;
     }
 
     Value val(buf);

@@ -1,6 +1,6 @@
 #include "repl.h"
 #include "kana_utf8.h"
-#include "hal_battery.h"
+#include "line_input.h"
 #include "hal_display.h"
 #include "hal_sound.h"
 #include "lexer.h"
@@ -63,26 +63,14 @@ void repl_start() {
         bool aborted = false;
 
         while (true) {
-            // 文字が来るまで待つ間、電源ボタンの長押しを監視する。
-            // ここを素の getchar() にすると Ready の待ち受け中に反応しなくなる
-            int c;
-            while ((c = hal_system_getchar_timeout(50000)) < 0) {
-                if (hal_battery_power_key_held()) basic_power_off();
-            }
-
-            if (c == EOF) {
-                continue; // Prevent infinite loop on EOF
-            }
-
-            // 端末は UTF-8 で送ってくる。半角カタカナ（3 バイト）は JIS の 1 バイトに
-            // 畳んでから通常の経路へ流す。漢字・ひらがなは表示できないので 3 バイトごと捨てる。
-            // 2 バイトしか読み捨てないと 1 バイトずれて別の字に化ける（`ﾀﾁﾂ` → `ｾ`）
-            if (c >= 0xE0 && c <= 0xEF) {
-                int b2 = getchar();
-                int b3 = getchar();
-                unsigned char kana = utf8_to_jis_kana((unsigned char)c, (unsigned char)b2, (unsigned char)b3);
-                if (kana == 0) continue;
-                c = kana;
+            // 文字が来るまで待つ。待っている間の電源ボタンの監視も、端末が
+            // 送ってくる多バイト文字の畳み込みも line_input.cpp が面倒を見る
+            int c = line_input_getchar();
+            if (c == LINE_INPUT_SKIP) continue;
+            if (c == LINE_INPUT_POWER_OFF) {
+                // 電源を落としに行ったが切れなかった。入力途中の行は捨てて Ready へ
+                aborted = true;
+                break;
             }
 
             // Simple Line Editor implementation
@@ -132,10 +120,6 @@ void repl_start() {
                     printf("\n[screen save failed]\n");
                 // 入力途中の行を打ち直さずに済むよう、そのまま再表示する
                 if (input_ptr > 0) serial_print_kana(input_buffer);
-            } else if (c >= 0x81 && c <= 0x9F) {
-                // Shift-JIS を送ってくる端末向けの保険。2 バイト文字の 1 バイト目なので
-                // 対のバイトも読み捨てる（放置すると 2 バイト目が単独の字として紛れ込む）
-                getchar();
             } else if ((c >= 32 && c <= 126) || (c >= 0xA1 && c <= 0xDF)) {
                 // 印字可能 ASCII と JIS X 0201 半角カタカナ（0xA1-0xDF）を受け付ける
                 last_terminator = 0; // 改行の対を待つ状態を解除する
