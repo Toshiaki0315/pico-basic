@@ -315,6 +315,25 @@ void clear_program() {
     data_ptr = 0;
 }
 
+// トークン 1 個をソースの見た目に戻す。戻り値は書いたバイト数。
+//
+// LIST と SAVE の両方がこれを使う。別々に書くと、text に本文しか入っていない
+// トークンの扱いが片方だけ抜ける。実際 SAVE には REM の分岐が無く、
+// `10 REM --- TITLE ---` が `10 - - - TITLE - - -` として保存されていた。
+int token_to_source(char* out, size_t out_size, const Token& t) {
+    switch (t.type) {
+        case TokenType::STRING:
+            // 引用符は text に入っていないので書き戻す
+            return snprintf(out, out_size, "\"%s\"", t.text);
+        case TokenType::REM:
+            // text はコメント本文だけ。命令語は捨てられているので付け直す。
+            // `'` で書かれていても REM に正規化される（字句解析では同じもの）
+            return snprintf(out, out_size, "REM %s", t.text);
+        default:
+            return snprintf(out, out_size, "%s", t.text);
+    }
+}
+
 void list_program(int from_line, int to_line) {
     uint16_t ptr = MEMORY_TEXT_BASE;
     if (logical_memory[ptr] == 0 && logical_memory[ptr+1] == 0 && 
@@ -337,13 +356,7 @@ void list_program(int from_line, int to_line) {
         for (int i = 0; i < tokens.size; i++) {
             if (tokens.tokens[i].type == TokenType::END_OF_FILE) break;
             bpos += snprintf(buffer + bpos, sizeof(buffer) - bpos, " ");
-            if (tokens.tokens[i].type == TokenType::STRING) {
-                bpos += snprintf(buffer + bpos, sizeof(buffer) - bpos, "\"%s\"", tokens.tokens[i].text);
-            } else if (tokens.tokens[i].type == TokenType::REM) {
-                bpos += snprintf(buffer + bpos, sizeof(buffer) - bpos, "REM %s", tokens.tokens[i].text);
-            } else {
-                bpos += snprintf(buffer + bpos, sizeof(buffer) - bpos, "%s", tokens.tokens[i].text);
-            }
+            bpos += token_to_source(buffer + bpos, sizeof(buffer) - bpos, tokens.tokens[i]);
         }
         snprintf(buffer + bpos, sizeof(buffer) - bpos, "\n");
         basic_print(buffer);

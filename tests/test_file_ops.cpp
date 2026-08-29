@@ -432,3 +432,96 @@ TEST_F(FileOpsTest, GraphicsLineStillWorks) {
     parse_and_execute(lex("LINE (0,0)-(50,50), 15"));
     EXPECT_FALSE(mock_hal::get_draw_commands().empty());
 }
+
+// --- SAVE / LOAD の往復 --------------------------------------------------
+//
+// SAVE は LIST とは別に書き戻しを組み立てていて、REM の分岐が抜けていた。
+// REM トークンの text はコメント本文だけで命令語を含まないため、保存すると
+// コメントが裸の式として書き出され、読み戻すと別のプログラムになっていた。
+
+TEST_F(FileOpsTest, SaveKeepsRemComments) {
+    store_line(10, lex("REM --- TITLE ---"));
+    store_line(20, lex("PRINT 1"));
+    parse_and_execute(lex("SAVE \"RT.DAT\""));
+
+    clear_program();
+    mock_hal::reset();
+    parse_and_execute(lex("LOAD \"RT.DAT\""));
+    parse_and_execute(lex("LIST"));
+    std::string out = mock_hal::get_raw_print_buffer();
+    EXPECT_NE(out.find("10 REM --- TITLE ---"), std::string::npos) << out;
+}
+
+// `'` は字句解析の時点で REM と同じものになるので、書き戻しは REM に揃う
+TEST_F(FileOpsTest, SaveKeepsApostropheComments) {
+    store_line(10, lex("' NOTE"));
+    parse_and_execute(lex("SAVE \"RT2.DAT\""));
+
+    clear_program();
+    mock_hal::reset();
+    parse_and_execute(lex("LOAD \"RT2.DAT\""));
+    parse_and_execute(lex("LIST"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("10 REM NOTE"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}
+
+// 行末のコメントも同じ。ここが壊れていると、保存したプログラムの実行結果まで変わる
+TEST_F(FileOpsTest, SaveKeepsTrailingComment) {
+    store_line(10, lex("A = 5 : REM SET A"));
+    store_line(20, lex("PRINT A"));
+    parse_and_execute(lex("SAVE \"RT3.DAT\""));
+
+    clear_program();
+    mock_hal::reset();
+    parse_and_execute(lex("LOAD \"RT3.DAT\""));
+    mock_hal::reset(); // LOAD の "Loaded" を数えない
+    parse_and_execute(lex("RUN"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "5\n");
+}
+
+// 往復して LIST が一致すること。SAVE と LIST は同じ書き戻しを使う約束なので、
+// 新しいトークン種別が増えても片方だけ抜けたらここで落ちる
+TEST_F(FileOpsTest, SaveLoadRoundTripMatchesList) {
+    store_line(10, lex("REM --- HEADER ---"));
+    store_line(20, lex("DIM A(3)"));
+    store_line(30, lex("S$ = \"0111\""));
+    store_line(40, lex("FOR I = 0 TO 3 : A(I) = VAL(MID$(S$,I+1,1)) : NEXT I"));
+    store_line(50, lex("IF A(1) <> 0 THEN PRINT \"OK\" : REM TRAILING"));
+    store_line(60, lex("*LOOP"));
+    store_line(70, lex("GOSUB *LOOP"));
+
+    mock_hal::reset();
+    parse_and_execute(lex("LIST"));
+    std::string before = mock_hal::get_raw_print_buffer();
+
+    parse_and_execute(lex("SAVE \"RT4.DAT\""));
+    clear_program();
+    parse_and_execute(lex("LOAD \"RT4.DAT\""));
+
+    mock_hal::reset();
+    parse_and_execute(lex("LIST"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), before);
+}
+
+// 保存と読み込みを繰り返しても増えない・減らないこと。
+// SAVE がトークンの後ろに空白を置き、LOAD が行末の改行を落としていなかった
+// ころは、REM の本文が往復のたびに 1 文字ずつ伸びていた
+TEST_F(FileOpsTest, RepeatedSaveLoadIsStable) {
+    store_line(10, lex("REM NOTE"));
+    store_line(20, lex("A = 1 : REM TAIL"));
+
+    std::string prev;
+    for (int cycle = 0; cycle < 3; cycle++) {
+        parse_and_execute(lex("SAVE \"RT5.DAT\""));
+        clear_program();
+        parse_and_execute(lex("LOAD \"RT5.DAT\""));
+
+        mock_hal::reset();
+        parse_and_execute(lex("LIST"));
+        std::string now = mock_hal::get_raw_print_buffer();
+        if (cycle > 0) EXPECT_EQ(now, prev) << "往復 " << cycle << " 回目で変化した";
+        prev = now;
+    }
+    EXPECT_NE(prev.find("10 REM NOTE\n"), std::string::npos) << prev;
+    EXPECT_NE(prev.find("20 A = 1 : REM TAIL\n"), std::string::npos) << prev;
+}

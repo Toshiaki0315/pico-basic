@@ -303,13 +303,20 @@ void execute_save(const TokenList& tokens, int& pos) {
         if (logical_memory[ptr+2] == 0 && logical_memory[ptr+3] == 0 && ptr != MEMORY_TEXT_BASE) break;
 
         uint16_t line_num = prog_line_no(ptr);
-        hal_file_printf(fp, "%d ", line_num);
-        
+        hal_file_printf(fp, "%d", line_num);
+
         TokenList t = get_detokenized_line(ptr); // from program_manager.cpp
         for (int i=0; i<t.size; i++) {
             if (t.tokens[i].type == TokenType::END_OF_FILE) break;
-            if (t.tokens[i].type == TokenType::STRING) hal_file_printf(fp, "\"%s\" ", t.tokens[i].text);
-            else hal_file_printf(fp, "%s ", t.tokens[i].text);
+            // 書き戻しは LIST と同じ関数に任せる。ここで独自に組み立てていた
+            // ころは REM の分岐が抜けていて、保存するとコメントが消えていた。
+            //
+            // 区切りの空白はトークンの「前」に置く。後ろに置くと行末にも空白が
+            // 残り、それが REM の本文に取り込まれて、保存するたびに 1 つずつ
+            // 伸びていく
+            char rendered[MAX_TOKEN_LEN + 8];
+            token_to_source(rendered, sizeof(rendered), t.tokens[i]);
+            hal_file_printf(fp, " %s", rendered);
         }
         hal_file_printf(fp, "\n");
         
@@ -333,6 +340,14 @@ void execute_load(const TokenList& tokens, int& pos) {
     clear_program();
     char line_buf[256];
     while (hal_file_gets(line_buf, sizeof(line_buf), fp)) {
+        // 行末の改行を落としてから字句解析する。REM は行末までを本文として
+        // 取り込むので、残っていると改行そのものがコメントに入り、保存と
+        // 読み込みを繰り返すたびに伸びていく。PC で編集した CRLF のファイルを
+        // 読んだときの \r も同じ理由でここで落とす
+        int len = (int)strlen(line_buf);
+        while (len > 0 && (line_buf[len-1] == '\n' || line_buf[len-1] == '\r'))
+            line_buf[--len] = '\0';
+
         TokenList t = lex(line_buf);
         if (t.size > 0 && t.tokens[0].type == TokenType::NUMBER) {
             int line_num = atoi(t.tokens[0].text);

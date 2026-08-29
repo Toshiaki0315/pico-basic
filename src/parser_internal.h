@@ -205,6 +205,9 @@ extern int data_ptr;
 // Shared Functions
 // ---------------------------------------------------------
 const char* token_type_to_string(TokenType type);
+
+// トークン 1 個をソースの見た目に戻す（LIST と SAVE が共有）。戻り値は書いた長さ
+int token_to_source(char* out, size_t out_size, const Token& t);
 void require_token(const TokenList& tokens, int& pos, TokenType expected, const char* err_msg);
 
 // Memory / Program Managers
