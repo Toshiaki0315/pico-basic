@@ -65,7 +65,12 @@ if(BUILD_TESTS)
         src/program_manager.cpp
         src/expression_parser.cpp
         src/statement_core.cpp
-        src/statement_graphics_io.cpp
+        src/statement_control.cpp
+        src/statement_device.cpp
+        src/statement_dispatch.cpp
+        src/statement_graphics.cpp
+        src/statement_file_io.cpp
+        src/statement_sound.cpp
         src/line_input.cpp
         src/screenshot.cpp
         src/hal_battery.cpp
@@ -153,7 +158,12 @@ else()
         src/program_manager.cpp
         src/expression_parser.cpp
         src/statement_core.cpp
-        src/statement_graphics_io.cpp
+        src/statement_control.cpp
+        src/statement_device.cpp
+        src/statement_dispatch.cpp
+        src/statement_graphics.cpp
+        src/statement_file_io.cpp
+        src/statement_sound.cpp
         src/line_input.cpp
         src/screenshot.cpp
     )
