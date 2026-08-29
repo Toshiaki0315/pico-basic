@@ -96,9 +96,26 @@ RUN
 
 ## 🔨 ビルドとテスト
 
-**実機用ファームウェア**のビルドと書き込みは [SETUP.md](./SETUP.md) を参照してください。
+`tools/` に 3 本のスクリプトがあります。
 
-**ホストテスト**（実機不要）: BASIC エンジンは PC 上で 360 件超の単体テストで検証しています。
+```bash
+tools/test.sh            # ホスト単体テスト（実機も SDK も不要）
+tools/build-firmware.sh  # 実機ファームウェア build/pico_basic.uf2 を作る
+tools/check.sh           # コミット前のフル確認（上の両方＋警告チェック）
+```
+
+**ホストテスト**（実機不要）: BASIC エンジンは PC 上で 390 件超の単体テストで検証しています。
+`tools/test.sh PowerKeyTest.*` のように Google Test のフィルタも渡せます。
+
+**実機ファームウェア**の書き込み手順は [SETUP.md](./SETUP.md) を参照してください。
+初回の構成には Pico SDK とネットワーク接続が要ります。
+
+**フル確認**が両方のビルドを通すのは、警告の出方がコンパイラで違うためです。ホストは clang、
+実機は `arm-none-eabi-gcc` で、gcc にしか無い警告は実機ビルドまで通さないと見えません。
+`-Wall -Wextra` を有効にしてあるので、自分たちのコードに警告が 1 つでも出たら `tools/check.sh`
+は失敗します（FetchContent 由来の警告は数えません）。
+
+cmake を直に叩く場合は次のとおりです。
 
 ```bash
 cmake -S . -B build_host -DBUILD_TESTS=ON && cmake --build build_host && ./build_host/basic_tests
