@@ -55,6 +55,28 @@ struct MmlTrack {
     int      count;
 };
 
+// ctype に渡す前に unsigned char へ直す。
+//
+// char が符号付きの処理系では、半角カタカナ（0xA1-0xDF）のような 0x80 以上の
+// バイトが負の値として渡り未定義動作になる。ARM の char は符号なしなので実機は
+// 素通りし、ホストのテストだけが踏む。lexer.cpp と同じ流儀に揃える
+static inline int uch(char c) { return (unsigned char)c; }
+
+// MML の命令に続く 10 進数を読む。O / L / T / V と音長の 5 か所で使う。
+// 桁が増え続けても int を溢れさせないよう、上限で頭打ちにする
+// （どの命令も範囲外は呼び出し側が弾くので、頭打ちの値がそのまま使われることはない）
+static int read_mml_number(const char* mml, int& i, int fallback) {
+    if (!std::isdigit(uch(mml[i]))) return fallback;
+
+    constexpr int LIMIT = 100000;
+    int val = 0;
+    while (std::isdigit(uch(mml[i]))) {
+        if (val < LIMIT) val = val * 10 + (mml[i] - '0');
+        i++;
+    }
+    return val;
+}
+
 // MML 文字列を解釈してイベント列に変換する（この時点では発音しない）
 static void parse_mml(const char* mml, MmlTrack& track) {
     track.count = 0;
@@ -66,31 +88,27 @@ static void parse_mml(const char* mml, MmlTrack& track) {
 
     int i = 0;
     while (mml[i] != '\0') {
-        char c = std::toupper(mml[i++]);
-        if (std::isspace(c)) continue;
+        char c = (char)std::toupper(uch(mml[i++]));
+        if (std::isspace(uch(c))) continue;
 
         switch (c) {
             case 'O': {
-                int val = 0;
-                while (std::isdigit(mml[i])) val = val * 10 + (mml[i++] - '0');
+                int val = read_mml_number(mml, i, octave);
                 if (val >= 1 && val <= 8) octave = val;
                 break;
             }
             case 'L': {
-                int val = 0;
-                while (std::isdigit(mml[i])) val = val * 10 + (mml[i++] - '0');
+                int val = read_mml_number(mml, i, default_len);
                 if (val >= 1 && val <= 64) default_len = val;
                 break;
             }
             case 'T': {
-                int val = 0;
-                while (std::isdigit(mml[i])) val = val * 10 + (mml[i++] - '0');
+                int val = read_mml_number(mml, i, tempo);
                 if (val >= 32 && val <= 255) tempo = val;
                 break;
             }
             case 'V': {
-                int val = 0;
-                while (std::isdigit(mml[i])) val = val * 10 + (mml[i++] - '0');
+                int val = read_mml_number(mml, i, volume);
                 if (val < 0) val = 0;
                 if (val > 15) val = 15;
                 volume = val;
@@ -116,11 +134,7 @@ static void parse_mml(const char* mml, MmlTrack& track) {
                     else if (mml[i] == '-') { note--; i++; }
                 }
 
-                int len = default_len;
-                if (std::isdigit(mml[i])) {
-                    len = 0;
-                    while (std::isdigit(mml[i])) len = len * 10 + (mml[i++] - '0');
-                }
+                int len = read_mml_number(mml, i, default_len);
                 if (len <= 0) len = default_len;
 
                 float duration_ms = (60.0f / tempo) * (4.0f / len) * 1000.0f;

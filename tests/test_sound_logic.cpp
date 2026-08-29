@@ -121,3 +121,56 @@ TEST_F(SoundLogicTest, MoreThanThreeVoicesIsAnError) {
     parse_and_execute(lex("MUSIC \"C\",\"E\",\"G\",\"B\""));
     EXPECT_TRUE(mock_hal::get_raw_print_buffer().find("Too many voices") != std::string::npos);
 }
+
+// --- MML の数値読み取り ----------------------------------------------------
+//
+// O / L / T / V と音長の 5 か所で同じ読み取りを写経していたのを 1 か所に
+// まとめた。ctype に char をそのまま渡していたのも同時に直してある
+// （char が符号付きの処理系では 0x80 以上のバイトが負値で渡り未定義動作）。
+
+// 既定（T120 L4）の 4 分音符は 500ms、末尾の切れ目 10ms を引いて 490ms
+static int count_substr(const std::string& hay, const std::string& needle) {
+    int n = 0;
+    for (size_t at = hay.find(needle); at != std::string::npos; at = hay.find(needle, at + 1)) n++;
+    return n;
+}
+
+// 半角カタカナ入りでも落ちず、未知の命令として読み飛ばして残りを鳴らすこと
+TEST_F(SoundLogicTest, MmlSkipsNonAsciiBytesAndPlaysTheRest) {
+    testing::internal::CaptureStdout();
+    parse_and_execute(lex("PLAY \"\xB1\xB2 CDE\""));
+    std::string out = testing::internal::GetCapturedStdout();
+    EXPECT_EQ(count_substr(out, "PLAY 1 voice(s)"), 3) << out; // C D E の 3 音
+}
+
+// 桁が増え続けても int を溢れさせない。溢れた値がたまたま 1-64 に入ると
+// 音長が化けるので、既定の 4 分音符のままであることまで確かめる
+TEST_F(SoundLogicTest, MmlIgnoresAbsurdlyLongLengthAndKeepsTheDefault) {
+    testing::internal::CaptureStdout();
+    parse_and_execute(lex("PLAY \"L99999999999 C\""));
+    std::string out = testing::internal::GetCapturedStdout();
+    EXPECT_NE(out.find("for 490 ms"), std::string::npos) << out;
+}
+
+TEST_F(SoundLogicTest, MmlIgnoresAbsurdlyLongTempoAndKeepsTheDefault) {
+    testing::internal::CaptureStdout();
+    parse_and_execute(lex("PLAY \"T99999999999 C\""));
+    std::string out = testing::internal::GetCapturedStdout();
+    EXPECT_NE(out.find("for 490 ms"), std::string::npos) << out;
+}
+
+// 範囲外の指定は無視され、直前の値が残る（切り出し前と同じ挙動）
+TEST_F(SoundLogicTest, MmlIgnoresOutOfRangeOctave) {
+    testing::internal::CaptureStdout();
+    parse_and_execute(lex("PLAY \"O4 O99 C\""));
+    std::string out = testing::internal::GetCapturedStdout();
+    EXPECT_NE(out.find("261.63Hz"), std::string::npos) << out; // O4 の C のまま
+}
+
+// 有効な指定はこれまでどおり効く（切り出しで壊していないことの確認）
+TEST_F(SoundLogicTest, MmlStillHonoursValidLengthAndTempo) {
+    testing::internal::CaptureStdout();
+    parse_and_execute(lex("PLAY \"L8 C\"")); // 8 分音符 = 250ms - 10ms
+    std::string out = testing::internal::GetCapturedStdout();
+    EXPECT_NE(out.find("for 240 ms"), std::string::npos) << out;
+}
