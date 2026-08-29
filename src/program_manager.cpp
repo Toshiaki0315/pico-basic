@@ -1,4 +1,5 @@
 #include "parser_internal.h"
+#include <cstdarg>
 #include "hal_display.h"
 #include <cstring>
 #include <stdexcept>
@@ -106,16 +107,29 @@ const char* token_type_to_string(TokenType type) {
     }
 }
 
-static int tokenize(const TokenList& tokens, uint8_t* buffer) {
+// トークンが本文を持つ種別か。中間コードでは「型 1 + 長さ 1 + 本文」に展開される
+static bool token_carries_text(TokenType type) {
+    return type == TokenType::NUMBER || type == TokenType::IDENTIFIER ||
+           type == TokenType::STRING || type == TokenType::LABEL ||
+           type == TokenType::REM;
+}
+
+// トークン列を中間コードに変換する。収まらなければ -1。
+//
+// 以前は書き込み量を確かめずに 256 バイトのスタック配列へ書いていた。
+// 本文を持つトークンは本文に加えて 2 バイト使うので、短いトークンが並ぶほど
+// 中間コードは元の行より長くなる。`10 1 1 1 ...` と数値を 90 個並べた
+// 254 文字の行（REPL の上限は 255 文字）で、実際にスタックを踏み抜いていた。
+static int tokenize(const TokenList& tokens, uint8_t* buffer, int buffer_size) {
     int ptr = 0;
     for (int i=0; i<tokens.size; i++) {
+        int len = token_carries_text(tokens.tokens[i].type)
+                    ? (int)strlen(tokens.tokens[i].text) : 0;
+        int need = 1 + (len > 0 || token_carries_text(tokens.tokens[i].type) ? 1 + len : 0);
+        if (ptr + need + 1 > buffer_size) return -1; // +1 は行末の 0xFF
+
         buffer[ptr++] = (uint8_t)tokens.tokens[i].type;
-        if (tokens.tokens[i].type == TokenType::NUMBER ||
-            tokens.tokens[i].type == TokenType::IDENTIFIER ||
-            tokens.tokens[i].type == TokenType::STRING ||
-            tokens.tokens[i].type == TokenType::LABEL ||
-            tokens.tokens[i].type == TokenType::REM) {
-            int len = strlen(tokens.tokens[i].text);
+        if (token_carries_text(tokens.tokens[i].type)) {
             buffer[ptr++] = (uint8_t)len;
             memcpy(&buffer[ptr], tokens.tokens[i].text, len);
             ptr += len;
@@ -129,18 +143,19 @@ static TokenList detokenize(const uint8_t* buffer) {
     TokenList t;
     int ptr = 0;
     while (t.size < MAX_TOKENS_PER_LINE && buffer[ptr] != 0xFF) {
-        if (ptr > 512) break; 
+        if (ptr >= MAX_LINE_CODE_LEN) break;
         t.tokens[t.size].type = (TokenType)buffer[ptr++];
-        if (t.tokens[t.size].type == TokenType::NUMBER ||
-            t.tokens[t.size].type == TokenType::IDENTIFIER ||
-            t.tokens[t.size].type == TokenType::STRING ||
-            t.tokens[t.size].type == TokenType::LABEL ||
-            t.tokens[t.size].type == TokenType::REM) {
-            int len = buffer[ptr++];
-            if (len > 64) len = 64; 
+        if (token_carries_text(t.tokens[t.size].type)) {
+            int stored = buffer[ptr++];
+            // 読み出しは Token の本文に収まる分だけ。ただし **進む量は格納された
+            // 長さそのもの**にすること。切り詰めた長さで進めると、はみ出した
+            // バイトが次のトークンとして読まれて行全体が化ける。
+            // 以前は 64 で切り詰めたうえに切り詰めた長さで進めていたため、
+            // 64 文字を超える文字列や REM を含む行は格納すると壊れていた
+            int len = (stored > MAX_TOKEN_LEN - 1) ? MAX_TOKEN_LEN - 1 : stored;
             memcpy(t.tokens[t.size].text, &buffer[ptr], len);
             t.tokens[t.size].text[len] = '\0';
-            ptr += len;
+            ptr += stored;
         } else {
             const char* kw = token_type_to_string(t.tokens[t.size].type);
             copy_string(t.tokens[t.size].text, MAX_TOKEN_LEN, kw);
@@ -278,8 +293,9 @@ void store_line(int line_number, const TokenList& tokens) {
         insert_ptr = next_ptr;
     }
     
-    uint8_t buffer[256];
-    int code_len = tokenize(tokens, buffer);
+    uint8_t buffer[MAX_LINE_CODE_LEN];
+    int code_len = tokenize(tokens, buffer, sizeof(buffer));
+    if (code_len < 0) throw std::runtime_error("Line too long");
     int total_len = 4 + code_len;
     
     if (end_ptr + total_len >= MEMORY_VAR_BASE) {
@@ -313,6 +329,20 @@ void clear_program() {
     call_stack_ptr = 0;
     data_buffer_size = 0;
     data_ptr = 0;
+}
+
+// buffer の末尾へ書き足す。pos は「実際に書けた長さ」だけ進む。
+//
+// snprintf の戻り値を積算する書き方だと、切り詰めが起きた時点で pos が
+// バッファ長を超え、以降の書き込み位置と残り長がどちらも壊れる。
+static void append_to(char* buffer, size_t size, size_t& pos, const char* fmt, ...) {
+    if (pos + 1 >= size) return; // 残りが終端ぶんしか無い
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buffer + pos, size - pos, fmt, ap);
+    va_end(ap);
+    if (n < 0) return;
+    pos += ((size_t)n < size - pos) ? (size_t)n : (size - pos - 1);
 }
 
 // トークン 1 個をソースの見た目に戻す。戻り値は書いたバイト数。
@@ -352,13 +382,21 @@ void list_program(int from_line, int to_line) {
         }
         TokenList tokens = detokenize(&logical_memory[ptr+4]);
         
-        int bpos = snprintf(buffer, sizeof(buffer), "%d", line_num);
+        // snprintf は「切り詰めなければ書いたはずの長さ」を返すので、戻り値を
+        // そのまま足していくと bpos がバッファ長を超える。超えた先では
+        // buffer + bpos がバッファ外を指し、sizeof(buffer) - bpos は size_t で
+        // 折り返して巨大値になるため、次の snprintf がスタックを踏み抜く。
+        // 実際に書けた分だけ進めて、残りが無くなったら書くのをやめる
+        size_t bpos = 0;
+        append_to(buffer, sizeof(buffer), bpos, "%d", line_num);
         for (int i = 0; i < tokens.size; i++) {
             if (tokens.tokens[i].type == TokenType::END_OF_FILE) break;
-            bpos += snprintf(buffer + bpos, sizeof(buffer) - bpos, " ");
-            bpos += token_to_source(buffer + bpos, sizeof(buffer) - bpos, tokens.tokens[i]);
+            append_to(buffer, sizeof(buffer), bpos, " ");
+            char rendered[MAX_TOKEN_LEN + 8];
+            token_to_source(rendered, sizeof(rendered), tokens.tokens[i]);
+            append_to(buffer, sizeof(buffer), bpos, "%s", rendered);
         }
-        snprintf(buffer + bpos, sizeof(buffer) - bpos, "\n");
+        append_to(buffer, sizeof(buffer), bpos, "\n");
         basic_print(buffer);
         
         uint16_t next_ptr = prog_next_ptr(ptr);

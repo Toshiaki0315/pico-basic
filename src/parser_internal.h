@@ -79,6 +79,14 @@ struct ForLoopContext {
 // ---------------------------------------------------------
 // Constants
 // ---------------------------------------------------------
+// プログラム 1 行ぶんの中間コードの上限。
+//
+// 本文を持つトークンは「型 1 + 長さ 1 + 本文」に展開されるので、中間コードは
+// 元の行より長くなりうる。入力 1 行は 256 バイト（repl.cpp の MAX_LINE_LEN と
+// execute_load の行バッファ）なので、最悪でも
+// 「トークン数 * 2 + 入力の長さ + 行末の 1」に収まる。
+#define MAX_LINE_CODE_LEN (MAX_TOKENS_PER_LINE * 2 + 256 + 1)
+
 #define MAX_VARIABLES 128
 #define MAX_ARRAY_HEAP 1024
 #define MAX_FOR_STACK 16

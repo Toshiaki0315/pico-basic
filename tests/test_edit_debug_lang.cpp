@@ -233,3 +233,64 @@ TEST_F(EditDebugLangTest, OnErrorGotoZeroDisables) {
     EXPECT_EQ(out().find("handler"), std::string::npos);
     EXPECT_NE(out().find("Division by zero"), std::string::npos);
 }
+
+// --- 1 行の格納と読み戻し（中間コード）---------------------------------
+//
+// プログラムの行は「型 1 + 長さ 1 + 本文」の中間コードで論理メモリに置かれる。
+// 本文を持つトークンは 2 バイト余計に使うので、短いトークンが並ぶ行の中間
+// コードは元の行より長くなる。ここが 3 つ壊れていた:
+//   - 書き込み側が長さを確かめずに 256 バイトのスタック配列へ書いていた
+//   - 読み出し側が本文を 64 バイトで切り詰めていた
+//   - しかも切り詰めた長さだけ読み位置を進めていて、残りが次のトークンに化けた
+
+// 数値を並べた 1 行。REPL に打てる長さ（255 文字）でスタックを踏み抜いていた
+TEST_F(EditDebugLangTest, LongLineOfShortTokensIsStoredAndListedBack) {
+    std::string src = "10 PRINT";
+    for (int i = 0; i < 90; i++) src += " 1";
+    ASSERT_LE(src.size(), (size_t)255) << "REPL に打てる長さであること";
+
+    run(src.c_str());
+    mock_hal::reset();
+    run("LIST");
+    EXPECT_EQ(out(), src + "\n") << out();
+}
+
+// 64 文字を超える文字列リテラルは、格納すると本文が切れたうえに以降が
+// トークンとして誤読され、実行時に構文エラーになっていた
+TEST_F(EditDebugLangTest, LongStringLiteralSurvivesBeingStored) {
+    std::string lit(100, 'X');
+    run(("10 PRINT \"" + lit + "\"").c_str());
+    mock_hal::reset();
+    run("RUN");
+    EXPECT_EQ(out(), lit + "\n") << out();
+}
+
+// 64 文字を超える REM も同じ経路。行末までがコメントなので影響が出やすい
+TEST_F(EditDebugLangTest, LongRemCommentSurvivesBeingStored) {
+    std::string body(100, 'Z');
+    run(("10 REM " + body).c_str());
+    run("20 PRINT \"AFTER\"");
+    mock_hal::reset();
+    run("LIST");
+    EXPECT_EQ(out(), "10 REM " + body + "\n20 PRINT \"AFTER\"\n") << out();
+}
+
+// 中間コードに収まらない行は、踏み抜かずに断る。
+// lex 自体に 255 文字の制限は無いので、ここは字句解析を直接使って作る
+TEST_F(EditDebugLangTest, LineTooLongForTheCodeBufferIsRefused) {
+    std::string chunk(127, 'X');
+    std::string src = "10";
+    for (int i = 0; i < 12; i++) src += " \"" + chunk + "\"";
+
+    mock_hal::reset();
+    run(src.c_str());
+    EXPECT_NE(out().find("Line too long"), std::string::npos) << out();
+}
+
+// 短い行はこれまでどおり最後まで出る
+TEST_F(EditDebugLangTest, ListStillPrintsShortLinesInFull) {
+    run("10 PRINT \"HELLO\" : REM NOTE");
+    mock_hal::reset();
+    run("LIST");
+    EXPECT_EQ(out(), "10 PRINT \"HELLO\" : REM NOTE\n") << out();
+}
