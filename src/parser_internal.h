@@ -104,8 +104,20 @@ struct ForLoopContext {
 #define MAX_PROGRAM_LINES 256
 #define MAX_LABELS 64
 
+// 論理メモリ 64KB の割り付け:
+//   0x0000-0x6000  プログラム本文（24KB）
+//   0x6000-0x6800  変数表
+//   0x6800-0x7000  配列表
+//   0x7000-0xC000  配列ヒープ（20KB）
+//   0xC000-0x10000 文字列ヒープ（16KB）
+//
+// 本文が 32KB だったころ配列ヒープは 12KB しかなく、GET@ で取り込める画像が
+// 39x39 程度に制限されていた。同梱サンプルの最大は 126 行 / 4KB、行数の上限
+// MAX_PROGRAM_LINES を同じ密度で埋め尽くしても 8KB 程度なので、本文を 24KB に
+// 詰めても 3 倍の余裕がある。溢れた場合は store_line が
+// 「Out of Memory: Program too large」で明示的に断る。
 #define MEMORY_TEXT_BASE 0x0000
-#define MEMORY_VAR_BASE 0x8000
+#define MEMORY_VAR_BASE 0x6000
 #define VAR_TABLE_SIZE (MAX_VARIABLES * 16)
 #define ARRAY_TABLE_BASE (MEMORY_VAR_BASE + VAR_TABLE_SIZE)
 #define ARRAY_TABLE_SIZE (MAX_VARIABLES * 16)

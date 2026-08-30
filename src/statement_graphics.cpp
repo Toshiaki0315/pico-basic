@@ -508,6 +508,38 @@ void execute_paint(const TokenList& tokens, int& pos) {
     if (!complete) basic_print("Paint incomplete: region too complex\n");
 }
 
+// ---------------------------------------------------------
+// GET@ / PUT@ の画像の入れ物
+//
+// 画素は 16bit だが、配列の 1 要素は型 1 バイト + 値 4 バイト + 詰め物で 8 バイト
+// ある。1 画素に 1 要素を使うと 4 倍の場所を食い、12KB のヒープでは 39x39 ほどしか
+// 入らなかった。そこで画素だけは 2 バイトずつ詰めて置く。
+//
+// 幅と高さは今までどおり先頭 2 要素に Value として置く。BASIC から A(0) / A(1) で
+// 読めることは MANUAL に書いてあるので、そこは変えない。画素はその後ろのバイト列で、
+// A(2) 以降を数値として読んでも画素の並びにはならない。
+// ---------------------------------------------------------
+
+/// 画素列が始まるバイト位置（幅・高さの 2 要素ぶん後ろ）
+static constexpr int IMAGE_PIXELS_OFFSET = 2 * 8;
+
+/// この配列に収まる画素数
+static int image_capacity(const ArrayRef* arr) {
+    int bytes = (int)arr->total_size() * 8 - IMAGE_PIXELS_OFFSET;
+    return (bytes > 0) ? bytes / 2 : 0;
+}
+
+static void image_write_pixel(const ArrayRef* arr, int index, uint16_t color) {
+    uint16_t at = (uint16_t)(arr->start_addr + IMAGE_PIXELS_OFFSET + index * 2);
+    logical_memory[at]     = (uint8_t)(color & 0xFF);
+    logical_memory[at + 1] = (uint8_t)(color >> 8);
+}
+
+static uint16_t image_read_pixel(const ArrayRef* arr, int index) {
+    uint16_t at = (uint16_t)(arr->start_addr + IMAGE_PIXELS_OFFSET + index * 2);
+    return (uint16_t)(logical_memory[at] | (logical_memory[at + 1] << 8));
+}
+
 void execute_get_at(const TokenList& tokens, int& pos) {
     pos++; 
     require_token(tokens, pos, TokenType::LPAREN, "Expected '('"); pos++;
@@ -553,16 +585,15 @@ void execute_get_at(const TokenList& tokens, int& pos) {
     if (w > scr_w || h > scr_h)
         throw std::runtime_error("Illegal function call: GET@ rectangle is larger than the screen");
 
-    if (2 + w * h > arr->total_size()) throw std::runtime_error("Array too small for image");
+    if (w * h > image_capacity(arr)) throw std::runtime_error("Array too small for image");
     
     write_heap_value(arr->start_addr, Value((float)w));
     write_heap_value(arr->start_addr + 8, Value((float)h));
     
-    int idx = 2;
+    int idx = 0;
     for (int j = 0; j < h; j++) {
         for (int i = 0; i < w; i++) {
-            uint16_t color = hal_graphics_get_pixel(x1 + i, y1 + j);
-            write_heap_value(arr->start_addr + (idx++ * 8), Value((float)color));
+            image_write_pixel(arr, idx++, hal_graphics_get_pixel(x1 + i, y1 + j));
         }
     }
 }
@@ -629,7 +660,8 @@ void execute_put_at(const TokenList& tokens, int& pos) {
     // （A(0)=30000 : A(1)=30000 で 9 億回のループになる）
     int scr_w, scr_h;
     hal_display_get_info(scr_w, scr_h);
-    if (w > scr_w || h > scr_h)
+    // 配列に収まらない寸法も同じ理由で断る（詰めて置いているので容量から逆算する）
+    if (w > scr_w || h > scr_h || w * h > image_capacity(arr))
         throw std::runtime_error("Illegal function call: PUT@ image size is not valid");
 
     // 転送先のサイズ。矩形指定がなければ元画像と同じ
@@ -647,8 +679,7 @@ void execute_put_at(const TokenList& tokens, int& pos) {
             int si = has_dst_rect ? (dx * w / dst_w) : dx;
             int sj = has_dst_rect ? (dy * h / dst_h) : dy;
 
-            uint16_t src = static_cast<uint16_t>(
-                read_heap_value(arr->start_addr + ((2 + sj * w + si) * 8)).num_val);
+            uint16_t src = image_read_pixel(arr, sj * w + si);
 
             int x = ox + dx;
             int y = oy + dy;

@@ -259,3 +259,93 @@ TEST_F(AdvancedGraphicsTest, GetAtPutAtStillRoundTrips) {
     EXPECT_EQ(mock_hal::get_raw_print_buffer().find("Illegal function call"), std::string::npos)
         << mock_hal::get_raw_print_buffer();
 }
+
+// --- 画像の詰め方と容量 ---------------------------------------------------
+//
+// 画素は 16bit だが配列の 1 要素は 8 バイトある。1 画素 1 要素だと 4 倍の
+// 場所を食い、12KB のヒープでは 39x39 ほどしか入らなかった。画素だけ 2 バイト
+// ずつ詰め、あわせて本文領域を削って配列ヒープを 20KB にしてある。
+
+// 詰めた結果 1 要素に 4 画素入る。DIM A(10) は 11 要素 = 88 バイトなので
+// 先頭 2 要素を除いた 72 バイト = 36 画素まで
+TEST_F(AdvancedGraphicsTest, GetAtFitsFourPixelsPerArrayElement) {
+    parse_and_execute(lex("DIM A(10)"));
+    mock_hal::reset();
+    parse_and_execute(lex("GET@ (0,0)-(5,5), A")); // 6x6 = 36 画素
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "") << mock_hal::get_raw_print_buffer();
+}
+
+TEST_F(AdvancedGraphicsTest, GetAtRefusesOnePixelBeyondCapacity) {
+    parse_and_execute(lex("DIM A(10)"));
+    mock_hal::reset();
+    parse_and_execute(lex("GET@ (0,0)-(6,5), A")); // 7x6 = 42 画素 > 36
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("Array too small"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}
+
+// 以前の上限（39x39）を超える画像が取り込めること
+TEST_F(AdvancedGraphicsTest, GetAtHandlesImagesLargerThanTheOldLimit) {
+    parse_and_execute(lex("DIM A(1300)")); // 64x64 = 4096 画素に足りる
+    mock_hal::reset();
+    parse_and_execute(lex("GET@ (0,0)-(63,63), A"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "") << mock_hal::get_raw_print_buffer();
+}
+
+// 幅・高さは今までどおり先頭 2 要素から BASIC で読める（MANUAL の約束）
+TEST_F(AdvancedGraphicsTest, GetAtStillExposesWidthAndHeightToBasic) {
+    parse_and_execute(lex("DIM A(50)"));
+    parse_and_execute(lex("GET@ (0,0)-(9,4), A")); // 10x5
+    mock_hal::reset();
+    parse_and_execute(lex("PRINT A(0); A(1)"));
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("10"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+    EXPECT_NE(mock_hal::get_raw_print_buffer().find("5"), std::string::npos)
+        << mock_hal::get_raw_print_buffer();
+}
+
+// 取り込んだ色がそのまま戻ること（詰め方を間違えると色が化ける）。
+//
+// mock_hal::reset() はフレームバッファも消すので、描いてから読むまでの間で
+// 呼べない。出力は CaptureStdout で受ける
+TEST_F(AdvancedGraphicsTest, GetAtPutAtPreservesPixelColours) {
+    parse_and_execute(lex("DIM A(50)"));
+    parse_and_execute(lex("PSET (0,0), 12"));
+    parse_and_execute(lex("PSET (3,3), 9"));
+    parse_and_execute(lex("GET@ (0,0)-(3,3), A"));
+    parse_and_execute(lex("PUT@ (100,100), A"));
+
+    testing::internal::CaptureStdout();
+    parse_and_execute(lex("PRINT POINT(100,100)"));
+    parse_and_execute(lex("PRINT POINT(103,103)"));
+    std::string out = testing::internal::GetCapturedStdout();
+    EXPECT_EQ(out, "12\n9\n") << out; // 左上と右下の色がそのまま
+}
+
+// 4 画素を 1 要素に詰めるので、要素の境界をまたぐ位置でも色が化けないこと
+TEST_F(AdvancedGraphicsTest, GetAtPutAtPreservesColoursAcrossPackingBoundary) {
+    parse_and_execute(lex("DIM A(50)"));
+    for (int i = 0; i < 6; i++) {
+        char cmd[32];
+        snprintf(cmd, sizeof(cmd), "PSET (%d,0), %d", i, i + 9);
+        parse_and_execute(lex(cmd));
+    }
+    parse_and_execute(lex("GET@ (0,0)-(5,0), A")); // 6 画素 = 1.5 要素ぶん
+    parse_and_execute(lex("PUT@ (200,50), A"));
+
+    testing::internal::CaptureStdout();
+    for (int i = 0; i < 6; i++) {
+        char cmd[32];
+        snprintf(cmd, sizeof(cmd), "PRINT POINT(%d,50)", 200 + i);
+        parse_and_execute(lex(cmd));
+    }
+    std::string out = testing::internal::GetCapturedStdout();
+    EXPECT_EQ(out, "9\n10\n11\n12\n13\n14\n") << out;
+}
+
+// 本文領域を削ったぶん、以前は入らなかった大きさの配列が取れる
+// （配列ヒープ 12KB = 1536 要素 -> 20KB = 2560 要素）
+TEST_F(AdvancedGraphicsTest, ArrayHeapHoldsMoreThanTheOldSixteenHundred) {
+    mock_hal::reset();
+    parse_and_execute(lex("DIM A(2000)"));
+    EXPECT_EQ(mock_hal::get_raw_print_buffer(), "") << mock_hal::get_raw_print_buffer();
+}
