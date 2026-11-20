@@ -12,6 +12,9 @@
 # 自分たちのコードに警告が 1 つでも出たら失敗にする。-Wall -Wextra を入れて
 # ある以上、新しい警告は「いま入った問題」だから。
 # FetchContent 由来（googletest / FatFS ドライバ）の警告は数えない。
+#
+# doxygen が入っていれば公開ヘッダのドキュメントも同じ扱いで見る。
+# 入っていなければその段だけ飛ばす（必須の道具にはしない）。
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -41,7 +44,7 @@ build_into() {
 }
 
 # ---- 1. ホスト: 自分のソースを作り直してビルド、テスト ----
-say "[1/2] ホストテスト"
+say "[1/3] ホストテスト"
 if [ "$CLEAN" = 1 ]; then
     rm -rf "$HOST_BUILD_DIR"
 else
@@ -64,7 +67,7 @@ HOST_WARN="$(project_warnings "$HOST_LOG")"
 [ -z "$HOST_WARN" ] || FAILURES="$FAILURES host-warnings"
 
 # ---- 2. 実機: 自分のソースを作り直してビルド ----
-say "[2/2] 実機ファームウェア"
+say "[2/3] 実機ファームウェア"
 if [ "$CLEAN" = 1 ]; then
     rm -rf "$PICO_BUILD_DIR"
 else
@@ -80,6 +83,23 @@ PICO_WARN="$(project_warnings "$PICO_LOG")"
 [ -z "$PICO_WARN" ] || FAILURES="$FAILURES pico-warnings"
 [ -f "$PICO_BUILD_DIR/pico_basic.uf2" ] || FAILURES="$FAILURES pico-uf2"
 
+# ---- 3. 公開ヘッダのドキュメント ----
+say "[3/3] ドキュメント"
+DOC_WARN=""
+if command -v doxygen > /dev/null 2>&1; then
+    DOC_LOG="$REPO_ROOT/build-doc/doxygen.log"
+    mkdir -p "$REPO_ROOT/build-doc"
+    (cd "$REPO_ROOT" && doxygen docs/Doxyfile) 2> "$DOC_LOG" > /dev/null || true
+    DOC_WARN="$(grep -E 'warning:|error:' "$DOC_LOG" 2> /dev/null || true)"
+    if [ -z "$DOC_WARN" ]; then
+        echo "警告なし"
+    else
+        FAILURES="$FAILURES doc-warnings"
+    fi
+else
+    echo "doxygen が無いので飛ばす（brew install doxygen で入る）"
+fi
+
 # ---- まとめ ----
 say "結果"
 if [ -n "$HOST_WARN" ]; then
@@ -90,6 +110,10 @@ if [ -n "$PICO_WARN" ]; then
     warn "実機ビルドの警告:"
     printf '%s\n' "$PICO_WARN" >&2
 fi
+if [ -n "$DOC_WARN" ]; then
+    warn "ドキュメントの警告:"
+    printf '%s\n' "$DOC_WARN" >&2
+fi
 
 if [ -n "$FAILURES" ]; then
     die "失敗:$FAILURES"
@@ -98,3 +122,6 @@ fi
 echo "ホストテスト: 通過"
 echo "実機ビルド:   $PICO_BUILD_DIR/pico_basic.uf2"
 echo "警告:         自分たちのコードには無し"
+if command -v doxygen > /dev/null 2>&1; then
+    echo "ドキュメント: 警告なし"
+fi

@@ -3,9 +3,13 @@
 /// @file lexer.h
 /// 字句解析。1 行のソースをトークン列に変換する。
 
+/// トークン 1 個が持てる本文の長さ（終端を含む）
 #define MAX_TOKEN_LEN 128
+/// 1 行に入るトークンの数。超えた分は切り捨てる
 #define MAX_TOKENS_PER_LINE 128
 
+/// トークンの種別。本文を持つのは NUMBER / IDENTIFIER / STRING / LABEL / REM だけで、
+/// 残りは命令語や記号そのものを表す
 enum class TokenType {
     NUMBER,
     IDENTIFIER,
@@ -76,14 +80,14 @@ enum class TokenType {
 
 /// トークン 1 個。text は種別によって意味が変わる（本文を持たない種別では命令語）
 struct Token {
-    TokenType type;
-    char text[MAX_TOKEN_LEN];
+    TokenType type;            ///< 種別
+    char text[MAX_TOKEN_LEN];  ///< 本文。種別によって意味が変わる（上の説明を参照）
 };
 
 /// 1 行ぶんのトークン列。固定長で、動的確保はしない
 struct TokenList {
-    Token tokens[MAX_TOKENS_PER_LINE];
-    int size;
+    Token tokens[MAX_TOKENS_PER_LINE]; ///< トークン列。末尾は必ず END_OF_FILE
+    int size;                          ///< tokens に入っている個数
 
     TokenList() : size(0) {}
 };

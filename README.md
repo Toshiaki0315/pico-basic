@@ -104,6 +104,10 @@ tools/build-firmware.sh  # 実機ファームウェア build/pico_basic.uf2 を�
 tools/check.sh           # コミット前のフル確認（上の両方＋警告チェック）
 ```
 
+公開ヘッダのドキュメントは `doxygen docs/Doxyfile` で `build-doc/html/` に出ます
+（`brew install doxygen`）。`tools/check.sh` は doxygen が入っていればこれも通し、
+`@param` の抜けなどが出たら失敗にします。入っていなければその段を飛ばします。
+
 **ホストテスト**（実機不要）: BASIC エンジンは PC 上で 390 件超の単体テストで検証しています。
 `tools/test.sh PowerKeyTest.*` のように Google Test のフィルタも渡せます。
 

@@ -54,9 +54,9 @@ void hal_adc_set_mock_temp_c(float celsius);
 
 // RP2350 の ADC は GPIO26..29 が入力 0..3 に順に対応し、入力 4 が内蔵温度センサー。
 // これはチップ側の都合なので、基板の配線を書く board_config.h ではなくここに置く。
-constexpr int ADC_GPIO_BASE    = 26;
-constexpr int ADC_INPUT_COUNT  = 4;
-constexpr int ADC_TEMP_INPUT   = 4;
+constexpr int ADC_GPIO_BASE    = 26; ///< ADC 入力 0 に対応する GPIO 番号
+constexpr int ADC_INPUT_COUNT  = 4;  ///< 外部ピンに繋がる ADC 入力の数
+constexpr int ADC_TEMP_INPUT   = 4;  ///< 内蔵温度センサーの ADC 入力番号
 
 /**
  * @brief GPIO 番号を ADC 入力番号へ直す。

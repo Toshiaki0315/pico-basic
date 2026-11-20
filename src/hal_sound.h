@@ -9,18 +9,18 @@
 extern "C" {
 #endif
 
-// PSG 相当の同時発音数（AY-3-8910 の 3ch に合わせる）
+/// PSG 相当の同時発音数（AY-3-8910 の 3ch に合わせる）
 #define HAL_SOUND_VOICES 3
 
-// 音量を指定しなかったときの既定値（0-15）。
-// 矩形波は同じ振幅でも耳につきやすいため、最大にはしない。
-// MML の V コマンドや hal_sound_set_volume() で上げ下げできる。
+/// 音量を指定しなかったときの既定値（0-15）。
+/// 矩形波は同じ振幅でも耳につきやすいため、最大にはしない。
+/// MML の V コマンドや hal_sound_set_volume() で上げ下げできる。
 #define HAL_SOUND_DEFAULT_VOLUME 8
 
-// 1 声分の発音指定。frequency <= 0 は消音（休符）
+/// 1 声分の発音指定
 typedef struct {
-    float frequency;
-    int   volume; // 0-15
+    float frequency; ///< 周波数（Hz）。0 以下は消音（休符）
+    int   volume;    ///< 音量 0-15
 } HalSoundVoice;
 
 // ---------------------------------------------------------
@@ -101,6 +101,7 @@ void hal_sound_set_volume(int volume); // 0-15
 //
 // トーン周波数 = 2MHz / (16 × 周期)
 // ---------------------------------------------------------
+/// PSG のレジスタ本数（R0-R15）
 #define HAL_SOUND_PSG_REGS 16
 /**
  * @brief PSG 相当のレジスタへ書く（BASIC の SOUND 文）。

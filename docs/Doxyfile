@@ -1,0 +1,45 @@
+# 公開ヘッダのドキュメント生成設定。
+#
+#   doxygen docs/Doxyfile     → build-doc/html/index.html
+#
+# tools/check.sh が doxygen の入っている環境でだけこれを通し、警告が出たら
+# 失敗にする。コンパイラの -Wall -Wextra と同じ扱いで、新しい警告は
+# 「いま入った問題」とみなす。
+#
+# 対象は公開ヘッダだけ。parser_internal.h はインタプリタの内部で公開 API では
+# なく、hal_font.h と board_config.h は関数を宣言していない（フォントの字形と
+# 基板の配線表）。
+
+PROJECT_NAME           = pico-basic
+PROJECT_BRIEF          = Hu-BASIC 互換インタプリタ（RP2350 / Waveshare RP2350-Touch-LCD-2.8）
+OUTPUT_DIRECTORY       = build-doc
+
+INPUT                  = src
+FILE_PATTERNS          = *.h
+RECURSIVE              = NO
+EXCLUDE                = src/parser_internal.h \
+                         src/hal_font.h \
+                         src/board_config.h
+
+# 日本語のコメントをそのまま扱う
+DOXYFILE_ENCODING      = UTF-8
+INPUT_ENCODING         = UTF-8
+OUTPUT_LANGUAGE        = Japanese
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+
+# 書いていないものを拾う。EXTRACT_ALL を切ってあるので、
+# 「文書化されていない」警告が実際に意味を持つ
+EXTRACT_ALL            = NO
+EXTRACT_STATIC         = NO
+QUIET                  = YES
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = YES
+WARN_IF_DOC_ERROR      = YES
+WARN_NO_PARAMDOC       = YES
+WARN_AS_ERROR          = NO
+
+# マクロは展開せず、定義そのものを出す（ピン番号などは値を見たい）
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = NO

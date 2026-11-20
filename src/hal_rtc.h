@@ -21,14 +21,15 @@
 ///   04h Seconds（bit7 = OS: 立っていると時刻が信用できない）… 0Ah Years
 ///   時刻・日付はすべて BCD。年はチップ側が 00-99 しか持てない
 
+/// RTC が持つ日時。チップは年を 00-99 しか持てないので 2000 年代に読み替える
 struct RtcTime {
-    int  year;   // 西暦 2000-2099
-    int  month;  // 1-12
-    int  day;    // 1-31
-    int  hour;   // 0-23
-    int  minute; // 0-59
-    int  second; // 0-59
-    bool valid;  // false = 電源断などで時刻が信用できない（OS フラグ）
+    int  year;   ///< 西暦 2000-2099
+    int  month;  ///< 1-12
+    int  day;    ///< 1-31
+    int  hour;   ///< 0-23
+    int  minute; ///< 0-59
+    int  second; ///< 0-59
+    bool valid;  ///< false = 電源断などで時刻が信用できない（OS フラグ）
 };
 
 /// @brief RTC を初期化する。見つからなければ以降 false を返し続ける

@@ -2,6 +2,7 @@
 build/
 build_host/
 build-test/
+build-doc/
 CMakeCache.txt
 CMakeFiles/
 CMakeScripts/
