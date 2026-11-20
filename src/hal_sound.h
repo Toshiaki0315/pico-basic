@@ -1,12 +1,9 @@
 #pragma once
 
-/// @file hal_sound.h
-/// I2S サウンド出力。発音は DMA で非同期に進む。
 #include <stdint.h>
 
-// ---------------------------------------------------------
-// Sound Hardware Abstraction Layer
-// ---------------------------------------------------------
+/// @file hal_sound.h
+/// I2S サウンド出力。発音は DMA で非同期に進む。
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,36 +38,44 @@ void hal_sound_init();
 /// @brief 短いビープを鳴らす
 void hal_sound_beep();
 
-// 単音発音（内部的には voice 0 のみを使う）
 /**
- * @brief 単音を鳴らす（非同期。すぐ戻る）。
+ * @brief 単音を鳴らす（非同期。すぐ戻る）。内部では voice 0 だけを使う。
+ *
  * @param frequency 周波数（Hz）。0 以下なら休符
  * @param duration_ms 長さ（ミリ秒）
  */
 void hal_sound_play(float frequency, int duration_ms);
 
-// 最大 HAL_SOUND_VOICES 声を duration_ms だけ同時に発音する。
-// 連続して積めば、周波数が変わらない声は位相を保って繋がる。
 /**
  * @brief 複数声部を同時に鳴らす（非同期）。
+ *
+ * 最大 HAL_SOUND_VOICES 声を duration_ms だけ同時に発音する。
+ * 連続して積めば、周波数が変わらない声は位相を保って繋がる。
+ *
  * @param voices 声部ごとの周波数と音量
  * @param duration_ms 長さ（ミリ秒）
  */
 void hal_sound_play_voices(const HalSoundVoice voices[HAL_SOUND_VOICES], int duration_ms);
 
-// キューを捨てて即座に全声を消音する（Ctrl-C や NEW から呼ぶ）
-/// @brief 鳴っている音を止める
+/**
+ * @brief 鳴っている音を止める
+ *
+ * キューを捨てて即座に全声を消音する（Ctrl-C や NEW から呼ぶ）
+ */
 void hal_sound_stop();
 
-// 再生中（キューに残りがある、または発音中）なら 1
 /**
  * @brief まだ鳴っているか。
+ *
+ * 再生中（キューに残りがある、または発音中）なら 1
+ *
  * @return 鳴っていれば 1
  */
 int hal_sound_is_playing();
 
-// 起動音（PC-9801 風の 2 音「ピポッ」）を鳴らす
-/// @brief 起動音を鳴らす（非同期なので待たされない）
+/**
+ * @brief 起動音を鳴らす（非同期なので待たされない）
+ */
 void hal_sound_startup_chime();
 
 /**

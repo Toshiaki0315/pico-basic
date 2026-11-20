@@ -1,21 +1,23 @@
 #pragma once
 
-/// @file hal_adc.h
 #include "board_config.h"
 
-// 汎用アナログ入力と内蔵温度センサー（RP2350）
-//
-// ADIN(gpio) は拡張コネクタに出ているピンを 0-4095 の生値で読む。
-// BAT_EN は電源ラッチの制御線で、アナログ入力に切り替えると出力が切れて
-// 電池運用時にその場で電源が落ちるため、読める対象から外してある。
+/// @file hal_adc.h
+/// 汎用アナログ入力と内蔵温度センサー（RP2350）
+///
+/// ADIN(gpio) は拡張コネクタに出ているピンを 0-4095 の生値で読む。
+/// BAT_EN は電源ラッチの制御線で、アナログ入力に切り替えると出力が切れて
+/// 電池運用時にその場で電源が落ちるため、読める対象から外してある。
 
-// ADC ブロックの初期化。何度呼んでも安全で、内蔵温度センサーの有効化まで含む。
-//
-// **adc_init() を直に呼ぶのはこの関数だけにすること。** adc_init() は ADC
-// ブロックをリセットするので、あとから別の HAL がもう一度呼ぶと、先に有効化
-// してあった温度センサーが黙って落ちる。各 HAL は自分の使うピンの
-// adc_gpio_init() だけを持ち、ブロックの面倒はここに集約する。
-/// @brief ADC ブロックを初期化する（何度呼んでも安全）
+/**
+ * @brief ADC ブロックを初期化する。何度呼んでも安全で、内蔵温度センサーの
+ *        有効化まで含む。
+ *
+ * **adc_init() を直に呼ぶのはこの関数だけにすること。** adc_init() は ADC
+ * ブロックをリセットするので、あとから別の HAL がもう一度呼ぶと、先に有効化
+ * してあった温度センサーが黙って落ちる。各 HAL は自分の使うピンの
+ * adc_gpio_init() だけを持ち、ブロックの面倒はここに集約する。
+ */
 void hal_adc_block_init();
 
 /// @brief ADIN で読む対象のピンをアナログ入力に切り替える。ブロックの初期化も含む
@@ -34,7 +36,6 @@ int hal_adc_read_raw(int gpio);
  */
 float hal_adc_read_temp_c();
 
-/// @brief テスト用の差し込み口（実機では何もしない）
 /**
  * @brief テスト用の差し込み口（実機では何もしない）。
  * @param gpio 値を差し込む GPIO 番号
@@ -57,9 +58,9 @@ constexpr int ADC_GPIO_BASE    = 26;
 constexpr int ADC_INPUT_COUNT  = 4;
 constexpr int ADC_TEMP_INPUT   = 4;
 
-// GPIO 番号 -> ADC 入力番号。ADC に繋がっていないピンなら -1。
 /**
  * @brief GPIO 番号を ADC 入力番号へ直す。
+ *
  * @param gpio GPIO 番号
  * @return 入力番号（0-3）。ADC に繋がっていないピンなら -1
  */
@@ -68,13 +69,13 @@ constexpr int adc_input_for_gpio(int gpio) {
     return (input >= 0 && input < ADC_INPUT_COUNT) ? input : -1;
 }
 
-// ADIN で読んでよい GPIO か。BAT_EN は意図的に外してある（上のコメント参照）。
-//
-// 対象ピンは board_config.h の定義から決まるので、別のボードでもここは直さずに済む。
-// ADC に繋がっているかどうかを先に見るのは、board_config.h が ADC の無いピンを
-// 指していた場合に、そのまま入力番号として使われて範囲外に飛ぶのを止めるため。
 /**
- * @brief ADIN で読んでよいピンか。
+ * @brief ADIN で読んでよいピンか。BAT_EN は意図的に外してある（上の説明参照）。
+ *
+ * 対象ピンは board_config.h の定義から決まるので、別のボードでもここは直さずに済む。
+ * ADC に繋がっているかどうかを先に見るのは、board_config.h が ADC の無いピンを
+ * 指していた場合に、そのまま入力番号として使われて範囲外に飛ぶのを止めるため。
+ *
  * @param gpio GPIO 番号
  * @return 読んでよければ true
  */

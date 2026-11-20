@@ -1,24 +1,23 @@
 #pragma once
 
-/// @file psg_envelope.h
-/// PSG（AY-3-8910 相当）のハードウェアエンベロープ。
-/// ハードウェアに依存しないので、ホストのテストからそのまま検証できる。
 #include <stdbool.h>
 #include <stdint.h>
 
-// ---------------------------------------------------------
-// AY-3-8910 エンベロープの純粋ロジック（Pico / ホスト共通）
-//
-// 状態を引数で受け取るので単体テストできる。
-//   vol  … 現在の振幅 0〜15
-//   dir  … +1 上昇 / -1 下降
-//   hold … 端で保持中
-// shape は R13 の下位 4bit（bit3 Continue / bit2 Attack / bit1 Alternate / bit0 Hold）。
-// ---------------------------------------------------------
+/// @file psg_envelope.h
+/// PSG（AY-3-8910 相当）のハードウェアエンベロープ。
+/// ハードウェアに依存しないので、ホストのテストからそのまま検証できる。
+///
+/// 状態を引数で受け取るので単体テストできる。
+///   vol  … 現在の振幅 0〜15
+///   dir  … +1 上昇 / -1 下降
+///   hold … 端で保持中
+/// shape は R13 の下位 4bit（bit3 Continue / bit2 Attack / bit1 Alternate / bit0 Hold）。
 
-// 形状書き込み時の初期化
 /**
  * @brief 形状に応じてエンベロープの初期状態を作る。
+ *
+ * 形状書き込み時の初期化
+ *
  * @param[out] vol 音量（0-15）
  * @param[out] dir 進む向き（+1 で増加、-1 で減少）
  * @param[out] hold 端に達したら止まるか
@@ -31,9 +30,9 @@ static inline void psg_envelope_init(int* vol, int* dir, bool* hold, uint8_t sha
     *hold = false;
 }
 
-// 振幅を 1 段進める
 /**
  * @brief エンベロープを 1 段進める。
+ *
  * @param[in,out] vol 音量（0-15）
  * @param[in,out] dir 進む向き
  * @param[in,out] hold 端で止まる状態か

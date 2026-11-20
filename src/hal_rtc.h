@@ -1,26 +1,25 @@
 #pragma once
 
-/// @file hal_rtc.h
-/// リアルタイムクロック（PCF85063A）と、日時文字列の解釈。
 #include <stdbool.h>
 
-// ---------------------------------------------------------
-// PCF85063ATL リアルタイムクロック
-// Waveshare RP2350-Touch-LCD-2.8 の U5
-//
-// 回路図より:
-//   SDA/SCL (6/7)  -> GP6/GP7 … タッチ(0x1A)・IMU(0x6B) と共用の i2c1
-//   INT     (4)    -> GP5     … 本実装では未使用
-//   OSCI/OSCO      -> 32.768kHz 水晶 Y2（+ C22/C29 22pF）
-//   VDD            -> 3V3（D4 経由）。J2 にバックアップ電池を繋げば
-//                     本体の電源を切っても時刻を保持する
-//
-// I2C アドレスは 0x51 固定（実機のバス走査でも 0x51 が応答）。
-// レジスタはデータシート PCF85063A Rev 7.3 の Table 4 に準拠:
-//   00h Control_1（bit5 STOP / bit1 12_24 / bit0 CAP_SEL）
-//   04h Seconds（bit7 = OS: 立っていると時刻が信用できない）… 0Ah Years
-//   時刻・日付はすべて BCD。年はチップ側が 00-99 しか持てない
-// ---------------------------------------------------------
+/// @file hal_rtc.h
+/// リアルタイムクロック（PCF85063A）と、日時文字列の解釈。
+///
+/// PCF85063ATL リアルタイムクロック
+/// Waveshare RP2350-Touch-LCD-2.8 の U5
+///
+/// 回路図より:
+///   SDA/SCL (6/7)  -> GP6/GP7 … タッチ(0x1A)・IMU(0x6B) と共用の i2c1
+///   INT     (4)    -> GP5     … 本実装では未使用
+///   OSCI/OSCO      -> 32.768kHz 水晶 Y2（+ C22/C29 22pF）
+///   VDD            -> 3V3（D4 経由）。J2 にバックアップ電池を繋げば
+///                     本体の電源を切っても時刻を保持する
+///
+/// I2C アドレスは 0x51 固定（実機のバス走査でも 0x51 が応答）。
+/// レジスタはデータシート PCF85063A Rev 7.3 の Table 4 に準拠:
+///   00h Control_1（bit5 STOP / bit1 12_24 / bit0 CAP_SEL）
+///   04h Seconds（bit7 = OS: 立っていると時刻が信用できない）… 0Ah Years
+///   時刻・日付はすべて BCD。年はチップ側が 00-99 しか持てない
 
 struct RtcTime {
     int  year;   // 西暦 2000-2099
@@ -35,7 +34,6 @@ struct RtcTime {
 /// @brief RTC を初期化する。見つからなければ以降 false を返し続ける
 void hal_rtc_init();
 
-// RTC が応答しているか
 /**
  * @brief RTC が載っているか。
  * @return 見つかっていれば true
@@ -55,10 +53,11 @@ bool hal_rtc_get(RtcTime* out);
  */
 bool hal_rtc_set(const RtcTime* t);
 
-// ホストテスト用: 実機ビルドでは何もしない
-/// @brief テスト用の差し込み口（実機では何もしない）
 /**
  * @brief テスト用の差し込み口（実機では何もしない）。
+ *
+ * ホストテスト用: 実機ビルドでは何もしない
+ *
  * @param t 以降 hal_rtc_get() が返す日時
  */
 void hal_rtc_set_mock(const RtcTime* t);
@@ -112,10 +111,12 @@ inline int rtc_days_in_month(int y, int m) {
     return days[m - 1];
 }
 
-// 曜日（0=日曜）。Sakamoto の方法。
-// チップの Weekdays レジスタを正しく埋めるために使う
 /**
  * @brief 曜日を求める。
+ *
+ * 曜日（0=日曜）。Sakamoto の方法。
+ * チップの Weekdays レジスタを正しく埋めるために使う
+ *
  * @param y,m,d 西暦・月・日
  * @return 0=日曜 … 6=土曜
  */
@@ -125,10 +126,11 @@ inline int rtc_weekday(int y, int m, int d) {
     return (y + y / 4 - y / 100 + y / 400 + t[m - 1] + d) % 7;
 }
 
-// "HH:MM:SS" の書式だけを見て数値を取り出す（範囲は見ない）。
-// 「書式が違う」のか「値が範囲外」なのかをエラーで区別するために分けてある。
 /**
  * @brief "HH:MM:SS" を数値に分解する（範囲は見ない）。
+ *
+ * 「書式が違う」のか「値が範囲外」なのかをエラーで区別するために分けてある。
+ *
  * @param s 時刻文字列
  * @param[out] hour,minute,second 分解した値
  * @return 形式が合っていれば true
@@ -148,7 +150,6 @@ inline bool rtc_time_fields(const char* s, int* hour, int* minute, int* second) 
     return true;
 }
 
-// "HH:MM:SS" を解釈する。桁数・区切り・範囲に厳密。
 /**
  * @brief "HH:MM:SS" を解釈する。
  * @param s 時刻文字列
@@ -163,9 +164,9 @@ inline bool rtc_parse_time(const char* s, int* hour, int* minute, int* second) {
     return true;
 }
 
-// "YYYY-MM-DD" の書式だけを見て数値を取り出す（暦の妥当性は見ない）。
 /**
  * @brief "YYYY-MM-DD" を数値に分解する（実在するかは見ない）。
+ *
  * @param s 日付文字列
  * @param[out] year,month,day 分解した値
  * @return 形式が合っていれば true
@@ -185,9 +186,11 @@ inline bool rtc_date_fields(const char* s, int* year, int* month, int* day) {
     return true;
 }
 
-// 実在する日付か（年の範囲は見ない）
 /**
  * @brief その日付が実在するか（閏年も見る）。
+ *
+ * 実在する日付か（年の範囲は見ない）
+ *
  * @param year,month,day 西暦・月・日
  * @return 実在すれば true
  */
@@ -196,7 +199,6 @@ inline bool rtc_date_exists(int year, int month, int day) {
     return day >= 1 && day <= rtc_days_in_month(year, month);
 }
 
-// "YYYY-MM-DD" を解釈する。年は 2000-2099（チップが 2 桁しか持てないため）。
 /**
  * @brief "YYYY-MM-DD" を解釈する。
  * @param s 日付文字列
