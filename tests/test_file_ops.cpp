@@ -519,7 +519,11 @@ TEST_F(FileOpsTest, RepeatedSaveLoadIsStable) {
         mock_hal::reset();
         parse_and_execute(lex("LIST"));
         std::string now = mock_hal::get_raw_print_buffer();
-        if (cycle > 0) EXPECT_EQ(now, prev) << "往復 " << cycle << " 回目で変化した";
+        // EXPECT_EQ は内部で if/else に展開されるので、波括弧が無いと
+        // else の結び先が曖昧になる（GCC の -Wdangling-else）
+        if (cycle > 0) {
+            EXPECT_EQ(now, prev) << "往復 " << cycle << " 回目で変化した";
+        }
         prev = now;
     }
     EXPECT_NE(prev.find("10 REM NOTE\n"), std::string::npos) << prev;
