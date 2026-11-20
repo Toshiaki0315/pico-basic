@@ -12,6 +12,20 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # ビルドディレクトリ。既存の構成に合わせた既定値で、環境変数で上書きできる
 HOST_BUILD_DIR="${HOST_BUILD_DIR:-$REPO_ROOT/build-test}"
 PICO_BUILD_DIR="${PICO_BUILD_DIR:-$REPO_ROOT/build}"
+# ホストテストを GCC でも通すためのディレクトリ。
+# 既定のホストビルドは macOS では clang になるが、CI は Linux の GCC で走る。
+# 警告の出方がコンパイラで違うので、手元でも GCC を通さないと CI でしか
+# 分からない警告が残る（実際 -Wdangling-else は CI で初めて出た）
+GCC_BUILD_DIR="${GCC_BUILD_DIR:-$REPO_ROOT/build-gcc}"
+
+# Homebrew で入れた GCC を探す（新しいものを優先）。無ければ空
+find_host_gcc() {
+    local c
+    for c in g++-17 g++-16 g++-15 g++-14; do
+        if command -v "$c" > /dev/null 2>&1; then echo "$c"; return; fi
+    done
+    echo ""
+}
 
 if command -v nproc > /dev/null 2>&1; then
     JOBS="${JOBS:-$(nproc)}"

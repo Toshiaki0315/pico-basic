@@ -104,9 +104,15 @@ tools/build-firmware.sh  # 実機ファームウェア build/pico_basic.uf2 を�
 tools/check.sh           # コミット前のフル確認（上の両方＋警告チェック）
 ```
 
-公開ヘッダのドキュメントは `doxygen docs/Doxyfile` で `build-doc/html/` に出ます
-（`brew install doxygen`）。`tools/check.sh` は doxygen が入っていればこれも通し、
-`@param` の抜けなどが出たら失敗にします。入っていなければその段を飛ばします。
+公開ヘッダのドキュメントは `doxygen docs/Doxyfile` で `build-doc/html/` に出ます。
+`tools/check.sh` は doxygen が入っていればこれも通し、`@param` の抜けなどが出たら失敗にします。
+
+ホストの GCC と doxygen は任意です。入っていなければその段を飛ばすので、
+`tools/check.sh` が動かなくなることはありません。両方入れるなら:
+
+```bash
+brew install gcc doxygen
+```
 
 **ホストテスト**（実機不要）: BASIC エンジンは PC 上で 390 件超の単体テストで検証しています。
 `tools/test.sh PowerKeyTest.*` のように Google Test のフィルタも渡せます。
@@ -114,8 +120,10 @@ tools/check.sh           # コミット前のフル確認（上の両方＋警�
 **実機ファームウェア**の書き込み手順は [SETUP.md](./SETUP.md) を参照してください。
 初回の構成には Pico SDK とネットワーク接続が要ります。
 
-**フル確認**が両方のビルドを通すのは、警告の出方がコンパイラで違うためです。ホストは clang、
-実機は `arm-none-eabi-gcc` で、gcc にしか無い警告は実機ビルドまで通さないと見えません。
+**フル確認**が複数のコンパイラを通すのは、警告の出方がそれぞれ違うためです。ホストは clang と
+GCC、実機は `arm-none-eabi-gcc` の 3 つで、実際に「`arm-none-eabi-gcc` だけが出す `strncpy` の
+切り詰め」と「Linux の GCC だけが出す `-Wdangling-else`」の両方を経験しています（後者は CI で
+初めて気づきました）。CI は Ubuntu + GCC なので、手元の GCC がその予習になります。
 `-Wall -Wextra` を有効にしてあるので、自分たちのコードに警告が 1 つでも出たら `tools/check.sh`
 は失敗します（FetchContent 由来の警告は数えません）。
 

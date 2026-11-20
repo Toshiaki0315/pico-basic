@@ -13,8 +13,9 @@
 # ある以上、新しい警告は「いま入った問題」だから。
 # FetchContent 由来（googletest / FatFS ドライバ）の警告は数えない。
 #
-# doxygen が入っていれば公開ヘッダのドキュメントも同じ扱いで見る。
-# 入っていなければその段だけ飛ばす（必須の道具にはしない）。
+# ホストテストは clang と GCC の両方で通す。CI は Linux の GCC で走るので、
+# 片方だけだと「CI でしか出ない警告」が残る（-Wdangling-else がそうだった）。
+# doxygen と GCC はどちらも、入っていなければその段を飛ばす（必須にはしない）。
 
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
@@ -44,7 +45,7 @@ build_into() {
 }
 
 # ---- 1. ホスト: 自分のソースを作り直してビルド、テスト ----
-say "[1/3] ホストテスト"
+say "[1/4] ホストテスト (clang)"
 if [ "$CLEAN" = 1 ]; then
     rm -rf "$HOST_BUILD_DIR"
 else
@@ -66,8 +67,34 @@ fi
 HOST_WARN="$(project_warnings "$HOST_LOG")"
 [ -z "$HOST_WARN" ] || FAILURES="$FAILURES host-warnings"
 
-# ---- 2. 実機: 自分のソースを作り直してビルド ----
-say "[2/3] 実機ファームウェア"
+# ---- 2. ホストテストを GCC でも ----
+say "[2/4] ホストテスト (GCC)"
+GCC_WARN=""
+HOST_GCC="$(find_host_gcc)"
+if [ -z "$HOST_GCC" ]; then
+    echo "GCC が無いので飛ばす（brew install gcc で入る）"
+else
+    echo "使うコンパイラ: $HOST_GCC ($($HOST_GCC -dumpversion))"
+    if [ "$CLEAN" = 1 ]; then rm -rf "$GCC_BUILD_DIR"; fi
+    # googletest は clang 側が取得したソースを使い回す（再ダウンロードを避ける）
+    GTEST_SRC="$HOST_BUILD_DIR/_deps/googletest-src"
+    GTEST_ARG=""
+    [ -d "$GTEST_SRC" ] && GTEST_ARG="-DFETCHCONTENT_SOURCE_DIR_GOOGLETEST=$GTEST_SRC"
+    cmake -S "$REPO_ROOT" -B "$GCC_BUILD_DIR" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=ON \
+        -DCMAKE_C_COMPILER="${HOST_GCC/g++/gcc}" -DCMAKE_CXX_COMPILER="$HOST_GCC" \
+        $GTEST_ARG > /dev/null
+    GCC_LOG="$GCC_BUILD_DIR/build.log"
+    if build_into "$GCC_BUILD_DIR" "$GCC_LOG"; then
+        "$GCC_BUILD_DIR/basic_tests" > /dev/null || FAILURES="$FAILURES gcc-tests"
+    else
+        FAILURES="$FAILURES gcc-build"
+    fi
+    GCC_WARN="$(project_warnings "$GCC_LOG")"
+    [ -z "$GCC_WARN" ] || FAILURES="$FAILURES gcc-warnings"
+fi
+
+# ---- 3. 実機: 自分のソースを作り直してビルド ----
+say "[3/4] 実機ファームウェア"
 if [ "$CLEAN" = 1 ]; then
     rm -rf "$PICO_BUILD_DIR"
 else
@@ -83,8 +110,8 @@ PICO_WARN="$(project_warnings "$PICO_LOG")"
 [ -z "$PICO_WARN" ] || FAILURES="$FAILURES pico-warnings"
 [ -f "$PICO_BUILD_DIR/pico_basic.uf2" ] || FAILURES="$FAILURES pico-uf2"
 
-# ---- 3. 公開ヘッダのドキュメント ----
-say "[3/3] ドキュメント"
+# ---- 4. 公開ヘッダのドキュメント ----
+say "[4/4] ドキュメント"
 DOC_WARN=""
 if command -v doxygen > /dev/null 2>&1; then
     DOC_LOG="$REPO_ROOT/build-doc/doxygen.log"
@@ -106,6 +133,10 @@ if [ -n "$HOST_WARN" ]; then
     warn "ホストビルドの警告:"
     printf '%s\n' "$HOST_WARN" >&2
 fi
+if [ -n "$GCC_WARN" ]; then
+    warn "ホストビルド (GCC) の警告:"
+    printf '%s\n' "$GCC_WARN" >&2
+fi
 if [ -n "$PICO_WARN" ]; then
     warn "実機ビルドの警告:"
     printf '%s\n' "$PICO_WARN" >&2
@@ -119,7 +150,7 @@ if [ -n "$FAILURES" ]; then
     die "失敗:$FAILURES"
 fi
 
-echo "ホストテスト: 通過"
+echo "ホストテスト: 通過（clang$([ -n "$HOST_GCC" ] && echo " / GCC")）"
 echo "実機ビルド:   $PICO_BUILD_DIR/pico_basic.uf2"
 echo "警告:         自分たちのコードには無し"
 if command -v doxygen > /dev/null 2>&1; then
